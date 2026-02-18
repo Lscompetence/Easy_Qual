@@ -1,0 +1,227 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../../supabaseClient'
+import { useAuth } from '../../contexts/AuthContext'
+import { useNavigate } from 'react-router-dom'
+import { Search, Filter, Plus, FileText, CheckCircle, AlertTriangle, MoreVertical, Building } from 'lucide-react'
+import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
+import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
+import NewCaseModal from '../../components/consultant/NewCaseModal'
+
+export default function ConsultantCases() {
+    const { user } = useAuth()
+    const navigate = useNavigate()
+
+    const [cases, setCases] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [filterStatus, setFilterStatus] = useState('all')
+
+    const [showCreateModal, setShowCreateModal] = useState(false)
+
+    const [walletBalance, setWalletBalance] = useState(0)
+
+    useEffect(() => {
+        if (user) {
+            fetchCases()
+            fetchWallet()
+        }
+    }, [user])
+
+    const fetchWallet = async () => {
+        const { data } = await supabase
+            .from('credits_wallet')
+            .select('balance')
+            .eq('consultant_id', user.id)
+            .single()
+        if (data) setWalletBalance(data.balance)
+    }
+
+    const fetchCases = async () => {
+        try {
+            setLoading(true)
+            const { data, error } = await supabase
+                .from('cases')
+                .select(`
+                    *,
+                    tenants (name, siret, logo_url)
+                `)
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+            setCases(data || [])
+        } catch (error) {
+            console.error('Error fetching cases:', error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const filteredCases = cases.filter(c => {
+        const matchesSearch = c.tenants?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            c.category?.toLowerCase().includes(searchQuery.toLowerCase())
+        const matchesStatus = filterStatus === 'all' || c.status === filterStatus
+        return matchesSearch && matchesStatus
+    })
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'active': return 'bg-blue-50 text-blue-700'
+            case 'validated': return 'bg-green-50 text-green-700'
+            case 'draft': return 'bg-gray-100 text-gray-600'
+            default: return 'bg-amber-50 text-amber-700'
+        }
+    }
+
+    const getStatusLabel = (status) => {
+        switch (status) {
+            case 'active': return 'En cours'
+            case 'validated': return 'Terminé'
+            case 'draft': return 'À faire'
+            default: return 'À valider'
+        }
+    }
+
+    return (
+        <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
+            <ConsultantSidebar />
+
+            <div className="flex-1 flex flex-col min-w-0">
+                <ConsultantTopBar
+                    onNewFolder={() => setShowCreateModal(true)}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                />
+
+                <main className="p-4 sm:p-6 lg:p-8 max-w-[2000px] mx-auto w-full">
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-900">Dossiers Clients</h1>
+                            <p className="text-sm text-gray-500 mt-1">Gérez l'ensemble de vos dossiers d'accompagnement.</p>
+                        </div>
+                    </div>
+
+                    {/* Filters */}
+                    <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
+                        {['all', 'active', 'draft', 'validated'].map(status => (
+                            <button
+                                key={status}
+                                onClick={() => setFilterStatus(status)}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold capitalize whitespace-nowrap transition-colors ${filterStatus === status
+                                    ? 'bg-purple-100 text-purple-700'
+                                    : 'bg-white text-gray-600 border border-gray-100 hover:bg-gray-50'
+                                    }`}
+                            >
+                                {status === 'all' ? 'Tous' : getStatusLabel(status)}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* List */}
+                    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50/50">
+                                    <tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                        <th className="px-6 py-4">Client</th>
+                                        <th className="px-6 py-4">Catégorie</th>
+                                        <th className="px-6 py-4">Audits</th>
+                                        <th className="px-6 py-4">Progression</th>
+                                        <th className="px-6 py-4 text-right">Statut</th>
+                                        <th className="px-6 py-4"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {loading ? (
+                                        <tr><td colSpan="6" className="px-6 py-12 text-center text-gray-500">Chargement...</td></tr>
+                                    ) : filteredCases.length === 0 ? (
+                                        <tr><td colSpan="6" className="px-6 py-12 text-center text-gray-500">Aucun dossier trouvé.</td></tr>
+                                    ) : (
+                                        filteredCases.map((c) => (
+                                            <tr
+                                                key={c.id}
+                                                onClick={() => navigate(`/consultant/case/${c.id}`)}
+                                                className="group hover:bg-gray-50 transition-colors cursor-pointer"
+                                            >
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center">
+                                                        <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold mr-4 uppercase shadow-sm">
+                                                            {c.tenants?.name?.substring(0, 2) || 'UK'}
+                                                        </div>
+                                                        <div>
+                                                            <span className="block text-sm font-bold text-gray-900 group-hover:text-purple-600 transition-colors">
+                                                                {c.tenants?.name}
+                                                            </span>
+                                                            <span className="text-xs text-gray-400">SIRET: {c.tenants?.siret}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <Building className="h-4 w-4 text-gray-400" />
+                                                        <span className="text-sm font-medium text-gray-600 capitalize">
+                                                            {c.category === 'multi-site' ? 'Multi-site' : 'Mono-site'}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {c.audit_type && c.audit_type.map((type, idx) => (
+                                                            <span key={idx} className="px-2 py-1 rounded bg-orange-50 text-orange-700 text-[10px] font-bold uppercase border border-orange-100">
+                                                                {type.replace('Audit ', '')}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 w-1/5">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-xs font-bold text-gray-700">{c.progress || 0}%</span>
+                                                        <div className="h-1.5 flex-1 bg-gray-100 rounded-full overflow-hidden">
+                                                            <div className="h-full bg-blue-600 rounded-full" style={{ width: `${c.progress || 0}%` }}></div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(c.status)}`}>
+                                                        {getStatusLabel(c.status)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <button className="text-gray-400 hover:text-purple-600 transition-colors p-2 hover:bg-purple-50 rounded-full">
+                                                        <MoreVertical className="h-4 w-4" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Pagination (Mock) */}
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                            <span>Affichage de {filteredCases.length} dossiers</span>
+                            <div className="flex gap-2">
+                                <button disabled className="px-3 py-1 bg-white border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50">Précédent</button>
+                                <button disabled className="px-3 py-1 bg-white border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50">Suivant</button>
+                            </div>
+                        </div>
+                    </div>
+
+                </main>
+            </div>
+
+            {/* Modal: Create Case */}
+            <NewCaseModal
+                isOpen={showCreateModal}
+                onClose={() => setShowCreateModal(false)}
+                user={user}
+                walletBalance={walletBalance}
+                onSuccess={() => {
+                    fetchCases()
+                    fetchWallet()
+                }}
+            />
+        </div>
+    )
+}
