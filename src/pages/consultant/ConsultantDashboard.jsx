@@ -275,7 +275,7 @@ export default function ConsultantDashboard() {
                                     <thead>
                                         <tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50">
                                             <th className="pb-3 pl-2">Client</th>
-                                            <th className="pb-3">Type</th>
+                                            <th className="pb-3">Catégorie de formation</th>
                                             <th className="pb-3">Progression</th>
                                             <th className="pb-3 text-right pr-2">Statut</th>
                                         </tr>
@@ -344,14 +344,11 @@ export default function ConsultantDashboard() {
                                                             </div>
                                                         </td>
                                                         <td className="py-4 text-right pr-2">
-                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${c.status === 'active' ? 'bg-blue-50 text-blue-700' :
-                                                                c.status === 'validated' ? 'bg-green-50 text-green-700' :
-                                                                    c.status === 'draft' ? 'bg-gray-100 text-gray-600' :
-                                                                        'bg-amber-50 text-amber-700'
+                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${c.status === 'validated'
+                                                                ? 'bg-green-50 text-green-700'
+                                                                : 'bg-orange-50 text-orange-700'
                                                                 }`}>
-                                                                {c.status === 'active' ? '● En cours' :
-                                                                    c.status === 'validated' ? '● Terminé' :
-                                                                        c.status === 'draft' ? '● À faire' : '● À valider'}
+                                                                {c.status === 'validated' ? '● Terminé' : '● Non Terminé'}
                                                             </span>
                                                         </td>
                                                     </tr>

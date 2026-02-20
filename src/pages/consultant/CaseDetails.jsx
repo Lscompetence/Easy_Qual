@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 import NewCaseModal from '../../components/consultant/NewCaseModal'
+import EventModal from '../../components/consultant/EventModal'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
@@ -24,8 +25,15 @@ import {
     ShieldCheck,
     RefreshCw,
     MessageSquare,
+    MessageCircle,
     Search,
-    Send
+    Send,
+    Plus,
+    Calendar,
+    Info,
+    Edit2,
+    Trash2,
+    Video
 } from 'lucide-react'
 
 // Icon mapping for Criteria
@@ -60,18 +68,33 @@ export default function CaseDetails() {
     const [criteriaData, setCriteriaData] = useState([])
     const [allIndicatorStates, setAllIndicatorStates] = useState([])
     const [indicatorStates, setIndicatorStates] = useState({})
+    const [error, setError] = useState(null)
     const [stats, setStats] = useState({ total: 32, validated: 0 })
     const [showNewCaseModal, setShowNewCaseModal] = useState(false)
-    const [quizUploads, setQuizUploads] = useState({}) // { criterion_id: quiz }
+    const [quizUploads, setQuizUploads] = useState({}) // { criterion_id: { audit_type: quiz } }
 
     // NEW TABS STATE
     const [activeTab, setActiveTab] = useState('suivi_rno')
+    const [selectedAudit, setSelectedAudit] = useState('initial') // 'initial' | 'surveillance 1' | ...
     const [activeCriterion, setActiveCriterion] = useState(null)
     const [selectedIndicatorId, setSelectedIndicatorId] = useState(null) // which indicator is expanded
     const [criterionComments, setCriterionComments] = useState({}) // { criterion_id: string }
     const [savingComment, setSavingComment] = useState(null) // criterion_id being saved
 
-    const [error, setError] = useState(null)
+
+
+    // Planning State
+    const [events, setEvents] = useState([])
+    const [showEventModal, setShowEventModal] = useState(false)
+    const [editingEvent, setEditingEvent] = useState(null)
+    const [savingEvent, setSavingEvent] = useState(false)
+
+    // Messaging State
+    const [messages, setMessages] = useState([])
+    const [newMessage, setNewMessage] = useState('')
+    const [loadingMessages, setLoadingMessages] = useState(false)
+    const [scrolledToBottom, setScrolledToBottom] = useState(false)
+    const messagesEndRef = useRef(null)
 
     // DEBUGGING LOGS
     console.log('CaseDetails Render - ID:', id)
@@ -85,7 +108,7 @@ export default function CaseDetails() {
         const filteredMap = {}
         let validatedCount = 0
         const totalCount = criteriaData.reduce((acc, crit) => acc + (crit.indicators?.length || 0), 0)
-        const currentAuditType = 'initial'
+        const currentAuditType = selectedAudit || 'initial'
 
         allIndicatorStates.filter(s => (s.audit_type || 'initial') === currentAuditType).forEach(s => {
             filteredMap[s.indicator_id] = {
@@ -99,7 +122,7 @@ export default function CaseDetails() {
         if (totalCount > 0) {
             setStats({ total: totalCount, validated: validatedCount })
         }
-    }, [allIndicatorStates, criteriaData, caseData])
+    }, [allIndicatorStates, criteriaData, caseData, selectedAudit])
 
     useEffect(() => {
         if (id && user) {
@@ -129,6 +152,16 @@ export default function CaseDetails() {
             if (!cData) throw new Error("Aucune donnée trouvée pour ce dossier")
 
             setCaseData(cData)
+            // Initialize indicatorStates if needed
+            // ...
+            if (cData.audit_type && Array.isArray(cData.audit_type) && cData.audit_type.length > 0) {
+                // Determine default audit type based on status or just pick first
+                // If we want to persist selection or default to 'initial', logic goes here.
+                // For now, default to first one if not set, or keep 'initial' if it exists in list.
+                if (!selectedAudit || !cData.audit_type.includes(selectedAudit)) {
+                    setSelectedAudit(cData.audit_type[0])
+                }
+            }
 
             const { data: indData, error: indError } = await supabase
                 .from('indicators')
@@ -156,20 +189,133 @@ export default function CaseDetails() {
             if (sError) throw sError
             setAllIndicatorStates(sData || [])
 
-            // Fetch quiz uploads for this case
+            // Fetch quiz uploads & comments for this case
             const { data: quizData } = await supabase
                 .from('criterion_quiz_uploads')
-                .select('criterion_id, file_name, uploaded_at')
+                .select('criterion_id, file_name, file_url, uploaded_at, audit_type, consultant_comment')
                 .eq('case_id', id)
+
             const quizMap = {}
-            quizData?.forEach(q => { quizMap[q.criterion_id] = q })
+            const commentsMap = {}
+            quizData?.forEach(q => {
+                if (!quizMap[q.criterion_id]) quizMap[q.criterion_id] = {}
+                quizMap[q.criterion_id][q.audit_type || 'initial'] = q
+
+                if (q.consultant_comment) {
+                    if (!commentsMap[q.criterion_id]) commentsMap[q.criterion_id] = {}
+                    commentsMap[q.criterion_id][q.audit_type || 'initial'] = q.consultant_comment
+                }
+            })
             setQuizUploads(quizMap)
+
+            // Fetch events
+            const { data: eventData } = await supabase
+                .from('case_events')
+                .select('*')
+                .eq('case_id', id)
+                .order('event_date', { ascending: true })
+
+            setEvents(eventData || [])
+            // Initialize criterionComments from DB if available (structure state slightly differently or map it)
+            // For simplicity, let's keep criterionComments separate but context-aware? 
+            // Better to load them into a map similar to uploads.
+            // Let's refactor criterionComments to be flat or per audit. 
+            // For now, let's just use the quizData.consultant_comment directly in render or init state.
+            const flatComments = {} // We'll just load them when rendering or when changing tab?
+            // Actually, setCriterionComments is used for editing. 
+            // Let's init it empty and use the quizMap data for initial display.
+
 
         } catch (error) {
             console.error('Error fetching details:', error)
             setError(error.message || "Erreur lors du chargement du dossier")
         } finally {
             setLoading(false)
+        }
+    }
+
+    // Scroll to bottom of chat
+    const scrollToBottom = () => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+        }
+    }
+
+    useEffect(() => {
+        if (activeTab === 'messagerie') {
+            fetchMessages()
+            scrollToBottom()
+
+            // Realtime subscription
+            const channel = supabase
+                .channel(`case_messages:${id}`)
+                .on('postgres_changes', {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'case_messages',
+                    filter: `case_id=eq.${id}`
+                }, (payload) => {
+                    setMessages(prev => [...prev, payload.new])
+                    setTimeout(scrollToBottom, 100)
+                })
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channel)
+            }
+        }
+    }, [activeTab, id])
+
+    useEffect(() => {
+        scrollToBottom()
+    }, [messages])
+
+    const fetchMessages = async () => {
+        try {
+            setLoadingMessages(true)
+            const { data, error } = await supabase
+                .from('case_messages')
+                .select('*')
+                .eq('case_id', id)
+                .order('created_at', { ascending: true })
+
+            if (error) throw error
+            setMessages(data || [])
+        } catch (err) {
+            console.error('Error loading messages:', err)
+        } finally {
+            setLoadingMessages(false)
+        }
+    }
+
+    const handleSendMessage = async (e) => {
+        e.preventDefault()
+        if (!newMessage.trim()) return
+
+        try {
+            const { data, error } = await supabase
+                .from('case_messages')
+                .insert({
+                    case_id: id,
+                    sender_id: user.id, // uses 'user' from useAuth
+                    content: newMessage.trim()
+                })
+                .select()
+                .single()
+
+            if (error) throw error
+
+            // Optimistically update (Realtime handles duplicates or we can check ID)
+            setMessages(prev => {
+                // Avoid duplicates if realtime catches it fast
+                if (prev.some(m => m.id === data.id)) return prev
+                return [...prev, data]
+            })
+            setNewMessage('')
+            setTimeout(scrollToBottom, 100)
+        } catch (err) {
+            console.error('Error sending message:', err)
+            alert("Erreur lors de l'envoi du message : " + err.message)
         }
     }
 
@@ -181,8 +327,8 @@ export default function CaseDetails() {
     const handleIndicatorUpdate = async (indicatorId, newStatus) => {
         // 1. Calculate new states locally first to determine progress
         let updatedStates = [...allIndicatorStates]
-        const type = 'initial' // Default audit type
-        const index = updatedStates.findIndex(s => s.indicator_id === indicatorId && s.audit_type === type)
+        const type = selectedAudit || 'initial'
+        const index = updatedStates.findIndex(s => s.indicator_id === indicatorId && (s.audit_type || 'initial') === type)
 
         if (index >= 0) {
             updatedStates[index] = { ...updatedStates[index], status: newStatus }
@@ -233,7 +379,7 @@ export default function CaseDetails() {
             await supabase.from('case_indicator_states').upsert({
                 case_id: id,
                 indicator_id: indicatorId,
-                audit_type: 'initial',
+                audit_type: selectedAudit || 'initial',
                 status: indicatorStates[indicatorId]?.status || 'to_do',
                 consultant_verdict: verdict
             }, { onConflict: 'case_id,indicator_id,audit_type' })
@@ -247,18 +393,158 @@ export default function CaseDetails() {
     const handleSaveCriterionComment = async (criterionId) => {
         setSavingComment(criterionId)
         try {
+            const currentQuiz = quizUploads[criterionId]?.[selectedAudit || 'initial']
+            const existingComment = currentQuiz?.consultant_comment || ''
+            const commentToSave = criterionComments[criterionId] !== undefined ? criterionComments[criterionId] : existingComment
+
             await supabase.from('criterion_quiz_uploads').upsert({
                 case_id: id,
                 criterion_id: criterionId,
-                audit_type: 'initial',
-                file_url: quizUploads[criterionId]?.file_url || '',
-                file_name: quizUploads[criterionId]?.file_name || '',
-                consultant_comment: criterionComments[criterionId] || ''
+                audit_type: selectedAudit || 'initial',
+                file_url: currentQuiz?.file_url || '',
+                file_name: currentQuiz?.file_name || '',
+                consultant_comment: commentToSave
             }, { onConflict: 'case_id,criterion_id,audit_type' })
+
+            // Update local state to reflect saved comment
+            setQuizUploads(prev => ({
+                ...prev,
+                [criterionId]: {
+                    ...(prev[criterionId] || {}),
+                    [selectedAudit || 'initial']: {
+                        ...(prev[criterionId]?.[selectedAudit || 'initial'] || {}),
+                        consultant_comment: criterionComments[criterionId]
+                    }
+                }
+            }))
         } catch (err) {
             console.error('Error saving comment:', err)
         } finally {
             setSavingComment(null)
+        }
+    }
+
+    const handleInitializeEvents = async () => {
+        setSavingEvent(true)
+        try {
+            const startDate = new Date()
+            const standardEvents = [
+                {
+                    case_id: id,
+                    title: "Rendez-vous de lancement",
+                    description: "Cadrage de la mission et analyse initiale.",
+                    event_date: new Date(startDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(), // +2 days
+                    event_type: 'meeting',
+                    visio_link: 'https://meet.google.com/abc-defg-hij',
+                    status: 'done'
+                },
+                {
+                    case_id: id,
+                    title: "Mentorat : Suivi Mi-Parcours",
+                    description: "Revue des indicateurs bloquants (C2, C3).",
+                    event_date: new Date(startDate.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString(), // +15 days
+                    event_type: 'meeting',
+                    visio_link: '',
+                    status: 'in_progress'
+                },
+                {
+                    case_id: id,
+                    title: "Audit Blanc",
+                    description: "Simulation complète de l'audit de surveillance.",
+                    event_date: new Date(startDate.getTime() + 45 * 24 * 60 * 60 * 1000).toISOString(), // +45 days (1.5 months)
+                    event_type: 'audit',
+                    visio_link: '',
+                    status: 'pending'
+                },
+                {
+                    case_id: id,
+                    title: "Audit de Surveillance",
+                    description: "Date prévisionnelle : Mars 2026",
+                    event_date: new Date(startDate.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString(), // +60 days (2 months)
+                    event_type: 'audit',
+                    visio_link: '',
+                    status: 'pending'
+                }
+            ]
+
+            const { data, error } = await supabase
+                .from('case_events')
+                .insert(standardEvents)
+                .select()
+
+            if (error) throw error
+            setEvents(data.sort((a, b) => new Date(a.event_date) - new Date(b.event_date)))
+        } catch (err) {
+            console.error('Error initializing events:', err)
+        } finally {
+            setSavingEvent(false)
+        }
+    }
+
+    // Planning Actions
+    const handleSaveEvent = async (eventData) => {
+        setSavingEvent(true)
+        try {
+            if (editingEvent) {
+                // Update
+                const { error } = await supabase
+                    .from('case_events')
+                    .update({
+                        title: eventData.title,
+                        description: eventData.description,
+                        event_date: eventData.event_date, // Changed from date to event_date to match DB
+                        event_type: eventData.type,
+                        visio_link: eventData.visio_link
+                    })
+                    .eq('id', editingEvent.id)
+
+                if (error) throw error
+                setEvents(prev => prev.map(e => e.id === editingEvent.id ? { ...e, ...eventData, event_date: eventData.event_date, event_type: eventData.type } : e).sort((a, b) => new Date(a.event_date) - new Date(b.event_date)))
+            } else {
+                // Create
+                const { data, error } = await supabase
+                    .from('case_events')
+                    .insert({
+                        case_id: id,
+                        title: eventData.title,
+                        description: eventData.description,
+                        event_date: eventData.event_date,
+                        event_type: eventData.type,
+                        visio_link: eventData.visio_link,
+                        status: 'pending'
+                    })
+                    .select()
+                    .single()
+
+                if (error) throw error
+                setEvents([...events, data].sort((a, b) => new Date(a.event_date) - new Date(b.event_date)))
+            }
+            setShowEventModal(false)
+            setEditingEvent(null)
+        } catch (err) {
+            console.error('Error saving event:', err)
+        } finally {
+            setSavingEvent(false)
+        }
+    }
+
+    const handleDeleteEvent = async (eventId) => {
+        if (!window.confirm("Supprimer cette étape ?")) return
+        try {
+            await supabase.from('case_events').delete().eq('id', eventId)
+            setEvents(prev => prev.filter(e => e.id !== eventId))
+        } catch (err) {
+            console.error('Error deleting event:', err)
+        }
+    }
+
+    const handleUpdateEventStatus = async (eventId, newStatus) => {
+        // Optimistic update
+        setEvents(prev => prev.map(e => e.id === eventId ? { ...e, status: newStatus } : e))
+        try {
+            await supabase.from('case_events').update({ status: newStatus }).eq('id', eventId)
+        } catch (err) {
+            console.error('Error updating status:', err)
         }
     }
 
@@ -301,7 +587,7 @@ export default function CaseDetails() {
             yPos += 8
 
             // Quiz Section (Top)
-            const quiz = quizUploads[crit.id]
+            const quiz = quizUploads[crit.id]?.[selectedAudit || 'initial']
             if (quiz) {
                 doc.setDrawColor(200, 200, 255)
                 doc.setFillColor(240, 248, 255) // AliceBlue
@@ -352,7 +638,8 @@ export default function CaseDetails() {
             yPos = doc.lastAutoTable.finalY + 10
 
             // Quiz & Main Comment
-            const comment = criterionComments[crit.id]
+            // Use local state comment if editing, else use saved comment from quiz object
+            const comment = criterionComments[crit.id] || quizUploads[crit.id]?.[selectedAudit || 'initial']?.consultant_comment
 
             if (quiz || comment) {
                 // Check page break
@@ -530,71 +817,105 @@ export default function CaseDetails() {
 
 
                     {activeTab === 'messagerie' && (
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex h-[600px] overflow-hidden">
-                            {/* LEFT LIST */}
-                            <div className="w-1/3 border-r border-gray-100 flex flex-col">
-                                <div className="p-4 border-b border-gray-50">
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden h-[600px] flex">
+
+                            {/* Sidebar (Participants) */}
+                            <div className="w-80 border-r border-gray-100 bg-gray-50 flex flex-col">
+                                <div className="p-4 border-b border-gray-100 bg-white">
                                     <div className="relative">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                         <input
                                             type="text"
                                             placeholder="Rechercher..."
-                                            className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                                         />
                                     </div>
                                 </div>
                                 <div className="flex-1 overflow-y-auto">
-                                    <div className="p-4 hover:bg-blue-50 cursor-pointer border-l-4 border-blue-600 bg-blue-50/50">
+                                    <button className="w-full text-left p-4 hover:bg-white border-b border-gray-100 bg-white border-l-4 border-l-purple-600 transition-colors">
                                         <div className="flex justify-between items-start mb-1">
-                                            <h4 className="font-bold text-gray-900 text-sm">Sarah Conner</h4>
-                                            <span className="text-[10px] text-gray-400">09:42</span>
+                                            <span className="font-bold text-gray-900 text-sm">{caseData?.tenants?.name || 'Client'}</span>
+                                            <span className="text-[10px] text-gray-400">Maintenant</span>
                                         </div>
-                                        <p className="text-xs text-gray-500 line-clamp-2">
-                                            Merci pour le retour sur l'indicateur...
-                                        </p>
-                                    </div>
-                                    {/* More items... */}
+                                        <p className="text-xs text-gray-500 truncate">Discussion active sur le dossier.</p>
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* RIGHT CHAT */}
-                            <div className="flex-1 flex flex-col">
+                            {/* Chat Area */}
+                            <div className="flex-1 flex flex-col bg-white">
+
                                 {/* Header */}
-                                <div className="p-4 border-b border-gray-50 flex justify-between items-center">
-                                    <h3 className="font-bold text-gray-900">Discussion - {caseData.tenants?.name}</h3>
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                                        <span className="text-xs text-green-600 font-bold">En ligne</span>
+                                <div className="h-16 border-b border-gray-100 flex items-center justify-between px-6 bg-white">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+                                        <h3 className="font-bold text-gray-900">Discussion - {caseData?.tenants?.name}</h3>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full border border-green-100">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span> En ligne
                                     </div>
                                 </div>
 
-                                {/* Messages */}
-                                <div className="flex-1 bg-gray-50 p-6 overflow-y-auto space-y-4">
-                                    {messages.map(msg => (
-                                        <div key={msg.id} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
-                                            <div className={`max-w-[70%] rounded-2xl p-4 ${msg.isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white shadow-sm border border-gray-100 text-gray-700 rounded-bl-none'}`}>
-                                                <p className="text-sm font-medium mb-1">{msg.text}</p>
-                                                <span className={`text-[10px] block text-right ${msg.isMe ? 'text-blue-200' : 'text-gray-400'}`}>
-                                                    {msg.time}
-                                                </span>
-                                            </div>
+                                {/* Messages List */}
+                                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/30">
+                                    {loadingMessages ? (
+                                        <div className="flex justify-center p-4">
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
                                         </div>
-                                    ))}
+                                    ) : messages.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-2">
+                                            <MessageCircle className="h-12 w-12 text-gray-200" />
+                                            <p>Aucun message. Commencez la discussion !</p>
+                                        </div>
+                                    ) : (
+                                        messages.map((msg) => {
+                                            const isMe = msg.sender_id === user?.id
+                                            return (
+                                                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                                    <div className={`max-w-[70%] rounded-2xl px-4 py-3 shadow-sm text-sm ${isMe
+                                                        ? 'bg-purple-600 text-white rounded-br-none'
+                                                        : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'
+                                                        }`}>
+                                                        <p>{msg.content}</p>
+                                                        <span className={`text-[10px] block mt-1 text-right ${isMe ? 'text-purple-200' : 'text-gray-400'}`}>
+                                                            {new Date(msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })
+                                    )}
+                                    <div ref={messagesEndRef} />
                                 </div>
 
-                                {/* Input */}
-                                <div className="p-4 bg-white border-t border-gray-50">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="text"
-                                            placeholder="Écrivez votre message..."
-                                            className="flex-1 px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        />
-                                        <button className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors shadow-sm">
-                                            <Send className="h-4 w-4" />
+                                {/* Input Area */}
+                                <div className="p-4 border-t border-gray-100 bg-white">
+                                    <form onSubmit={handleSendMessage} className="flex gap-4">
+                                        <div className="relative flex-1">
+                                            <input
+                                                type="text"
+                                                value={newMessage}
+                                                onChange={(e) => setNewMessage(e.target.value)}
+                                                placeholder="Écrivez votre message..."
+                                                className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent active:scale-[0.99] transition-transform"
+                                            />
+                                            <button
+                                                type="button"
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200 transition-colors"
+                                            >
+                                                <FileText className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                        <button
+                                            type="submit"
+                                            disabled={!newMessage.trim()}
+                                            className="bg-purple-600 text-white p-3 rounded-xl shadow-lg shadow-purple-200 hover:bg-purple-700 disabled:opacity-50 disabled:shadow-none transition-all hover:scale-105 active:scale-95 flex items-center justify-center font-bold"
+                                        >
+                                            <Send className="h-5 w-5" />
                                         </button>
-                                    </div>
+                                    </form>
                                 </div>
+
                             </div>
                         </div>
                     )}
@@ -602,6 +923,30 @@ export default function CaseDetails() {
                     {/* ── SUIVI RNO ── */}
                     {activeTab === 'suivi_rno' && (
                         <div className="space-y-5">
+                            {/* AUDIT TYPE TABS */}
+                            {caseData.audit_type && caseData.audit_type.length > 0 && (
+                                <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
+                                    {caseData.audit_type.map(type => (
+                                        <button
+                                            key={type}
+                                            onClick={() => setSelectedAudit(type)}
+                                            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${selectedAudit === type
+                                                ? 'bg-gray-900 text-white shadow-md'
+                                                : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
+                                                }`}
+                                        >
+                                            {type}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-lg font-bold text-gray-900">
+                                    Détail de l'Audit : <span className="text-indigo-600 capitalize">{selectedAudit}</span>
+                                </h2>
+                            </div>
+
                             {criteriaData.length === 0 ? (
                                 <div className="p-8 text-center bg-white rounded-2xl border border-gray-100">
                                     <p className="text-gray-400">Aucun référentiel chargé pour ce dossier.</p>
@@ -616,7 +961,8 @@ export default function CaseDetails() {
                                     const clientDoneCount = critIndicators.filter(i => indicatorStates[i.id]?.status === 'done').length
                                     const percent = Math.round((clientDoneCount / critIndicators.length) * 100) || 0
 
-                                    const quiz = quizUploads[crit.id]
+                                    const quiz = quizUploads[crit.id]?.[selectedAudit || 'initial']
+                                    const savedComment = quiz?.consultant_comment || ''
 
                                     return (
                                         <div key={crit.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -795,31 +1141,38 @@ export default function CaseDetails() {
                                                     ) : (
                                                         <div className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-gray-200 rounded-xl text-gray-400">
                                                             <FileText className="h-4 w-4" />
-                                                            <span className="text-xs">Aucun quiz soumis pour ce critère</span>
+                                                            <span className="text-xs">Aucun quiz soumis pour ce critère ({selectedAudit})</span>
                                                         </div>
                                                     )}
                                                 </div>
 
-                                                {/* Comment Box */}
+                                                {/* Consultant Comment */}
                                                 <div>
                                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Commentaire / Remarques</p>
-                                                    <textarea
-                                                        value={criterionComments[crit.id] || ''}
-                                                        onChange={e => setCriterionComments(prev => ({ ...prev, [crit.id]: e.target.value }))}
-                                                        rows={3}
-                                                        placeholder="Notez les erreurs, points à corriger ou observations pour ce critère…"
-                                                        className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent resize-none transition-all"
-                                                    />
-                                                    <button
-                                                        onClick={() => handleSaveCriterionComment(crit.id)}
-                                                        disabled={savingComment === crit.id}
-                                                        className="mt-2 px-4 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                                                    >
-                                                        {savingComment === crit.id ? 'Enregistrement…' : 'Enregistrer'}
-                                                    </button>
+                                                    <div className="relative">
+                                                        <textarea
+                                                            value={criterionComments[crit.id] !== undefined ? criterionComments[crit.id] : savedComment}
+                                                            onChange={(e) => setCriterionComments({ ...criterionComments, [crit.id]: e.target.value })}
+                                                            placeholder="Notez les erreurs, points à corriger ou observations pour ce critère..."
+                                                            className="w-full min-h-[100px] p-4 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-y"
+                                                        />
+                                                        <div className="absolute bottom-3 right-3">
+                                                            <button
+                                                                onClick={() => handleSaveCriterionComment(crit.id)}
+                                                                disabled={savingComment === crit.id}
+                                                                className={`px-4 py-2 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-2 ${savingComment === crit.id
+                                                                    ? 'bg-indigo-400 cursor-wait'
+                                                                    : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-md'
+                                                                    }`}
+                                                            >
+                                                                {savingComment === crit.id ? (
+                                                                    <>Saving...</>
+                                                                ) : 'Enregistrer'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-
                                         </div>
                                     )
                                 })
@@ -827,83 +1180,149 @@ export default function CaseDetails() {
                         </div>
                     )}
 
+
                     {/* VUE PLANIFICATION (Timeline Mockup) */}
-                    {activeTab === 'planification' && (
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-fadeIn max-w-4xl mx-auto">
-                            <div className="flex justify-between items-center mb-10">
-                                <h2 className="text-xl font-bold text-gray-900">Parcours d'Accompagnement</h2>
-                                <button className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wide">
-                                    <Plus className="h-4 w-4" /> Ajouter une étape
-                                </button>
-                            </div>
-
-                            <div className="relative border-l-2 border-dashed border-gray-200 ml-6 space-y-10 py-2">
-                                {/* Step 1: RDV Lancement (Done) */}
-                                <div className="relative pl-10">
-                                    <div className="absolute -left-[9px] top-0 h-5 w-5 rounded-full bg-green-100 border-2 border-green-500 flex items-center justify-center">
-                                        <CheckCircle className="h-3 w-3 text-green-600" />
-                                    </div>
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
-                                        <h3 className="text-base font-bold text-gray-900">Rendez-vous de lancement</h3>
-                                        <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded uppercase border border-green-200 mt-1 sm:mt-0">Réalisé</span>
-                                    </div>
-                                    <p className="text-sm text-gray-500 mb-3">Cadrage de la mission et analyse initiale.</p>
-                                    <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs text-gray-600 font-medium">
-                                        Note: Client très réactif. Documents administratifs collectés.
-                                    </div>
+                    {
+                        activeTab === 'planification' && (
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-fadeIn max-w-4xl mx-auto">
+                                <div className="flex justify-between items-center mb-10">
+                                    <h2 className="text-xl font-bold text-gray-900">Parcours d'Accompagnement</h2>
+                                    <button
+                                        onClick={() => { setEditingEvent(null); setShowEventModal(true) }}
+                                        className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wide"
+                                    >
+                                        <Plus className="h-4 w-4" /> Ajouter une étape
+                                    </button>
                                 </div>
 
-                                {/* Step 2: Mentorat (Current) */}
-                                <div className="relative pl-10">
-                                    <div className="absolute -left-[9px] top-0 h-5 w-5 rounded-full bg-blue-100 border-2 border-blue-500 flex items-center justify-center animate-pulse">
-                                        <span className="h-2 w-2 rounded-full bg-blue-500"></span>
-                                    </div>
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
-                                        <h3 className="text-base font-bold text-gray-900">Mentorat : Suivi Mi-Parcours</h3>
-                                        <button className="text-xs font-bold bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200 mt-2 sm:mt-0">
-                                            Lancer Visio
+                                {events.length === 0 ? (
+                                    <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl bg-gray-50/50">
+                                        <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Calendar className="h-8 w-8" />
+                                        </div>
+                                        <h3 className="text-lg font-bold text-gray-900 mb-2">Aucune étape planifiée</h3>
+                                        <p className="text-sm text-gray-500 max-w-sm mx-auto mb-6">
+                                            Le parcours est vide. Vous pouvez commencer par générer les étapes standards d'accompagnement.
+                                        </p>
+                                        <button
+                                            onClick={handleInitializeEvents}
+                                            disabled={savingEvent}
+                                            className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all disabled:opacity-50"
+                                        >
+                                            {savingEvent ? 'Génération...' : 'Générer le Parcours Type'}
                                         </button>
                                     </div>
-                                    <p className="text-sm text-gray-500 mb-2">Revue des indicateurs bloquants (C2, C3).</p>
-                                    <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50 inline-block px-2 py-1 rounded border border-blue-100">
-                                        <Calendar className="h-3 w-3" /> 16 Fév. 2026 à 14:00
-                                    </div>
-                                </div>
+                                ) : (
+                                    <div className="relative border-l-2 border-dashed border-gray-200 ml-6 space-y-10 py-2">
+                                        {events.map((event) => {
+                                            const isDone = event.status === 'done' || event.status === 'realise'
+                                            const isToday = new Date(event.event_date).toDateString() === new Date().toDateString()
 
-                                {/* Step 3: Audit Blanc (Future) */}
-                                <div className="relative pl-10">
-                                    <div className="absolute -left-[9px] top-0 h-5 w-5 rounded-full bg-purple-50 border-2 border-purple-200 flex items-center justify-center">
-                                        <span className="h-2 w-2 rounded-full bg-purple-300"></span>
-                                    </div>
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
-                                        <h3 className="text-base font-bold text-gray-900">Audit Blanc</h3>
-                                        <button className="text-xs font-bold text-purple-600 border border-purple-200 bg-white px-3 py-1.5 rounded hover:bg-purple-50 transition-colors mt-2 sm:mt-0">
-                                            Planifier
-                                        </button>
-                                    </div>
-                                    <p className="text-sm text-gray-500 mb-2">Simulation complète de l'audit de surveillance.</p>
-                                    <div className="flex items-center gap-1.5 text-xs text-purple-500 font-medium">
-                                        <Info className="h-3 w-3" /> En attente de validation des indicateurs
-                                    </div>
-                                </div>
+                                            let connectorColor = 'bg-gray-50 border-gray-200'
+                                            let dotColor = 'bg-gray-300'
+                                            if (isDone) {
+                                                connectorColor = 'bg-green-100 border-green-500'
+                                                dotColor = 'text-green-600' // Check icon
+                                            } else if (event.status === 'in_progress' || isToday) {
+                                                connectorColor = 'bg-blue-100 border-blue-500'
+                                                dotColor = 'bg-blue-500'
+                                            } else if (event.event_type === 'audit') {
+                                                connectorColor = 'bg-purple-50 border-purple-200'
+                                                dotColor = 'bg-purple-300'
+                                            }
 
-                                {/* Step 4: Audit de Surveillance (Final) */}
-                                <div className="relative pl-10">
-                                    <div className="absolute -left-[9px] top-0 h-5 w-5 rounded-full bg-gray-50 border-2 border-gray-200 flex items-center justify-center">
-                                        <span className="h-2 w-2 rounded-full bg-gray-300"></span>
-                                    </div>
+                                            return (
+                                                <div key={event.id} className="relative pl-10">
+                                                    {/* Connector Dot */}
+                                                    <div className={`absolute -left-[9px] top-0 h-5 w-5 rounded-full border-2 flex items-center justify-center ${connectorColor} ${event.status === 'in_progress' ? 'animate-pulse' : ''}`}>
+                                                        {isDone ? (
+                                                            <CheckCircle className="h-3 w-3 text-green-600" />
+                                                        ) : (
+                                                            <span className={`h-2 w-2 rounded-full ${dotColor}`}></span>
+                                                        )}
+                                                    </div>
 
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
-                                        <h3 className="text-base font-bold text-gray-900">Audit de Surveillance</h3>
+                                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
+                                                        <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                                                            {event.title}
+                                                            <button
+                                                                onClick={() => { setEditingEvent(event); setShowEventModal(true) }}
+                                                                className="text-gray-300 hover:text-blue-600 transition-colors"
+                                                            >
+                                                                <Edit2 className="h-3 w-3" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteEvent(event.id)}
+                                                                className="text-gray-300 hover:text-red-600 transition-colors"
+                                                            >
+                                                                <Trash2 className="h-3 w-3" />
+                                                            </button>
+                                                        </h3>
+
+                                                        <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                                                            {/* Status Toggle - "Bien réalisé" Logic */}
+                                                            {!isDone && (
+                                                                <button
+                                                                    onClick={() => handleUpdateEventStatus(event.id, 'done')}
+                                                                    className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-green-50 hover:border-green-200 hover:text-green-700 transition-all shadow-sm"
+                                                                >
+                                                                    <div className="h-4 w-4 rounded border border-gray-300 group-hover:border-green-500 flex items-center justify-center transition-colors">
+                                                                        <CheckCircle className="h-3 w-3 text-white group-hover:text-green-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                                    </div>
+                                                                    <span className="text-xs font-bold uppercase tracking-wide">Marquer réalisé</span>
+                                                                </button>
+                                                            )}
+                                                            {isDone && (
+                                                                <span className="flex items-center gap-1 text-[10px] font-bold bg-green-100 text-green-700 px-2 py-1 rounded-lg uppercase border border-green-200 shadow-sm">
+                                                                    <CheckCircle className="h-3 w-3" /> Réalisé
+                                                                </span>
+                                                            )}
+
+                                                            {/* Visio Link - Special Logic for Audit Blanc ONLY */}
+                                                            {isDone && event.title.toLowerCase().includes('audit blanc') && (
+                                                                <a
+                                                                    href={event.visio_link || '#'}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    onClick={(e) => {
+                                                                        if (!event.visio_link) {
+                                                                            e.preventDefault()
+                                                                            setEditingEvent(event)
+                                                                            setShowEventModal(true)
+                                                                        }
+                                                                    }}
+                                                                    className="text-xs font-bold bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 flex items-center gap-1.5"
+                                                                >
+                                                                    <Video className="h-3.5 w-3.5" />
+                                                                    {event.visio_link ? 'Lancer Visio' : 'Planifier Visio'}
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {event.description && <p className="text-sm text-gray-500 mb-2">{event.description}</p>}
+                                                    <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50 inline-block px-2 py-1 rounded border border-blue-100">
+                                                        <Calendar className="h-3 w-3" /> {new Date(event.event_date).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
                                     </div>
-                                    <p className="text-sm text-gray-500">Date prévisionnelle : Mars 2026</p>
-                                </div>
+                                )}
                             </div>
-                        </div>
-                    )}
+                        )
+                    }
 
-                </div>
-            </div>
+                    {/* EVENT MODAL */}
+                    <EventModal
+                        isOpen={showEventModal}
+                        onClose={() => { setShowEventModal(false); setEditingEvent(null) }}
+                        onSave={handleSaveEvent}
+                        eventToEdit={editingEvent}
+                        isSaving={savingEvent}
+                    />
+
+                </div >
+            </div >
 
 
             <NewCaseModal
