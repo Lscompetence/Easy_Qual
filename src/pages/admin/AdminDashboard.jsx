@@ -390,8 +390,15 @@ export default function AdminDashboard() {
 
         try {
             // --- CALL EDGE FUNCTION (Ensures Auth user is created) ---
-            // --- CALL EDGE FUNCTION ---
+            const { data: { session } } = await supabase.auth.getSession()
+            const token = session?.access_token
+            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
             const { data: responseData, error: responseError } = await supabase.functions.invoke('admin_create_consultant', {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    apikey: anonKey
+                },
                 body: {
                     action: 'create_consultant',
                     ...newConsultant,

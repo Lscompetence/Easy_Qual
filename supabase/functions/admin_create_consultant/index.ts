@@ -110,22 +110,63 @@ Deno.serve(async (req) => {
     }
 })
 
-// HELPER: Cleanup all DB references
+// HELPER: Cleanup all DB references — ORDER MATTERS to avoid FK violations
 async function cleanupUserReferences(supabase: any, userId: string) {
     console.log(`[CLEANUP] Cleaning up DB for: ${userId}`)
     try {
-        // We delete in order of dependency if possible, or just nullify
+        // 1. Find all tenants created by this user
+        const { data: tenants } = await supabase
+            .from('tenants')
+            .select('id')
+            .eq('created_by', userId)
+
+        const tenantIds = (tenants || []).map((t: any) => t.id)
+
+        // 2. Find all cases for those tenants
+        let caseIds: string[] = []
+        if (tenantIds.length > 0) {
+            const { data: cases } = await supabase
+                .from('cases')
+                .select('id')
+                .in('tenant_id', tenantIds)
+            caseIds = (cases || []).map((c: any) => c.id)
+        }
+
+        // 3. Delete case_messages (sender_id = userId OR case_id in caseIds)
+        console.log(`[CLEANUP] Deleting case_messages for sender: ${userId} and ${caseIds.length} cases`)
+        await supabase.from('case_messages').delete().eq('sender_id', userId)
+        if (caseIds.length > 0) {
+            await supabase.from('case_messages').delete().in('case_id', caseIds)
+        }
+
+        // 4. Delete case_events for those cases
+        if (caseIds.length > 0) {
+            console.log(`[CLEANUP] Deleting case_events for ${caseIds.length} cases`)
+            await supabase.from('case_events').delete().in('case_id', caseIds)
+        }
+
+        // 5. Delete cases themselves
+        if (caseIds.length > 0) {
+            await supabase.from('cases').delete().in('id', caseIds)
+        }
+
+        // 6. Delete tenants
+        if (tenantIds.length > 0) {
+            await supabase.from('tenants').delete().in('id', tenantIds)
+        }
+
+        // 7. Cleanup other direct references (parallel is safe here)
         await Promise.allSettled([
-            // Critical Change: Delete tenants (and thus cases via cascade)
-            supabase.from('tenants').delete().eq('created_by', userId),
-            // Cleanup other direct references
             supabase.from('logs').delete().eq('user_id', userId),
             supabase.from('reviews').delete().eq('reviewer_id', userId),
             supabase.from('transactions').delete().eq('wallet_id', userId),
             supabase.from('credits_wallet').delete().eq('consultant_id', userId),
-            // Finally profile
-            supabase.from('profiles').delete().eq('id', userId)
         ])
+
+        // 8. Finally delete profile
+        await supabase.from('profiles').delete().eq('id', userId)
+
+        console.log(`[CLEANUP] All references cleaned for: ${userId}`)
     } catch (e: any) {
         console.warn(`[CLEANUP] Warning during cleanup: ${e.message}`)
     }

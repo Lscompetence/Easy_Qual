@@ -77,12 +77,23 @@ export default function ConsultantDashboard() {
             const totalProgress = activeCases.reduce((sum, c) => sum + (c.progress || 0), 0)
             const avgProgress = activeCases.length > 0 ? Math.round(totalProgress / activeCases.length) : 0
 
-            // Update stats
-            // Update stats
+            // Count Audit Blanc events from fetched cases
+            let auditBlancCount = 0
+            if (casesData && casesData.length > 0) {
+                const caseIds = casesData.map(c => c.id)
+                const { data: abEvents } = await supabase
+                    .from('case_events')
+                    .select('id')
+                    .in('case_id', caseIds)
+                    .ilike('title', '%audit blanc%')
+                    .neq('status', 'done')
+                if (abEvents) auditBlancCount = abEvents.length
+            }
+
             setStats({
                 active: casesData?.filter(c => c.status === 'active' || c.status === 'draft').length || 0,
-                toValidate: casesData?.filter(c => c.status === 'submitted').length || 0, // Assuming 'submitted' is the status for review
-                planned: 3,
+                toValidate: casesData?.filter(c => c.status === 'submitted').length || 0,
+                planned: auditBlancCount,
                 completed: casesData?.filter(c => c.status === 'validated').length || 0
             })
 
