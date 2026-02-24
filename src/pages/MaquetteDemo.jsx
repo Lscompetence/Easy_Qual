@@ -30,7 +30,8 @@ import {
     File,
     MoreVertical,
     CalendarDays,
-    Briefcase
+    Briefcase,
+    CircleOff
 } from 'lucide-react';
 
 // --- Mock Data ---
@@ -631,7 +632,7 @@ const ClientDetailView = ({ client, onBack }) => {
                                                                         <span className={`text-sm font-bold ${isActive ? 'text-indigo-700'
                                                                             : 'text-slate-800'}`}>Indicateur {ind.id}</span>
                                                                         {ind.status === 'conforme' && <span
-                                                                            className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded">Validé</span>}
+                                                                            className="text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded">Conforme</span>}
                                                                         {ind.status === 'review' && <span
                                                                             className="text-[10px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">À
                                                                             vérifier</span>}
@@ -883,15 +884,15 @@ const ClientDetailView = ({ client, onBack }) => {
                                     <span className="text-xs font-bold">Conforme</span>
                                 </button>
                                 <button
-                                    className="flex flex-col items-center justify-center py-3 px-2 rounded-xl bg-white border border-slate-200 hover:border-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-all group shadow-sm hover:shadow-md">
-                                    <CheckCircle2 size={24}
-                                        className="mb-1.5 text-slate-300 group-hover:text-amber-600 transition-colors" />
-                                    <span className="text-xs font-bold">À surveiller</span>
+                                    className="flex flex-col items-center justify-center py-3 px-2 rounded-xl bg-white border border-slate-200 hover:border-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-all group shadow-sm hover:shadow-md">
+                                    <CircleOff size={24}
+                                        className="mb-1.5 text-slate-300 group-hover:text-slate-600 transition-colors" />
+                                    <span className="text-xs font-bold">Non Applicable</span>
                                 </button>
                                 <button
                                     className="flex flex-col items-center justify-center py-3 px-2 rounded-xl bg-white border border-slate-200 hover:border-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-all group shadow-sm hover:shadow-md">
                                     <X size={24} className="mb-1.5 text-slate-300 group-hover:text-rose-600 transition-colors" />
-                                    <span className="text-xs font-bold">Non-conforme</span>
+                                    <span className="text-xs font-bold">Non Conforme</span>
                                 </button>
                             </div>
                         </div>

@@ -33,7 +33,9 @@ import {
     Info,
     Edit2,
     Trash2,
-    Video
+    Video,
+    CircleOff,
+    AlertTriangle
 } from 'lucide-react'
 
 // Icon mapping for Criteria
@@ -80,6 +82,7 @@ export default function CaseDetails() {
     const [selectedIndicatorId, setSelectedIndicatorId] = useState(null) // which indicator is expanded
     const [criterionComments, setCriterionComments] = useState({}) // { criterion_id: string }
     const [savingComment, setSavingComment] = useState(null) // criterion_id being saved
+    const [statusMessage, setStatusMessage] = useState(null) // { type: 'success'|'info', text: string }
 
 
 
@@ -389,6 +392,21 @@ export default function CaseDetails() {
         setSelectedIndicatorId(null) // collapse after verdict
     }
 
+    // Update the global case status
+    const handleCaseStatusUpdate = async (newStatus) => {
+        try {
+            const { error } = await supabase
+                .from('cases')
+                .update({ status: newStatus })
+                .eq('id', id)
+            if (error) throw error
+            // Optimistic update
+            setCaseData(prev => ({ ...prev, status: newStatus }))
+        } catch (err) {
+            console.error('Error updating case status:', err)
+        }
+    }
+
     // Save consultant comment for a criterion
     const handleSaveCriterionComment = async (criterionId) => {
         setSavingComment(criterionId)
@@ -613,7 +631,8 @@ export default function CaseDetails() {
                 if (state.status === 'done') statusText = 'Terminé'
 
                 let verdictText = '-'
-                if (state.consultant_verdict === 'validated') verdictText = 'VALIDE'
+                if (state.consultant_verdict === 'validated') verdictText = 'CONFORME'
+                if (state.consultant_verdict === 'non_applicable') verdictText = 'NON APPLICABLE'
                 if (state.consultant_verdict === 'non_conforme') verdictText = 'NON CONFORME'
 
                 return [
@@ -763,7 +782,7 @@ export default function CaseDetails() {
                             </div>
                         </div>
 
-                        {/* Progress */}
+                        {/* Progress + Status */}
                         <div className="w-full md:w-auto md:min-w-[300px] flex items-center gap-6">
                             <div className="flex-1">
                                 <div className="flex justify-between items-end mb-2">
@@ -772,6 +791,19 @@ export default function CaseDetails() {
                                 </div>
                                 <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
                                     <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${progressPercent}%` }}></div>
+                                </div>
+                                {/* Case Status Badge */}
+                                <div className="mt-2 flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Statut :</span>
+                                    {caseData.status !== 'validated' ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold">
+                                            ● Non Terminé
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
+                                            <CheckCircle className="h-3.5 w-3.5" /> Terminé
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                             <button
@@ -1034,12 +1066,17 @@ export default function CaseDetails() {
                                                                 <div className="flex-shrink-0 ml-3">
                                                                     {verdict === 'validated' && (
                                                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
-                                                                            <CheckCircle className="h-3.5 w-3.5" /> Validé
+                                                                            <CheckCircle className="h-3.5 w-3.5" /> Conforme
+                                                                        </span>
+                                                                    )}
+                                                                    {verdict === 'non_applicable' && (
+                                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                                                                            <CircleOff className="h-3.5 w-3.5" /> Non Applicable
                                                                         </span>
                                                                     )}
                                                                     {verdict === 'non_conforme' && (
                                                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold">
-                                                                            <XCircle className="h-3.5 w-3.5" /> Non conforme
+                                                                            <XCircle className="h-3.5 w-3.5" /> Non Conforme
                                                                         </span>
                                                                     )}
                                                                     {!verdict && (
@@ -1059,28 +1096,19 @@ export default function CaseDetails() {
                                                                     <div className="bg-white rounded-xl border border-indigo-100 p-4">
                                                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Statut déclaré par le client</p>
                                                                         <div className="flex gap-2">
-                                                                            {/* To Do */}
-                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-bold transition-all ${(!state.status || state.status === 'to_do')
-                                                                                ? 'bg-gray-100 text-gray-700 border-gray-300'
-                                                                                : 'bg-white text-gray-300 border-gray-100'
-                                                                                }`}>
-                                                                                <span className="h-2 w-2 rounded-full bg-current" /> À faire
+                                                                            {/* Conforme */}
+                                                                            <div className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-bold bg-white text-gray-300 border-gray-100">
+                                                                                <CheckCircle className="h-4 w-4" /> Conforme
                                                                             </div>
 
-                                                                            {/* Doing */}
-                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-bold transition-all ${state.status === 'doing'
-                                                                                ? 'bg-blue-100 text-blue-700 border-blue-300'
-                                                                                : 'bg-white text-gray-300 border-gray-100'
-                                                                                }`}>
-                                                                                <Clock className="h-4 w-4" /> En cours
+                                                                            {/* Non Applicable */}
+                                                                            <div className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-bold bg-white text-gray-300 border-gray-100">
+                                                                                <CircleOff className="h-4 w-4" /> Non Applicable
                                                                             </div>
 
-                                                                            {/* Done */}
-                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-bold transition-all ${state.status === 'done'
-                                                                                ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
-                                                                                : 'bg-white text-gray-300 border-gray-100'
-                                                                                }`}>
-                                                                                <CheckCircle className="h-4 w-4" /> Terminé
+                                                                            {/* Non Conforme */}
+                                                                            <div className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-bold bg-white text-gray-300 border-gray-100">
+                                                                                <XCircle className="h-4 w-4" /> Non Conforme
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -1096,7 +1124,7 @@ export default function CaseDetails() {
                                                                                     : 'border-emerald-200 text-emerald-600 bg-white hover:bg-emerald-50'
                                                                                     }`}
                                                                             >
-                                                                                <CheckCircle className="h-4 w-4" /> Validé
+                                                                                <CheckCircle className="h-4 w-4" /> Conforme
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => handleVerdict(ind.id, 'non_conforme')}
@@ -1105,7 +1133,7 @@ export default function CaseDetails() {
                                                                                     : 'border-red-200 text-red-600 bg-white hover:bg-red-50'
                                                                                     }`}
                                                                             >
-                                                                                <XCircle className="h-4 w-4" /> Non conforme
+                                                                                <XCircle className="h-4 w-4" /> Non Conforme
                                                                             </button>
                                                                         </div>
                                                                     </div>
@@ -1180,6 +1208,52 @@ export default function CaseDetails() {
                         </div>
                     )}
 
+                    {/* ── CASE STATUS BUTTONS — inside audit tab only ── */}
+                    {activeTab === 'suivi_rno' && (
+                        <div className="mt-6">
+                            {statusMessage && (
+                                <div className={`mb-3 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold border ${statusMessage.type === 'success'
+                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                        : 'bg-orange-50 border-orange-200 text-orange-700'
+                                    }`}>
+                                    {statusMessage.type === 'success'
+                                        ? <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                                        : <XCircle className="h-4 w-4 flex-shrink-0" />
+                                    }
+                                    {statusMessage.text}
+                                </div>
+                            )}
+                            <div className="flex items-center gap-3">
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-2 whitespace-nowrap">Statut du dossier :</p>
+                                <button
+                                    onClick={() => {
+                                        handleCaseStatusUpdate('active')
+                                        setStatusMessage({ type: 'info', text: 'Le dossier a été marqué comme Non Terminé.' })
+                                        setTimeout(() => setStatusMessage(null), 4000)
+                                    }}
+                                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${caseData.status === 'active'
+                                        ? 'bg-orange-500 border-orange-500 text-white shadow-sm'
+                                        : 'border-orange-200 text-orange-500 bg-white hover:bg-orange-50'
+                                        }`}
+                                >
+                                    <XCircle className="h-4 w-4" /> Non Terminé
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        handleCaseStatusUpdate('validated')
+                                        setStatusMessage({ type: 'success', text: 'Félicitations ! Le dossier de ce client est validé et marqué comme Terminé.' })
+                                        setTimeout(() => setStatusMessage(null), 5000)
+                                    }}
+                                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${caseData.status === 'validated'
+                                        ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm'
+                                        : 'border-emerald-200 text-emerald-600 bg-white hover:bg-emerald-50'
+                                        }`}
+                                >
+                                    <CheckCircle className="h-4 w-4" /> Terminé
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* VUE PLANIFICATION (Timeline Mockup) */}
                     {
@@ -1320,6 +1394,8 @@ export default function CaseDetails() {
                         eventToEdit={editingEvent}
                         isSaving={savingEvent}
                     />
+
+
 
                 </div >
             </div >

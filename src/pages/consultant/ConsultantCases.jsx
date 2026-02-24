@@ -246,12 +246,17 @@ export default function ConsultantCases() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right" onClick={() => navigate(`/consultant/case/${c.id}`)}>
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${c.status === 'validated'
-                                                        ? 'bg-green-50 text-green-700'
-                                                        : 'bg-orange-50 text-orange-700'
-                                                        }`}>
-                                                        {c.status === 'validated' ? 'Terminé' : 'Non Terminé'}
-                                                    </span>
+                                                    {c.status === 'validated' ? (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-100">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block"></span> Terminé
+                                                        </span>
+                                                    ) : c.status === 'active' ? (
+                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-100">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-orange-500 inline-block"></span> Non Terminé
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-300 font-bold text-base">—</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 text-right relative">
                                                     <div className="relative">

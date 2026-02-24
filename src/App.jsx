@@ -10,6 +10,7 @@ import ConsultantCases from './pages/consultant/ConsultantCases'
 import CaseDetails from './pages/consultant/CaseDetails'
 import ClientDashboard from './pages/client/ClientDashboard'
 import AgendaVisios from './pages/consultant/AgendaVisios'
+import Ressources from './pages/consultant/Ressources'
 import Profile from './pages/Profile'
 import Unauthorized from './pages/Unauthorized'
 import MaquetteDemo from './pages/MaquetteDemo'
@@ -41,6 +42,7 @@ function App() {
             <Route path="/consultant/cases" element={<ConsultantCases />} />
             <Route path="/consultant/case/:id" element={<CaseDetails />} />
             <Route path="/consultant/calendar" element={<AgendaVisios />} />
+            <Route path="/consultant/resources" element={<Ressources />} />
           </Route>
 
           {/* Client (OF) Routes */}
