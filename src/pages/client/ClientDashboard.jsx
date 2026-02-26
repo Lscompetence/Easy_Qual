@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import {
     FileText, Upload, CheckCircle, Clock, AlertTriangle,
-    LogOut, Download, XCircle, MessageSquare, ChevronDown, ChevronUp
+    LogOut, Download, XCircle, MessageSquare, ChevronDown, ChevronUp, CircleOff
 } from 'lucide-react'
 import Logo from '../../components/Logo'
 
@@ -143,7 +143,7 @@ export default function ClientDashboard() {
 
     // Calc Progress
     const totalIndicators = indicators.length
-    const doneCount = Object.values(indicatorStates).filter(s => s?.status === 'done').length
+    const doneCount = Object.values(indicatorStates).filter(s => s?.status === 'done' || s?.status === 'non_applicable').length
     const progressPercent = totalIndicators > 0 ? Math.round((doneCount / totalIndicators) * 100) : 0
 
     // Group by Criterion
@@ -155,8 +155,9 @@ export default function ClientDashboard() {
     }, {})
 
     const verdictConfig = {
-        validated: { label: 'Validé', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: <CheckCircle className="h-3.5 w-3.5" /> },
+        validated: { label: 'Conforme', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: <CheckCircle className="h-3.5 w-3.5" /> },
         non_conforme: { label: 'Non conforme', color: 'bg-red-100 text-red-700 border-red-200', icon: <XCircle className="h-3.5 w-3.5" /> },
+        non_applicable: { label: 'Non Applicable', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: <CircleOff className="h-3.5 w-3.5" /> },
     }
 
     return (
@@ -227,7 +228,7 @@ export default function ClientDashboard() {
                     <div className="space-y-6">
                         {Object.values(groupedIndicators).map((criterion) => {
                             const allDone = criterion.items.every(ind => indicatorStates[ind.id]?.status === 'done')
-                            const doneCnt = criterion.items.filter(ind => indicatorStates[ind.id]?.status === 'done').length
+                            const doneCnt = criterion.items.filter(ind => indicatorStates[ind.id]?.status === 'done' || indicatorStates[ind.id]?.status === 'non_applicable').length
                             const critPct = criterion.items.length > 0 ? Math.round((doneCnt / criterion.items.length) * 100) : 0
                             const quizUploaded = quizUploads[criterion.id]
                             const isExpanded = expandedCriteria[criterion.id] !== false // default expanded
@@ -305,19 +306,26 @@ export default function ClientDashboard() {
                                                                 {/* Status selector */}
                                                                 <div className="flex-shrink-0">
                                                                     <div className="flex flex-col gap-1.5">
-                                                                        {/* Bar 1: Non conforme */}
+                                                                        {/* En cours */}
                                                                         <button
                                                                             onClick={() => handleStatusChange(ind.id, 'to_do')}
-                                                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${status === 'to_do' ? 'bg-red-500 border-red-500 text-white' : 'border-gray-200 text-gray-400 hover:border-red-300'}`}
+                                                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${status === 'to_do' ? 'bg-orange-500 border-orange-500 text-white shadow-sm' : 'border-gray-100 text-gray-400 hover:border-orange-200'}`}
                                                                         >
-                                                                            <XCircle className="h-3.5 w-3.5" /> Non conforme
+                                                                            <Clock className="h-3.5 w-3.5" /> En cours
                                                                         </button>
-                                                                        {/* Bar 2: Validé */}
+                                                                        {/* Fait */}
                                                                         <button
                                                                             onClick={() => handleStatusChange(ind.id, 'done')}
-                                                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-200 text-gray-400 hover:border-emerald-300'}`}
+                                                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm' : 'border-gray-100 text-gray-400 hover:border-emerald-200'}`}
                                                                         >
-                                                                            <CheckCircle className="h-3.5 w-3.5" /> Validé
+                                                                            <CheckCircle className="h-3.5 w-3.5" /> Fait
+                                                                        </button>
+                                                                        {/* Non Applicable */}
+                                                                        <button
+                                                                            onClick={() => handleStatusChange(ind.id, 'non_applicable')}
+                                                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${status === 'non_applicable' ? 'bg-slate-500 border-slate-500 text-white shadow-sm' : 'border-gray-100 text-gray-400 hover:border-slate-200'}`}
+                                                                        >
+                                                                            <CircleOff className="h-3.5 w-3.5" /> Non Applicable
                                                                         </button>
                                                                     </div>
                                                                 </div>

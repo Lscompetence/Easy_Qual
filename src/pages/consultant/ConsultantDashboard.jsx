@@ -56,12 +56,7 @@ export default function ConsultantDashboard() {
             const { data: casesData, error: casesError } = await supabase
                 .from('cases')
                 .select(`
-                    id, 
-                    category, 
-                    status, 
-                    created_at,
-                    audit_type,
-                    training_categories,
+                    *,
                     tenants (name, siret, owner_id)
                 `)
                 .order('created_at', { ascending: false })
@@ -174,6 +169,10 @@ export default function ConsultantDashboard() {
                     onNewFolder={() => setShowCreateModal(true)}
                     showNewFolder={true}
                     refreshKey={refreshKey}
+                    onCreditsUpdate={() => {
+                        fetchConsultantData();
+                        setRefreshKey(k => k + 1);
+                    }}
                     hasUnreadNotifications={hasNotifications}
                     onNotificationClick={() => setHasNotifications(false)}
                     searchQuery={searchQuery}
@@ -220,7 +219,6 @@ export default function ConsultantDashboard() {
                                 <div className={`p-3 rounded-lg ${filterStatus === 'active' ? 'bg-blue-100 text-blue-700' : 'bg-blue-50 text-blue-600'}`}>
                                     <FolderOpen className="h-6 w-6" />
                                 </div>
-
                             </div>
                             <div>
                                 <h3 className={`text-3xl font-bold ${filterStatus === 'active' ? 'text-blue-900' : 'text-gray-900'}`}>{stats.active}</h3>
@@ -302,7 +300,6 @@ export default function ConsultantDashboard() {
                                                 : cases
                                             )
                                                 .filter(c => c.tenants?.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-                                                .filter(c => c.tenants?.name?.toLowerCase().includes(searchQuery.toLowerCase()))
                                                 .slice(0, 8).map((c) => (
                                                     <tr
                                                         key={c.id}
@@ -346,25 +343,33 @@ export default function ConsultantDashboard() {
                                                                 )}
                                                             </div>
                                                         </td>
-                                                        <td className="py-4 w-1/4">
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-xs font-bold text-gray-700">{c.progress || 0}%</span>
-                                                                <div className="h-1.5 flex-1 bg-gray-100 rounded-full overflow-hidden">
-                                                                    <div className="h-full bg-blue-600 rounded-full" style={{ width: `${c.progress || 0}%` }}></div>
+                                                        <td className="py-6 w-1/4">
+                                                            <div className="flex flex-col gap-1.5 pr-8">
+                                                                <div className="flex justify-between items-center mb-0.5">
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Progression</span>
+                                                                    <span className="text-xs font-black text-slate-700">{c.progress || 0}%</span>
+                                                                </div>
+                                                                <div className="h-2 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                                                                    <div
+                                                                        className={`h-full rounded-full transition-all duration-1000 ${(c.progress || 0) >= 100 ? 'bg-emerald-500' :
+                                                                            (c.progress || 0) >= 50 ? 'bg-indigo-500' : 'bg-blue-500'
+                                                                            }`}
+                                                                        style={{ width: `${c.progress || 0}%` }}
+                                                                    ></div>
                                                                 </div>
                                                             </div>
                                                         </td>
                                                         <td className="py-4 text-right pr-2">
                                                             {c.status === 'validated' ? (
                                                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-100">
-                                                                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block"></span> Terminé
+                                                                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block"></span> Validé
                                                                 </span>
-                                                            ) : c.status === 'active' ? (
-                                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-100">
-                                                                    <span className="h-1.5 w-1.5 rounded-full bg-orange-500 inline-block"></span> Non Terminé
+                                                            ) : (c.status === 'active' || (c.progress > 0)) ? (
+                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100 shadow-sm">
+                                                                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span> En cours
                                                                 </span>
                                                             ) : (
-                                                                <span className="text-gray-300 font-bold text-base">—</span>
+                                                                <span className="text-gray-300 font-bold px-4">—</span>
                                                             )}
                                                         </td>
                                                     </tr>

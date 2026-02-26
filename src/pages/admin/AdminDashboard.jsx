@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2 } from 'lucide-react'
+import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Logo from '../../components/Logo'
 
@@ -90,9 +90,48 @@ export default function AdminDashboard() {
     const [showEmailConfirmModal, setShowEmailConfirmModal] = useState(false)
     const [selectedConsultantForEmail, setSelectedConsultantForEmail] = useState(null)
 
+    // Notifications & Diagnostics State
+    const [notifications, setNotifications] = useState([])
+    const [showNotifications, setShowNotifications] = useState(false)
+    const [financialStats, setFinancialStats] = useState({
+        totalDistributed: 0,
+        totalPurchased: 0,
+    })
+
     useEffect(() => {
         fetchDashboardData()
+        fetchNotifications()
+
+        // Subscribe to real-time notifications
+        const channel = supabase
+            .channel('admin_notifications_changes')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'admin_notifications'
+            }, (payload) => {
+                console.log('🔔 New Admin Notification:', payload.new);
+                setNotifications(prev => [payload.new, ...prev].slice(0, 20)); // Keep latest 20
+                // Optional: Show a toast or sound
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        }
     }, [])
+
+    const fetchNotifications = async () => {
+        const { data, error } = await supabase
+            .from('admin_notifications')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+        if (!error && data) {
+            setNotifications(data);
+        }
+    }
 
     const fetchDashboardData = async (silent = false) => {
         try {
@@ -158,7 +197,27 @@ export default function AdminDashboard() {
                 activeCases: casesCount || 0
             })
 
-            // 4. Calculate Chart Data (Growth over months)
+            // 4. Calculate Financial Stats
+            const distributed = consultantsData?.reduce((acc, c) => {
+                const wallet = c.credits_wallet;
+                const bal = Array.isArray(wallet) ? (wallet[0]?.balance || 0) : (wallet?.balance || 0);
+                return acc + bal;
+            }, 0) || 0;
+
+            // Fetch Total Purchased (Recharge type in transactions)
+            const { data: transData } = await supabase
+                .from('transactions')
+                .select('amount')
+                .eq('transaction_type', 'purchase');
+
+            const purchased = transData?.reduce((acc, t) => acc + (t.amount || 0), 0) || 0;
+
+            setFinancialStats({
+                totalDistributed: distributed,
+                totalPurchased: purchased
+            })
+
+            // 5. Calculate Chart Data (Growth over months)
             if (consultantsData) {
                 const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
                 const growth = {}
@@ -585,33 +644,46 @@ export default function AdminDashboard() {
                             </span>
                         </div>
 
-                        {/* Centered Greeting */}
+                        {/* Centered Greeting (Clickable for Profile) */}
                         <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:flex items-center gap-3">
-                            {profile?.avatar_url && (
-                                <img
-                                    src={profile.avatar_url}
-                                    alt="Avatar"
-                                    className="h-8 w-8 rounded-full border border-blue-100 object-cover shadow-sm bg-blue-50"
-                                />
-                            )}
-                            <span className="text-sm font-semibold text-blue-600">
-                                Bonjour {profile?.first_name} {profile?.last_name}
-                            </span>
-                        </div>
-
-                        <div className="flex items-center space-x-4">
                             <button
                                 onClick={() => navigate('/profile')}
-                                className="text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors flex items-center"
+                                className="group flex items-center gap-3 p-1.5 px-3 rounded-xl hover:bg-blue-50 transition-all border border-transparent hover:border-blue-100"
                             >
-                                Mon Profil
+                                {profile?.avatar_url && (
+                                    <img
+                                        src={profile.avatar_url}
+                                        alt="Avatar"
+                                        className="h-8 w-8 rounded-full border border-blue-100 object-cover shadow-sm bg-blue-50 group-hover:scale-110 transition-transform"
+                                    />
+                                )}
+                                <div className="text-left">
+                                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest leading-none mb-1">Administrateur</p>
+                                    <span className="text-sm font-black text-gray-900 group-hover:text-blue-600 transition-colors">
+                                        {profile?.first_name} {profile?.last_name}
+                                    </span>
+                                </div>
                             </button>
+                        </div>
+
+                        <div className="flex items-center space-x-6">
+                            <div className="relative">
+                                <button
+                                    onClick={() => setShowNotifications(!showNotifications)}
+                                    className="p-2 text-gray-400 hover:text-blue-600 transition-colors relative"
+                                >
+                                    <Bell className="h-6 w-6" />
+                                    {notifications.length > 0 && notifications.some(n => !n.is_read) && (
+                                        <span className="absolute top-2 right-2 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white shadow-sm"></span>
+                                    )}
+                                </button>
+                            </div>
                             <button
                                 onClick={handleLogout}
-                                className="flex items-center text-gray-500 hover:text-red-600 transition-colors"
+                                className="flex items-center text-gray-600 hover:text-red-600 font-medium transition-colors"
                             >
                                 <LogOut className="h-5 w-5 mr-2" />
-                                Déconnexion
+                                <span className="hidden sm:inline">Déconnexion</span>
                             </button>
                         </div>
                     </div>
@@ -641,25 +713,51 @@ export default function AdminDashboard() {
                     </div>
                 )}
 
-                {/* KPI Cards */}
-                <div className="flex flex-wrap justify-center gap-6 mb-8">
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 flex items-center min-w-[300px]">
-                        <div className="p-3 rounded-full bg-blue-50 text-blue-600">
-                            <Users className="h-8 w-8" />
+                {/* KPI Cards & Diagnostics */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    {/* Consultants Actifs */}
+                    <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 flex items-center hover:shadow-md transition-shadow">
+                        <div className="p-3.5 rounded-2xl bg-blue-50 text-blue-600">
+                            <Users className="h-6 w-6" />
                         </div>
-                        <div className="ml-4">
-                            <h3 className="text-sm font-medium text-gray-500">Consultants Actifs</h3>
-                            <p className="text-2xl font-bold text-gray-900">{stats.consultants}</p>
+                        <div className="ml-5">
+                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Consultants Actifs</h3>
+                            <p className="text-2xl font-black text-gray-900 leading-none">{stats.consultants}</p>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 flex items-center min-w-[300px]">
-                        <div className="p-3 rounded-full bg-green-50 text-green-600">
-                            <CheckCircle className="h-8 w-8" />
+                    {/* Dossiers en cours */}
+                    <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 flex items-center hover:shadow-md transition-shadow">
+                        <div className="p-3.5 rounded-2xl bg-teal-50 text-teal-600">
+                            <CheckCircle className="h-6 w-6" />
                         </div>
-                        <div className="ml-4">
-                            <h3 className="text-sm font-medium text-gray-500">Dossiers en cours</h3>
-                            <p className="text-2xl font-bold text-gray-900">{stats.activeCases}</p>
+                        <div className="ml-5">
+                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Dossiers en cours</h3>
+                            <p className="text-2xl font-black text-gray-900 leading-none">{stats.activeCases}</p>
+                        </div>
+                    </div>
+
+                    {/* Crédits Distribués - NOUVEAU */}
+                    <div className="bg-gradient-to-br from-indigo-500 to-blue-700 rounded-2xl shadow-lg p-6 text-white flex items-center transform hover:scale-[1.02] transition-transform">
+                        <div className="p-3.5 rounded-2xl bg-white/20 backdrop-blur-sm">
+                            <Activity className="h-6 w-6 text-white" />
+                        </div>
+                        <div className="ml-5">
+                            <h3 className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-1">Volume Distribué</h3>
+                            <p className="text-2xl font-black text-white leading-none">{financialStats.totalDistributed} <span className="text-[12px] opacity-70">Cr.</span></p>
+                            <p className="text-[9px] font-bold text-white/50 mt-1 italic">Somme des soldes actuels</p>
+                        </div>
+                    </div>
+
+                    {/* Recharges Totales - NOUVEAU */}
+                    <div className="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-l-amber-500 border border-gray-100 flex items-center hover:shadow-md transition-shadow">
+                        <div className="p-3.5 rounded-2xl bg-amber-50 text-amber-600">
+                            <CreditCard className="h-6 w-6" />
+                        </div>
+                        <div className="ml-5">
+                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Acheté</h3>
+                            <p className="text-2xl font-black text-gray-900 leading-none">{financialStats.totalPurchased} <span className="text-[12px] text-gray-400">Cr.</span></p>
+                            <p className="text-[9px] font-bold text-amber-600 mt-1 uppercase tracking-tighter">Volume des recharges</p>
                         </div>
                     </div>
                 </div>
@@ -709,21 +807,48 @@ export default function AdminDashboard() {
                         </div>
                     </div>
 
-                    {/* Stats Distribution (Placeholder for future stats) */}
-                    <div className="bg-slate-800 rounded-xl shadow-lg p-6 text-white flex flex-col justify-between">
-                        <div>
-                            <h3 className="text-lg font-bold mb-2">Performance Globale</h3>
-                            <p className="text-slate-300 text-sm">Vue d'ensemble de l'activité de la plateforme.</p>
+                    {/* Activity Feed and Messages */}
+                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 flex flex-col">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                <Mail className="h-5 w-5 text-blue-500" />
+                                Messages & Activité
+                            </h3>
+                            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold uppercase tracking-wider">
+                                Temps réel
+                            </span>
                         </div>
-                        <div className="space-y-4 mt-8">
-                            <div className="flex justify-between items-center bg-white/10 p-4 rounded-lg backdrop-blur-sm">
-                                <span>Taux d'activation</span>
-                                <span className="font-bold text-xl">100%</span>
-                            </div>
-                            <div className="flex justify-between items-center bg-white/10 p-4 rounded-lg backdrop-blur-sm">
-                                <span>Crédits Distribués</span>
-                                <span className="font-bold text-xl">{consultants.reduce((acc, c) => acc + (c.credits_wallet?.balance || 0), 0)}</span>
-                            </div>
+
+                        <div className="flex-1 overflow-y-auto max-h-[250px] pr-2 space-y-4 custom-scrollbar">
+                            {notifications.length === 0 ? (
+                                <div className="text-center py-12 flex flex-col items-center gap-3">
+                                    <Activity className="h-8 w-8 text-gray-100" />
+                                    <p className="text-sm text-gray-400">Aucun message pour le moment.</p>
+                                </div>
+                            ) : (
+                                notifications.map((notif) => (
+                                    <div key={notif.id} className="p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-blue-100 transition-colors">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="text-xs font-bold text-gray-900">{notif.title}</span>
+                                            <span className="text-[10px] text-gray-400 font-medium">
+                                                {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 leading-tight">
+                                            {notif.content}
+                                        </p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t border-gray-50">
+                            <button
+                                onClick={fetchNotifications}
+                                className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest flex items-center gap-2"
+                            >
+                                <Plus className="h-3 w-3" /> Voir tout l'historique
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -807,7 +932,10 @@ export default function AdminDashboard() {
                                                         ? 'bg-green-100 text-green-800 border-green-200'
                                                         : 'bg-yellow-100 text-yellow-800 border-yellow-200'
                                                         }`}>
-                                                        {consultant.credits_wallet?.balance || 0} Crédits
+                                                        {(() => {
+                                                            const wallet = consultant.credits_wallet;
+                                                            return Array.isArray(wallet) ? (wallet[0]?.balance || 0) : (wallet?.balance || 0);
+                                                        })()} Crédits
                                                     </span>
                                                 </div>
                                             </td>
@@ -893,676 +1021,698 @@ export default function AdminDashboard() {
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </main>
+                </div >
+            </main >
 
             {/* Modal: Create Consultant (Provisioning) */}
-            {showCreateModal && (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all">
-                        <div className="mb-6 border-b border-gray-100 pb-4">
-                            <h3 className="text-xl font-bold text-gray-900">Provisioning Consultant</h3>
-                            <p className="text-sm text-gray-500">Créez un compte et allouez des crédits.</p>
-                        </div>
-
-                        <form onSubmit={handleCreateConsultant} className="space-y-4">
-                            {/* ... (Existing Create Form Fields) ... */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Prénom</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={newConsultant.firstName}
-                                        onChange={(e) => setNewConsultant({ ...newConsultant, firstName: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Nom</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={newConsultant.lastName}
-                                        onChange={(e) => setNewConsultant({ ...newConsultant, lastName: e.target.value })}
-                                    />
-                                </div>
+            {
+                showCreateModal && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center p-4 z-50">
+                        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all">
+                            <div className="mb-6 border-b border-gray-100 pb-4">
+                                <h3 className="text-xl font-bold text-gray-900">Provisioning Consultant</h3>
+                                <p className="text-sm text-gray-500">Créez un compte et allouez des crédits.</p>
                             </div>
 
-                            <div>
-                                <label className="block text-gray-700 text-sm font-bold mb-2">Nom Commercial / Entreprise</label>
-                                <input
-                                    type="text"
-                                    required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={newConsultant.commercialName}
-                                    onChange={(e) => setNewConsultant({ ...newConsultant, commercialName: e.target.value })}
-                                    placeholder="Ex: QualiConsult SARL"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Numéro SIRET</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={newConsultant.siret}
-                                        onChange={(e) => setNewConsultant({ ...newConsultant, siret: e.target.value })}
-                                        placeholder="14 chiffres"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Téléphone</label>
-                                    <div className="flex w-full overflow-hidden">
-                                        <select
-                                            className="px-2 py-2 border border-gray-300 rounded-l-lg bg-gray-50 border-r-0 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold"
-                                            value={newConsultant.countryCode}
-                                            onChange={(e) => setNewConsultant({ ...newConsultant, countryCode: e.target.value })}
-                                            style={{ minWidth: '85px' }}
-                                        >
-                                            {COUNTRY_CODES.map(c => (
-                                                <option key={c.code} value={c.code}>
-                                                    {c.flag} {c.code}
-                                                </option>
-                                            ))}
-                                        </select>
+                            <form onSubmit={handleCreateConsultant} className="space-y-4">
+                                {/* ... (Existing Create Form Fields) ... */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-2">Prénom</label>
                                         <input
-                                            type="tel"
+                                            type="text"
                                             required
-                                            className="min-w-0 w-full px-3 py-2 border border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            value={newConsultant.phone}
-                                            onChange={(e) => setNewConsultant({ ...newConsultant, phone: e.target.value.replace(/\s/g, '') })}
-                                            placeholder="Ex: 612345678"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={newConsultant.firstName}
+                                            onChange={(e) => setNewConsultant({ ...newConsultant, firstName: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-2">Nom</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={newConsultant.lastName}
+                                            onChange={(e) => setNewConsultant({ ...newConsultant, lastName: e.target.value })}
                                         />
                                     </div>
                                 </div>
-                            </div>
 
-                            <div>
-                                <label className="block text-gray-700 text-sm font-bold mb-2">Email Professionnel</label>
-                                <input
-                                    type="email"
-                                    required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={newConsultant.email}
-                                    onChange={(e) => setNewConsultant({ ...newConsultant, email: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Mot de Passe (Provisoire)</label>
+                                    <label className="block text-gray-700 text-sm font-bold mb-2">Nom Commercial / Entreprise</label>
                                     <input
                                         type="text"
                                         required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
-                                        value={newConsultant.password}
-                                        onChange={(e) => setNewConsultant({ ...newConsultant, password: e.target.value })}
-                                        placeholder="Ex: Pass123!"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Crédits Initiaux</label>
-                                    <input
-                                        type="number"
-                                        min="0"
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={newConsultant.initialCredits}
-                                        onChange={(e) => setNewConsultant({ ...newConsultant, initialCredits: parseInt(e.target.value) })}
+                                        value={newConsultant.commercialName}
+                                        onChange={(e) => setNewConsultant({ ...newConsultant, commercialName: e.target.value })}
+                                        placeholder="Ex: QualiConsult SARL"
                                     />
                                 </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-2">Numéro SIRET</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={newConsultant.siret}
+                                            onChange={(e) => setNewConsultant({ ...newConsultant, siret: e.target.value })}
+                                            placeholder="14 chiffres"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-2">Téléphone</label>
+                                        <div className="flex w-full overflow-hidden">
+                                            <select
+                                                className="px-2 py-2 border border-gray-300 rounded-l-lg bg-gray-50 border-r-0 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold"
+                                                value={newConsultant.countryCode}
+                                                onChange={(e) => setNewConsultant({ ...newConsultant, countryCode: e.target.value })}
+                                                style={{ minWidth: '85px' }}
+                                            >
+                                                {COUNTRY_CODES.map(c => (
+                                                    <option key={c.code} value={c.code}>
+                                                        {c.flag} {c.code}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <input
+                                                type="tel"
+                                                required
+                                                className="min-w-0 w-full px-3 py-2 border border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                value={newConsultant.phone}
+                                                onChange={(e) => setNewConsultant({ ...newConsultant, phone: e.target.value.replace(/\s/g, '') })}
+                                                placeholder="Ex: 612345678"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-bold mb-2">Email Professionnel</label>
+                                    <input
+                                        type="email"
+                                        required
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={newConsultant.email}
+                                        onChange={(e) => setNewConsultant({ ...newConsultant, email: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-2">Mot de Passe (Provisoire)</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
+                                            value={newConsultant.password}
+                                            onChange={(e) => setNewConsultant({ ...newConsultant, password: e.target.value })}
+                                            placeholder="Ex: Pass123!"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-2">Crédits Initiaux</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={newConsultant.initialCredits}
+                                            onChange={(e) => setNewConsultant({ ...newConsultant, initialCredits: parseInt(e.target.value) })}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="bg-blue-50 p-3 rounded-lg flex items-start">
+                                    <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
+                                    <p className="text-[10px] sm:text-xs text-blue-800">
+                                        Une fois créé, utilisez l'icône <Mail className="h-3 w-3 inline" /> dans la liste pour lui envoyer ses identifiants.
+                                    </p>
+                                </div>
+
+                                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCreateModal(false)}
+                                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                                        end
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={createLoading}
+                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center shadow-lg shadow-blue-600/20"
+                                    >
+                                        {createLoading ? 'Création...' : 'Créer le Compte'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Modal: Edit Consultant */}
+            {
+                showEditModal && editConsultant && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center p-4 z-50">
+                        <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all">
+                            <div className="mb-6 border-b border-gray-100 pb-4">
+                                <h3 className="text-xl font-bold text-gray-900">Modifier Consultant</h3>
+                                <p className="text-sm text-gray-500">Mettre à jour les informations du profil.</p>
                             </div>
 
-                            <div className="bg-blue-50 p-3 rounded-lg flex items-start">
-                                <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
-                                <p className="text-[10px] sm:text-xs text-blue-800">
-                                    Une fois créé, utilisez l'icône <Mail className="h-3 w-3 inline" /> dans la liste pour lui envoyer ses identifiants.
+                            <form onSubmit={handleUpdateConsultant} className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-2">Prénom</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={editConsultant.first_name || ''}
+                                            onChange={(e) => setEditConsultant({ ...editConsultant, first_name: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-2">Nom</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={editConsultant.last_name || ''}
+                                            onChange={(e) => setEditConsultant({ ...editConsultant, last_name: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-bold mb-2">Nom Commercial</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={editConsultant.commercial_name || ''}
+                                        onChange={(e) => setEditConsultant({ ...editConsultant, commercial_name: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-2">Siret</label>
+                                        <input
+                                            type="text"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={editConsultant.siret || ''}
+                                            onChange={(e) => setEditConsultant({ ...editConsultant, siret: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-700 text-sm font-bold mb-2">Téléphone</label>
+                                        <input
+                                            type="tel"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            value={editConsultant.phone || ''}
+                                            onChange={(e) => setEditConsultant({ ...editConsultant, phone: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-gray-700 text-sm font-bold mb-2">Email</label>
+                                    <input
+                                        type="email"
+                                        required
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                                        value={editConsultant.email || ''}
+                                        readOnly
+                                        title="L'email ne peut pas être modifié ici pour des raisons de sécurité auth."
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1">L'email est lié au compte de connexion et ne peut être modifié simplement.</p>
+                                </div>
+
+                                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowEditModal(false)
+                                            setEditConsultant(null)
+                                        }}
+                                        className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={editLoading}
+                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center shadow-lg shadow-blue-600/20"
+                                    >
+                                        {editLoading ? 'Enregistrement...' : 'Enregistrer'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Success Modal (New) */}
+            {
+                showSuccessModal && createdConsultantParams && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-bounce-in">
+                            <div className="bg-green-500 p-6 flex justify-center">
+                                <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-lg">
+                                    <Check className="h-10 w-10 text-green-500 stroke-[3]" />
+                                </div>
+                            </div>
+                            <div className="p-8 text-center">
+                                <h3 className="text-2xl font-bold text-gray-900 mb-2">Compte Créé !</h3>
+                                <p className="text-gray-500 mb-6">
+                                    Le consultant <span className="font-bold text-gray-900">{createdConsultantParams.firstName} {createdConsultantParams.lastName}</span> a été ajouté avec succès.
+                                </p>
+
+                                <div className="bg-gray-50 rounded-xl p-4 mb-8 text-left space-y-3">
+                                    <div className="flex justify-between">
+                                        <span className="text-sm text-gray-500">Email</span>
+                                        <span className="text-sm font-medium text-gray-900">{createdConsultantParams.email}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-sm text-gray-500">Crédits</span>
+                                        <span className="text-sm font-bold text-green-600">{createdConsultantParams.initialCredits}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-sm text-gray-500">Mot de passe</span>
+                                        <code className="text-sm font-mono bg-white px-2 py-0.5 rounded border">{createdConsultantParams.password}</code>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        setShowSuccessModal(false)
+                                        setCreatedConsultantParams(null)
+                                    }}
+                                    className="w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-green-600/20"
+                                >
+                                    Terminer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Modal: Add Credits */}
+            {
+                showCreditModal && selectedConsultant && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center p-4 z-[60]">
+                        <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Ajouter des Crédits</h3>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Pour {selectedConsultant.first_name || selectedConsultant.email}
+                                <br />
+                                <span className="font-mono text-xs">ID: {selectedConsultant.id}</span>
+                            </p>
+
+                            <div className="mb-6">
+                                <label className="block text-gray-700 text-sm font-bold mb-2 focus:outline-none">
+                                    Quantité de Crédits à ajouter
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    className="shadow appearance-none border rounded w-full py-3 px-3 text-gray-700 leading-tight text-xl font-bold text-center"
+                                    value={creditAmount}
+                                    onChange={(e) => setCreditAmount(parseInt(e.target.value))}
+                                />
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Solde actuel : <span className="font-bold">{selectedConsultant.credits_wallet?.balance || 0}</span>
+                                    {' '} → {' '}
+                                    <span className="font-bold text-green-600">
+                                        {(selectedConsultant.credits_wallet?.balance || 0) + (parseInt(creditAmount) || 0)}
+                                    </span>
                                 </p>
                             </div>
 
-                            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
+                            <div className="flex justify-end space-x-3">
                                 <button
                                     type="button"
-                                    onClick={() => setShowCreateModal(false)}
-                                    className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-                                    end
+                                    onClick={() => setShowCreditModal(false)}
+                                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
                                 >
                                     Annuler
                                 </button>
                                 <button
-                                    type="submit"
-                                    disabled={createLoading}
-                                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center shadow-lg shadow-blue-600/20"
-                                >
-                                    {createLoading ? 'Création...' : 'Créer le Compte'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal: Edit Consultant */}
-            {showEditModal && editConsultant && (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all">
-                        <div className="mb-6 border-b border-gray-100 pb-4">
-                            <h3 className="text-xl font-bold text-gray-900">Modifier Consultant</h3>
-                            <p className="text-sm text-gray-500">Mettre à jour les informations du profil.</p>
-                        </div>
-
-                        <form onSubmit={handleUpdateConsultant} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Prénom</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={editConsultant.first_name || ''}
-                                        onChange={(e) => setEditConsultant({ ...editConsultant, first_name: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Nom</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={editConsultant.last_name || ''}
-                                        onChange={(e) => setEditConsultant({ ...editConsultant, last_name: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-gray-700 text-sm font-bold mb-2">Nom Commercial</label>
-                                <input
-                                    type="text"
-                                    required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={editConsultant.commercial_name || ''}
-                                    onChange={(e) => setEditConsultant({ ...editConsultant, commercial_name: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Siret</label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={editConsultant.siret || ''}
-                                        onChange={(e) => setEditConsultant({ ...editConsultant, siret: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Téléphone</label>
-                                    <input
-                                        type="tel"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={editConsultant.phone || ''}
-                                        onChange={(e) => setEditConsultant({ ...editConsultant, phone: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-gray-700 text-sm font-bold mb-2">Email</label>
-                                <input
-                                    type="email"
-                                    required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
-                                    value={editConsultant.email || ''}
-                                    readOnly
-                                    title="L'email ne peut pas être modifié ici pour des raisons de sécurité auth."
-                                />
-                                <p className="text-xs text-gray-400 mt-1">L'email est lié au compte de connexion et ne peut être modifié simplement.</p>
-                            </div>
-
-                            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
-                                <button
                                     type="button"
-                                    onClick={() => {
-                                        setShowEditModal(false)
-                                        setEditConsultant(null)
-                                    }}
-                                    className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
+                                    onClick={handleGrantCredits}
+                                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center"
                                 >
-                                    Annuler
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={editLoading}
-                                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold flex items-center shadow-lg shadow-blue-600/20"
-                                >
-                                    {editLoading ? 'Enregistrement...' : 'Enregistrer'}
+                                    <CreditCard className="h-4 w-4 mr-2" />
+                                    Valider le transfert
                                 </button>
                             </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Success Modal (New) */}
-            {showSuccessModal && createdConsultantParams && (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-bounce-in">
-                        <div className="bg-green-500 p-6 flex justify-center">
-                            <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-lg">
-                                <Check className="h-10 w-10 text-green-500 stroke-[3]" />
-                            </div>
-                        </div>
-                        <div className="p-8 text-center">
-                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Compte Créé !</h3>
-                            <p className="text-gray-500 mb-6">
-                                Le consultant <span className="font-bold text-gray-900">{createdConsultantParams.firstName} {createdConsultantParams.lastName}</span> a été ajouté avec succès.
-                            </p>
-
-                            <div className="bg-gray-50 rounded-xl p-4 mb-8 text-left space-y-3">
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Email</span>
-                                    <span className="text-sm font-medium text-gray-900">{createdConsultantParams.email}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Crédits</span>
-                                    <span className="text-sm font-bold text-green-600">{createdConsultantParams.initialCredits}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-sm text-gray-500">Mot de passe</span>
-                                    <code className="text-sm font-mono bg-white px-2 py-0.5 rounded border">{createdConsultantParams.password}</code>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={() => {
-                                    setShowSuccessModal(false)
-                                    setCreatedConsultantParams(null)
-                                }}
-                                className="w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-green-600/20"
-                            >
-                                Terminer
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
-
-            {/* Modal: Add Credits */}
-            {showCreditModal && selectedConsultant && (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center p-4 z-[60]">
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">Ajouter des Crédits</h3>
-                        <p className="text-sm text-gray-500 mb-6">
-                            Pour {selectedConsultant.first_name || selectedConsultant.email}
-                            <br />
-                            <span className="font-mono text-xs">ID: {selectedConsultant.id}</span>
-                        </p>
-
-                        <div className="mb-6">
-                            <label className="block text-gray-700 text-sm font-bold mb-2 focus:outline-none">
-                                Quantité de Crédits à ajouter
-                            </label>
-                            <input
-                                type="number"
-                                min="1"
-                                className="shadow appearance-none border rounded w-full py-3 px-3 text-gray-700 leading-tight text-xl font-bold text-center"
-                                value={creditAmount}
-                                onChange={(e) => setCreditAmount(parseInt(e.target.value))}
-                            />
-                            <p className="text-xs text-gray-500 mt-2">
-                                Solde actuel : <span className="font-bold">{selectedConsultant.credits_wallet?.balance || 0}</span>
-                                {' '} → {' '}
-                                <span className="font-bold text-green-600">
-                                    {(selectedConsultant.credits_wallet?.balance || 0) + (parseInt(creditAmount) || 0)}
-                                </span>
-                            </p>
-                        </div>
-
-                        <div className="flex justify-end space-x-3">
-                            <button
-                                type="button"
-                                onClick={() => setShowCreditModal(false)}
-                                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
-                            >
-                                Annuler
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleGrantCredits}
-                                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center"
-                            >
-                                <CreditCard className="h-4 w-4 mr-2" />
-                                Valider le transfert
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Modal: Credit Success (New) */}
-            {showCreditSuccessModal && selectedConsultant && (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-bounce-in">
-                        <div className="bg-green-100 p-6 flex justify-center">
-                            <div className="h-20 w-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30">
-                                <CreditCard className="h-10 w-10 text-white stroke-[2]" />
+            {
+                showCreditSuccessModal && selectedConsultant && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-bounce-in">
+                            <div className="bg-green-100 p-6 flex justify-center">
+                                <div className="h-20 w-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/30">
+                                    <CreditCard className="h-10 w-10 text-white stroke-[2]" />
+                                </div>
                             </div>
-                        </div>
-                        <div className="p-6 text-center">
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">Crédits Ajoutés !</h3>
-                            <p className="text-gray-500 mb-6 text-sm">
-                                Le transfert de crédits a été effectué avec succès.
-                            </p>
+                            <div className="p-6 text-center">
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">Crédits Ajoutés !</h3>
+                                <p className="text-gray-500 mb-6 text-sm">
+                                    Le transfert de crédits a été effectué avec succès.
+                                </p>
 
-                            <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left space-y-3 border border-gray-100">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-gray-500">Bénéficiaire</span>
-                                    <div className="text-right">
-                                        <div className="text-sm font-bold text-gray-900">
-                                            {selectedConsultant.first_name || 'Consultant'} {selectedConsultant.last_name || ''}
+                                <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left space-y-3 border border-gray-100">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-500">Bénéficiaire</span>
+                                        <div className="text-right">
+                                            <div className="text-sm font-bold text-gray-900">
+                                                {selectedConsultant.first_name || 'Consultant'} {selectedConsultant.last_name || ''}
+                                            </div>
+                                            <div className="text-xs text-gray-400">{selectedConsultant.email}</div>
                                         </div>
-                                        <div className="text-xs text-gray-400">{selectedConsultant.email}</div>
+                                    </div>
+                                    <div className="border-t border-gray-200 my-2"></div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-500">Montant Ajouté</span>
+                                        <span className="text-lg font-bold text-green-600">+{creditAmount} Crédits</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-xs text-gray-400 uppercase tracking-wide">Nouveau Solde</span>
+                                        <span className="text-sm font-bold text-gray-900">
+                                            {(selectedConsultant.credits_wallet?.balance || 0) + (parseInt(creditAmount) || 0)} Crédits
+                                        </span>
                                     </div>
                                 </div>
-                                <div className="border-t border-gray-200 my-2"></div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-gray-500">Montant Ajouté</span>
-                                    <span className="text-lg font-bold text-green-600">+{creditAmount} Crédits</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-xs text-gray-400 uppercase tracking-wide">Nouveau Solde</span>
-                                    <span className="text-sm font-bold text-gray-900">
-                                        {(selectedConsultant.credits_wallet?.balance || 0) + (parseInt(creditAmount) || 0)} Crédits
-                                    </span>
-                                </div>
-                            </div>
 
-                            <button
-                                onClick={() => {
-                                    setShowCreditSuccessModal(false)
-                                    setSelectedConsultant(null)
-                                    setCreditAmount(10)
-                                }}
-                                className="w-full py-3 px-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-all shadow-lg"
-                            >
-                                Fermer
-                            </button>
+                                <button
+                                    onClick={() => {
+                                        setShowCreditSuccessModal(false)
+                                        setSelectedConsultant(null)
+                                        setCreditAmount(10)
+                                    }}
+                                    className="w-full py-3 px-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-all shadow-lg"
+                                >
+                                    Fermer
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Success Modal (Edit Consultant) */}
-            {showEditSuccessModal && editConsultant && (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-bounce-in">
-                        <div className="bg-blue-100 p-6 flex justify-center">
-                            <div className="h-20 w-20 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white stroke-[2]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                            </div>
-                        </div>
-                        <div className="p-6 text-center">
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">Profil Mis à Jour !</h3>
-                            <p className="text-gray-500 mb-6 text-sm">
-                                Les informations de ce consultant ont été modifiées avec succès.
-                            </p>
-
-                            <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left space-y-3 border border-gray-100">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-gray-500">Société</span>
-                                    <span className="text-sm font-medium text-gray-900">{editConsultant.commercial_name || '-'}</span>
-                                </div>
-                                <div className="border-t border-gray-200 my-1"></div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-gray-500">SIRET</span>
-                                    <span className="text-sm font-medium text-gray-900">{editConsultant.siret || '-'}</span>
-                                </div>
-                                <div className="border-t border-gray-200 my-1"></div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm text-gray-500">Téléphone</span>
-                                    <span className="text-sm font-medium text-gray-900">{editConsultant.phone || '-'}</span>
-                                </div>
-                            </div>
-
-                            <button
-                                onClick={() => {
-                                    setShowEditSuccessModal(false)
-                                    setEditConsultant(null)
-                                }}
-                                className="w-full py-3 px-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-all shadow-lg"
-                            >
-                                C'est noté
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal: Status Toggle Confirmation */}
-            {showStatusConfirmModal && consultantToToggle && (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[80]">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-bounce-in">
-                        <div className="p-6 text-center">
-                            <div className={`mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4 ${consultantToToggle.is_active ? 'bg-red-100' : 'bg-green-100'}`}>
-                                {consultantToToggle.is_active ? (
-                                    <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            {
+                showEditSuccessModal && editConsultant && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-bounce-in">
+                            <div className="bg-blue-100 p-6 flex justify-center">
+                                <div className="h-20 w-20 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white stroke-[2]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                     </svg>
-                                ) : (
-                                    <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                )}
+                                </div>
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">
-                                {consultantToToggle.is_active ? 'Suspendre ce consultant ?' : 'Activer ce consultant ?'}
-                            </h3>
-                            <p className="text-sm text-gray-500 mb-6">
-                                Êtes-vous sûr de vouloir {consultantToToggle.is_active ? 'suspendre' : 'activer'} <span className="font-bold">{consultantToToggle.first_name} {consultantToToggle.last_name}</span> ?
-                                <br /><br />
-                                {consultantToToggle.is_active ? (
-                                    <span className="text-xs text-red-500">Ce consultant ne pourra plus créer de dossiers ni utiliser ses crédits.</span>
-                                ) : (
-                                    <span className="text-xs text-green-500">Ce consultant pourra à nouveau créer des dossiers et utiliser ses crédits.</span>
-                                )}
-                            </p>
-                            <div className="flex space-x-3">
-                                <button
-                                    onClick={() => {
-                                        setShowStatusConfirmModal(false)
-                                        setConsultantToToggle(null)
-                                    }}
-                                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
-                                >
-                                    Annuler
-                                </button>
-                                <button
-                                    onClick={handleToggleStatus}
-                                    className={`flex-1 px-4 py-2 rounded-xl font-semibold transition-colors shadow-lg ${consultantToToggle.is_active
-                                        ? 'bg-red-600 text-white hover:bg-red-700 shadow-red-500/30'
-                                        : 'bg-green-600 text-white hover:bg-green-700 shadow-green-500/30'
-                                        }`}
-                                >
-                                    {consultantToToggle.is_active ? 'Suspendre' : 'Activer'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+                            <div className="p-6 text-center">
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">Profil Mis à Jour !</h3>
+                                <p className="text-gray-500 mb-6 text-sm">
+                                    Les informations de ce consultant ont été modifiées avec succès.
+                                </p>
 
-            {/* Modal: Email Confirmation */}
-            {showEmailConfirmModal && selectedConsultantForEmail && (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[80]">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-bounce-in">
-                        <div className="p-6 text-center">
-                            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
-                                <Mail className="h-6 w-6 text-blue-600" />
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">Envoyer les accès ?</h3>
-                            <p className="text-sm text-gray-500 mb-6">
-                                Êtes-vous sûr de vouloir envoyer l'email de connexion à <span className="font-bold">{selectedConsultantForEmail.first_name} {selectedConsultantForEmail.last_name}</span> ?
-                                <br /><br />
-                                <span className="text-xs text-gray-400">Cela ouvrira votre application de messagerie.</span>
-                            </p>
-                            <div className="flex space-x-3">
-                                <button
-                                    onClick={() => {
-                                        setShowEmailConfirmModal(false)
-                                        setSelectedConsultantForEmail(null)
-                                    }}
-                                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
-                                >
-                                    Annuler
-                                </button>
-                                <button
-                                    onClick={confirmSendEmail}
-                                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30"
-                                >
-                                    Envoyer
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {/* Modal: Consultant Deletion Confirmation (Enhanced & Professional) */}
-            {showDeleteConfirmModal && consultantToDelete && (
-                <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[90] animate-in fade-in duration-300">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-bounce-in border border-red-50">
-                        {/* Header Image/Icon area */}
-                        <div className="bg-red-50 p-8 flex flex-col items-center">
-                            <div className="h-24 w-24 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-red-100 relative">
-                                <div className="absolute inset-0 bg-red-500/10 rounded-full animate-ping"></div>
-                                <Trash2 className="h-10 w-10 text-red-600 stroke-[2.5]" />
-                            </div>
-                        </div>
-
-                        <div className="p-8">
-                            <h3 className="text-2xl font-black text-gray-900 text-center mb-2 tracking-tight">Supprimer le consultant ?</h3>
-                            <p className="text-gray-500 text-center mb-8 leading-relaxed">
-                                Vous êtes sur le point de retirer <span className="font-extrabold text-red-600 italic underline decoration-red-200 underline-offset-4 tracking-tighter">"{consultantToDelete.first_name || ''} {consultantToDelete.last_name || ''}"</span>.
-                                <br />Toutes ses données seront effacées.
-                            </p>
-
-                            <div className="bg-red-50 border-2 border-dashed border-red-200 rounded-2xl p-4 mb-8">
-                                <div className="flex items-start gap-3">
-                                    <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-                                    <div>
-                                        <p className="text-xs font-black text-red-700 uppercase tracking-widest mb-1">Attention Irréversible</p>
-                                        <p className="text-[11px] text-red-600 font-medium leading-normal italic">
-                                            Cette action supprimera également le portefeuille de crédits et l'historique de cet utilisateur.
-                                        </p>
+                                <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left space-y-3 border border-gray-100">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-500">Société</span>
+                                        <span className="text-sm font-medium text-gray-900">{editConsultant.commercial_name || '-'}</span>
+                                    </div>
+                                    <div className="border-t border-gray-200 my-1"></div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-500">SIRET</span>
+                                        <span className="text-sm font-medium text-gray-900">{editConsultant.siret || '-'}</span>
+                                    </div>
+                                    <div className="border-t border-gray-200 my-1"></div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-500">Téléphone</span>
+                                        <span className="text-sm font-medium text-gray-900">{editConsultant.phone || '-'}</span>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="grid grid-cols-2 gap-4">
                                 <button
                                     onClick={() => {
-                                        setShowDeleteConfirmModal(false)
-                                        setConsultantToDelete(null)
+                                        setShowEditSuccessModal(false)
+                                        setEditConsultant(null)
                                     }}
-                                    className="px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl font-black transition-all active:scale-95 text-sm"
-                                    disabled={isDeleting}
+                                    className="w-full py-3 px-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-all shadow-lg"
                                 >
-                                    Annuler
-                                </button>
-                                <button
-                                    onClick={handleDeleteConsultant}
-                                    disabled={isDeleting}
-                                    className="px-6 py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black transition-all shadow-xl shadow-red-600/20 active:scale-95 flex items-center justify-center gap-2 text-sm"
-                                >
-                                    {isDeleting ? (
-                                        <>
-                                            <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                            Patientez...
-                                        </>
-                                    ) : (
-                                        'Confirmer'
-                                    )}
+                                    C'est noté
                                 </button>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
+
+            {/* Modal: Status Toggle Confirmation */}
+            {
+                showStatusConfirmModal && consultantToToggle && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[80]">
+                        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-bounce-in">
+                            <div className="p-6 text-center">
+                                <div className={`mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4 ${consultantToToggle.is_active ? 'bg-red-100' : 'bg-green-100'}`}>
+                                    {consultantToToggle.is_active ? (
+                                        <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                        </svg>
+                                    ) : (
+                                        <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    )}
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                                    {consultantToToggle.is_active ? 'Suspendre ce consultant ?' : 'Activer ce consultant ?'}
+                                </h3>
+                                <p className="text-sm text-gray-500 mb-6">
+                                    Êtes-vous sûr de vouloir {consultantToToggle.is_active ? 'suspendre' : 'activer'} <span className="font-bold">{consultantToToggle.first_name} {consultantToToggle.last_name}</span> ?
+                                    <br /><br />
+                                    {consultantToToggle.is_active ? (
+                                        <span className="text-xs text-red-500">Ce consultant ne pourra plus créer de dossiers ni utiliser ses crédits.</span>
+                                    ) : (
+                                        <span className="text-xs text-green-500">Ce consultant pourra à nouveau créer des dossiers et utiliser ses crédits.</span>
+                                    )}
+                                </p>
+                                <div className="flex space-x-3">
+                                    <button
+                                        onClick={() => {
+                                            setShowStatusConfirmModal(false)
+                                            setConsultantToToggle(null)
+                                        }}
+                                        className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        onClick={handleToggleStatus}
+                                        className={`flex-1 px-4 py-2 rounded-xl font-semibold transition-colors shadow-lg ${consultantToToggle.is_active
+                                            ? 'bg-red-600 text-white hover:bg-red-700 shadow-red-500/30'
+                                            : 'bg-green-600 text-white hover:bg-green-700 shadow-green-500/30'
+                                            }`}
+                                    >
+                                        {consultantToToggle.is_active ? 'Suspendre' : 'Activer'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Modal: Email Confirmation */}
+            {
+                showEmailConfirmModal && selectedConsultantForEmail && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[80]">
+                        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-bounce-in">
+                            <div className="p-6 text-center">
+                                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+                                    <Mail className="h-6 w-6 text-blue-600" />
+                                </div>
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Envoyer les accès ?</h3>
+                                <p className="text-sm text-gray-500 mb-6">
+                                    Êtes-vous sûr de vouloir envoyer l'email de connexion à <span className="font-bold">{selectedConsultantForEmail.first_name} {selectedConsultantForEmail.last_name}</span> ?
+                                    <br /><br />
+                                    <span className="text-xs text-gray-400">Cela ouvrira votre application de messagerie.</span>
+                                </p>
+                                <div className="flex space-x-3">
+                                    <button
+                                        onClick={() => {
+                                            setShowEmailConfirmModal(false)
+                                            setSelectedConsultantForEmail(null)
+                                        }}
+                                        className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        onClick={confirmSendEmail}
+                                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/30"
+                                    >
+                                        Envoyer
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+            {/* Modal: Consultant Deletion Confirmation (Enhanced & Professional) */}
+            {
+                showDeleteConfirmModal && consultantToDelete && (
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[90] animate-in fade-in duration-300">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-bounce-in border border-red-50">
+                            {/* Header Image/Icon area */}
+                            <div className="bg-red-50 p-8 flex flex-col items-center">
+                                <div className="h-24 w-24 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-red-100 relative">
+                                    <div className="absolute inset-0 bg-red-500/10 rounded-full animate-ping"></div>
+                                    <Trash2 className="h-10 w-10 text-red-600 stroke-[2.5]" />
+                                </div>
+                            </div>
+
+                            <div className="p-8">
+                                <h3 className="text-2xl font-black text-gray-900 text-center mb-2 tracking-tight">Supprimer le consultant ?</h3>
+                                <p className="text-gray-500 text-center mb-8 leading-relaxed">
+                                    Vous êtes sur le point de retirer <span className="font-extrabold text-red-600 italic underline decoration-red-200 underline-offset-4 tracking-tighter">"{consultantToDelete.first_name || ''} {consultantToDelete.last_name || ''}"</span>.
+                                    <br />Toutes ses données seront effacées.
+                                </p>
+
+                                <div className="bg-red-50 border-2 border-dashed border-red-200 rounded-2xl p-4 mb-8">
+                                    <div className="flex items-start gap-3">
+                                        <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs font-black text-red-700 uppercase tracking-widest mb-1">Attention Irréversible</p>
+                                            <p className="text-[11px] text-red-600 font-medium leading-normal italic">
+                                                Cette action supprimera également le portefeuille de crédits et l'historique de cet utilisateur.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        onClick={() => {
+                                            setShowDeleteConfirmModal(false)
+                                            setConsultantToDelete(null)
+                                        }}
+                                        className="px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl font-black transition-all active:scale-95 text-sm"
+                                        disabled={isDeleting}
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        onClick={handleDeleteConsultant}
+                                        disabled={isDeleting}
+                                        className="px-6 py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black transition-all shadow-xl shadow-red-600/20 active:scale-95 flex items-center justify-center gap-2 text-sm"
+                                    >
+                                        {isDeleting ? (
+                                            <>
+                                                <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                Patientez...
+                                            </>
+                                        ) : (
+                                            'Confirmer'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
 
             {/* Modal: Consultant Deletion Success (New) */}
-            {showDeleteSuccessModal && (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[90]">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-bounce-in">
-                        <div className="bg-red-500 p-6 flex justify-center relative overflow-hidden">
-                            {/* Graphic background circles */}
-                            <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
-                            <div className="absolute bottom-0 right-0 w-32 h-32 bg-black/5 rounded-full translate-x-1/3 translate-y-1/3"></div>
+            {
+                showDeleteSuccessModal && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[90]">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-bounce-in">
+                            <div className="bg-red-500 p-6 flex justify-center relative overflow-hidden">
+                                {/* Graphic background circles */}
+                                <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                                <div className="absolute bottom-0 right-0 w-32 h-32 bg-black/5 rounded-full translate-x-1/3 translate-y-1/3"></div>
 
-                            <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-lg relative z-10">
-                                <Trash2 className="h-10 w-10 text-red-500 stroke-[2.5]" />
-                            </div>
-                        </div>
-                        <div className="p-8 text-center">
-                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Compte Supprimé</h3>
-                            <p className="text-gray-500 mb-6 text-sm">
-                                Le consultant <span className="font-bold text-gray-900">{deletedConsultantName}</span> a été retiré de la plateforme avec succès.
-                            </p>
-
-                            <div className="bg-gray-50 rounded-xl p-4 mb-8 text-left border border-gray-100 flex items-center space-x-3">
-                                <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                    <Check className="h-4 w-4 text-green-600" />
+                                <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-lg relative z-10">
+                                    <Trash2 className="h-10 w-10 text-red-500 stroke-[2.5]" />
                                 </div>
-                                <span className="text-xs text-gray-600 font-medium">Toutes les données associées ont été nettoyées.</span>
                             </div>
+                            <div className="p-8 text-center">
+                                <h3 className="text-2xl font-bold text-gray-900 mb-2">Compte Supprimé</h3>
+                                <p className="text-gray-500 mb-6 text-sm">
+                                    Le consultant <span className="font-bold text-gray-900">{deletedConsultantName}</span> a été retiré de la plateforme avec succès.
+                                </p>
 
-                            <button
-                                onClick={() => {
-                                    setShowDeleteSuccessModal(false)
-                                    setDeletedConsultantName('')
-                                }}
-                                className="w-full py-3.5 px-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-all shadow-lg active:scale-95"
-                            >
-                                Continuer
-                            </button>
+                                <div className="bg-gray-50 rounded-xl p-4 mb-8 text-left border border-gray-100 flex items-center space-x-3">
+                                    <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <Check className="h-4 w-4 text-green-600" />
+                                    </div>
+                                    <span className="text-xs text-gray-600 font-medium">Toutes les données associées ont été nettoyées.</span>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        setShowDeleteSuccessModal(false)
+                                        setDeletedConsultantName('')
+                                    }}
+                                    className="w-full py-3.5 px-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-all shadow-lg active:scale-95"
+                                >
+                                    Continuer
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Error Modal (New) */}
-            {showErrorModal && (
-                <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-bounce-in border border-red-100">
-                        <div className="bg-red-50 p-6 flex justify-center">
-                            <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-lg border-2 border-red-500">
-                                <AlertCircle className="h-10 w-10 text-red-500 stroke-[3]" />
+            {
+                showErrorModal && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-bounce-in border border-red-100">
+                            <div className="bg-red-50 p-6 flex justify-center">
+                                <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-lg border-2 border-red-500">
+                                    <AlertCircle className="h-10 w-10 text-red-500 stroke-[3]" />
+                                </div>
+                            </div>
+                            <div className="p-8 text-center">
+                                <h3 className="text-xl font-bold text-gray-900 mb-2">Attention !</h3>
+                                <p className="text-gray-600 mb-8 text-sm leading-relaxed">
+                                    {error}
+                                </p>
+
+                                <button
+                                    onClick={() => {
+                                        setShowErrorModal(false)
+                                        // Optionally clear top error too when modal closes
+                                        // setError(null) 
+                                    }}
+                                    className="w-full py-4 px-6 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-red-600/20 active:scale-95"
+                                >
+                                    Recommencer
+                                </button>
                             </div>
                         </div>
-                        <div className="p-8 text-center">
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">Attention !</h3>
-                            <p className="text-gray-600 mb-8 text-sm leading-relaxed">
-                                {error}
-                            </p>
-
-                            <button
-                                onClick={() => {
-                                    setShowErrorModal(false)
-                                    // Optionally clear top error too when modal closes
-                                    // setError(null) 
-                                }}
-                                className="w-full py-4 px-6 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-red-600/20 active:scale-95"
-                            >
-                                Recommencer
-                            </button>
-                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     )
 }

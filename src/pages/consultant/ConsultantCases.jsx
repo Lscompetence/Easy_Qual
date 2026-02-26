@@ -112,13 +112,15 @@ export default function ConsultantCases() {
             c.category?.toLowerCase().includes(searchQuery.toLowerCase())
 
         // Filter Logic:
-        // 'all' -> everything
-        // 'validated' -> only validated
+        // 'all'           -> everything
+        // 'validated'     -> only validated (Terminé)
         // 'not_completed' -> anything NOT validated
+        // 'active'        -> cases with progress > 0 and not validated (En cours)
         const matchesStatus =
             filterStatus === 'all' ? true :
                 filterStatus === 'validated' ? c.status === 'validated' :
-                    filterStatus === 'not_completed' ? c.status !== 'validated' : true
+                    filterStatus === 'not_completed' ? c.status !== 'validated' :
+                        filterStatus === 'active' ? (c.status !== 'validated' && (c.status === 'active' || (c.progress || 0) > 0)) : true
 
         return matchesSearch && matchesStatus
     })
@@ -134,10 +136,10 @@ export default function ConsultantCases() {
 
     const getStatusLabel = (status) => {
         switch (status) {
-            case 'active': return 'En cours'
+            case 'active': return 'Non Terminé'
             case 'validated': return 'Terminé'
-            case 'draft': return 'À faire'
-            default: return 'À valider'
+            case 'draft': return '—'
+            default: return '—'
         }
     }
 
@@ -166,7 +168,8 @@ export default function ConsultantCases() {
                         {[
                             { id: 'all', label: 'Tout' },
                             { id: 'not_completed', label: 'Non Terminé' },
-                            { id: 'validated', label: 'Terminé' }
+                            { id: 'validated', label: 'Validé' },
+                            { id: 'active', label: 'En cours' },
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -238,24 +241,32 @@ export default function ConsultantCases() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 w-1/5" onClick={() => navigate(`/consultant/case/${c.id}`)}>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-xs font-bold text-gray-700">{c.progress || 0}%</span>
-                                                        <div className="h-1.5 flex-1 bg-gray-100 rounded-full overflow-hidden">
-                                                            <div className="h-full bg-blue-600 rounded-full" style={{ width: `${c.progress || 0}%` }}></div>
+                                                    <div className="flex flex-col gap-1 pr-4">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Progression</span>
+                                                            <span className="text-xs font-black text-slate-700">{c.progress || 0}%</span>
+                                                        </div>
+                                                        <div className="h-2 flex-1 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                                                            <div
+                                                                className={`h-full rounded-full transition-all duration-1000 ${(c.progress || 0) >= 100 ? 'bg-emerald-500' :
+                                                                    (c.progress || 0) >= 50 ? 'bg-indigo-500' : 'bg-blue-500'
+                                                                    }`}
+                                                                style={{ width: `${c.progress || 0}%` }}
+                                                            ></div>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right" onClick={() => navigate(`/consultant/case/${c.id}`)}>
                                                     {c.status === 'validated' ? (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-100">
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block"></span> Terminé
+                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-green-50 text-green-700 border border-green-100 shadow-sm">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block"></span> Validé
                                                         </span>
-                                                    ) : c.status === 'active' ? (
-                                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-100">
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-orange-500 inline-block"></span> Non Terminé
+                                                    ) : (c.status === 'active' || (c.progress > 0)) ? (
+                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100 shadow-sm">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span> En cours
                                                         </span>
                                                     ) : (
-                                                        <span className="text-gray-300 font-bold text-base">—</span>
+                                                        <span className="text-gray-300 font-bold px-4">—</span>
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 text-right relative">

@@ -82,7 +82,6 @@ export default function CaseDetails() {
     const [selectedIndicatorId, setSelectedIndicatorId] = useState(null) // which indicator is expanded
     const [criterionComments, setCriterionComments] = useState({}) // { criterion_id: string }
     const [savingComment, setSavingComment] = useState(null) // criterion_id being saved
-    const [statusMessage, setStatusMessage] = useState(null) // { type: 'success'|'info', text: string }
 
 
 
@@ -99,26 +98,92 @@ export default function CaseDetails() {
     const [scrolledToBottom, setScrolledToBottom] = useState(false)
     const messagesEndRef = useRef(null)
 
-    // DEBUGGING LOGS
-    console.log('CaseDetails Render - ID:', id)
-    console.log('CaseDetails Render - Auth User:', user?.id)
-    console.log('CaseDetails Render - Case Data:', caseData)
-    console.log('CaseDetails Render - Error:', error)
+    // Helpers
+    const isInitialAudit = (t) => !t || t === 'initial' || t.toLowerCase().includes('initial')
+
+
+    // Unified Weighted Progress Calculation (Bien fait)
+    const calculateWeightedProgress = (states, total) => {
+        if (!total || total === 0) return 0
+        let score = 0
+        states.forEach(s => {
+            if (s.consultant_verdict === 'validated' || s.consultant_verdict === 'non_applicable') {
+                score += 100
+            } else if (s.status === 'doing') {
+                score += 50
+            } else if (s.status === 'done' && !s.consultant_verdict) {
+                score += 75
+            }
+        })
+        return Math.min(100, Math.round(score / total))
+    }
+
+    const currentAuditStates = allIndicatorStates.filter(s => {
+        const sType = s.audit_type || 'initial'
+        const currentSelected = selectedAudit || 'initial'
+        return isInitialAudit(currentSelected) ? isInitialAudit(sType) : sType === currentSelected
+    })
+
+    const totalPossibleIndicators = criteriaData.reduce((acc, crit) => acc + (crit.indicators?.length || 0), 0)
+    const calculatedProgress = calculateWeightedProgress(currentAuditStates, totalPossibleIndicators)
+
+    // Use dynamic if we have states, otherwise fallback to DB value to avoid 0% flicker
+    const progressPercent = (allIndicatorStates.length > 0) ? calculatedProgress : (caseData?.progress || 0)
+
+    // Auto-sync progress to DB if it differs from stored value
+    useEffect(() => {
+        if (!caseData || allIndicatorStates.length === 0 || criteriaData.length === 0) return
+
+        const currentDBProgress = caseData.progress || 0
+        const currentDBStatus = caseData.status
+        const targetStatus = (currentDBStatus === 'validated') ? 'validated' : 'active'
+
+        const needsSync = progressPercent !== currentDBProgress ||
+            (progressPercent > 0 && currentDBStatus !== 'active' && currentDBStatus !== 'validated')
+
+        if (needsSync) {
+            console.log(`Syncing progress to DB: ${progressPercent}%, status: ${targetStatus}`)
+            const syncProgress = async () => {
+                const { error: syncError } = await supabase.from('cases').update({
+                    progress: progressPercent,
+                    status: targetStatus
+                }).eq('id', id)
+
+                if (syncError) {
+                    console.error("Sync error:", syncError)
+                } else {
+                    setCaseData(prev => ({ ...prev, progress: progressPercent, status: targetStatus }))
+                }
+            }
+            syncProgress()
+        }
+    }, [progressPercent, caseData?.progress, caseData?.status, id])
 
     useEffect(() => {
-        if (!caseData) return
+        if (!caseData || criteriaData.length === 0) return
 
         const filteredMap = {}
         let validatedCount = 0
         const totalCount = criteriaData.reduce((acc, crit) => acc + (crit.indicators?.length || 0), 0)
-        const currentAuditType = selectedAudit || 'initial'
 
-        allIndicatorStates.filter(s => (s.audit_type || 'initial') === currentAuditType).forEach(s => {
-            filteredMap[s.indicator_id] = {
-                status: s.status,
-                consultant_verdict: s.consultant_verdict
+        const isMatch = (sType) => {
+            const currentSelected = selectedAudit || 'initial'
+            if (isInitialAudit(currentSelected)) return isInitialAudit(sType)
+            return sType === currentSelected
+        }
+
+        allIndicatorStates.forEach(s => {
+            if (isMatch(s.audit_type)) {
+                const indId = String(s.indicator_id)
+                const existing = filteredMap[indId]
+                if (existing?.consultant_verdict && !s.consultant_verdict) return
+
+                filteredMap[indId] = {
+                    status: s.status,
+                    consultant_verdict: s.consultant_verdict
+                }
+                if (s.consultant_verdict === 'validated') validatedCount++
             }
-            if (s.status === 'done') validatedCount++
         })
 
         setIndicatorStates(filteredMap)
@@ -155,15 +220,12 @@ export default function CaseDetails() {
             if (!cData) throw new Error("Aucune donnée trouvée pour ce dossier")
 
             setCaseData(cData)
-            // Initialize indicatorStates if needed
-            // ...
-            if (cData.audit_type && Array.isArray(cData.audit_type) && cData.audit_type.length > 0) {
-                // Determine default audit type based on status or just pick first
-                // If we want to persist selection or default to 'initial', logic goes here.
-                // For now, default to first one if not set, or keep 'initial' if it exists in list.
-                if (!selectedAudit || !cData.audit_type.includes(selectedAudit)) {
-                    setSelectedAudit(cData.audit_type[0])
-                }
+
+            // Fix initialization: default to first available audit type
+            let defaultAudit = 'initial'
+            if (cData.audit_type && cData.audit_type.length > 0) {
+                defaultAudit = cData.audit_type[0]
+                setSelectedAudit(defaultAudit)
             }
 
             const { data: indData, error: indError } = await supabase
@@ -190,6 +252,7 @@ export default function CaseDetails() {
                 .eq('case_id', id)
 
             if (sError) throw sError
+            console.log('Fetched indicator states:', sData?.length || 0)
             setAllIndicatorStates(sData || [])
 
             // Fetch quiz uploads & comments for this case
@@ -201,12 +264,13 @@ export default function CaseDetails() {
             const quizMap = {}
             const commentsMap = {}
             quizData?.forEach(q => {
+                const aType = q.audit_type || 'initial'
                 if (!quizMap[q.criterion_id]) quizMap[q.criterion_id] = {}
-                quizMap[q.criterion_id][q.audit_type || 'initial'] = q
+                quizMap[q.criterion_id][aType] = q
 
                 if (q.consultant_comment) {
                     if (!commentsMap[q.criterion_id]) commentsMap[q.criterion_id] = {}
-                    commentsMap[q.criterion_id][q.audit_type || 'initial'] = q.consultant_comment
+                    commentsMap[q.criterion_id][aType] = q.consultant_comment
                 }
             })
             setQuizUploads(quizMap)
@@ -219,15 +283,50 @@ export default function CaseDetails() {
                 .order('event_date', { ascending: true })
 
             setEvents(eventData || [])
-            // Initialize criterionComments from DB if available (structure state slightly differently or map it)
-            // For simplicity, let's keep criterionComments separate but context-aware? 
-            // Better to load them into a map similar to uploads.
-            // Let's refactor criterionComments to be flat or per audit. 
-            // For now, let's just use the quizData.consultant_comment directly in render or init state.
-            const flatComments = {} // We'll just load them when rendering or when changing tab?
-            // Actually, setCriterionComments is used for editing. 
-            // Let's init it empty and use the quizMap data for initial display.
 
+            // ATOMIC INITIALIZATION of indicatorStates to avoid flickers on refresh
+            const initialIndicatorMap = {}
+            let initialValidatedCount = 0
+            const finalTotalCount = Object.values(grouped).reduce((acc, crit) => acc + crit.indicators.length, 0)
+
+            const isMatchInitial = (sType) => {
+                const currentDefault = defaultAudit || 'initial'
+                if (isInitialAudit(currentDefault)) return isInitialAudit(sType)
+                return sType === currentDefault
+            }
+
+            const statesArray = sData || []
+            console.log('Initializing indicatorStates with', statesArray.length, 'total states. Target audit:', defaultAudit)
+            statesArray.forEach(s => {
+                if (isMatchInitial(s.audit_type)) {
+                    const indId = String(s.indicator_id)
+                    const existing = initialIndicatorMap[indId]
+                    if (existing?.consultant_verdict && !s.consultant_verdict) return
+
+                    initialIndicatorMap[indId] = {
+                        status: s.status,
+                        consultant_verdict: s.consultant_verdict
+                    }
+                    if (s.consultant_verdict === 'validated') initialValidatedCount++
+                }
+            })
+
+            console.log('Resulting individual states mapped:', Object.keys(initialIndicatorMap).length)
+            setIndicatorStates(initialIndicatorMap)
+            setStats({ total: finalTotalCount, validated: initialValidatedCount })
+
+            // Populate criterionComments from loaded quiz data for the selected/default audit
+            const restoredComments = {}
+            Object.keys(commentsMap).forEach(critId => {
+                const auditsForCrit = Object.keys(commentsMap[critId])
+                const matchingAudit = auditsForCrit.find(a =>
+                    isInitialAudit(defaultAudit) ? isInitialAudit(a) : a === defaultAudit
+                )
+                if (matchingAudit) {
+                    restoredComments[critId] = commentsMap[critId][matchingAudit]
+                }
+            })
+            setCriterionComments(restoredComments)
 
         } catch (error) {
             console.error('Error fetching details:', error)
@@ -328,7 +427,10 @@ export default function CaseDetails() {
     }
 
     const handleIndicatorUpdate = async (indicatorId, newStatus) => {
-        // 1. Calculate new states locally first to determine progress
+        // This function handled CLIENT updates, but we'll keep it as is if needed by client.
+        // However, the USER request implies progress should be based on CONSULTANT verdicts now.
+        // Let's focus on handleVerdict for the consultant's automation.
+
         let updatedStates = [...allIndicatorStates]
         const type = selectedAudit || 'initial'
         const index = updatedStates.findIndex(s => s.indicator_id === indicatorId && (s.audit_type || 'initial') === type)
@@ -339,73 +441,102 @@ export default function CaseDetails() {
             updatedStates.push({ indicator_id: indicatorId, audit_type: type, status: newStatus, case_id: id })
         }
 
-        // 2. Update UI State
         setAllIndicatorStates(updatedStates)
-
-        // 3. Calculate Progress
-        const total = stats.total || 1
-        const validatedCount = updatedStates.filter(s => s.status === 'done' && (s.audit_type === type || !s.audit_type)).length
-        const newProgress = Math.min(100, Math.round((validatedCount / total) * 100))
-
-        // 4. Update Case in DB (Progress & Status)
-        try {
-            const { error } = await supabase
-                .from('cases')
-                .update({
-                    progress: newProgress,
-                    status: caseData.status === 'draft' ? 'active' : caseData.status
-                })
-                .eq('id', id)
-
-            if (error) throw error
-
-            // Update local caseData
-            setCaseData(prev => ({
-                ...prev,
-                progress: newProgress,
-                status: prev.status === 'draft' ? 'active' : prev.status
-            }))
-
-        } catch (err) {
-            console.error("Error updating case progress:", err)
-        }
+        // We'll let handleVerdict handle the main case updates for the consultant view.
     }
 
     // Save consultant verdict for an indicator
     const handleVerdict = async (indicatorId, verdict) => {
-        // Optimistic update
+        const type = selectedAudit || 'initial'
+
+        // Optimistic update - consistently use string keys
         setIndicatorStates(prev => ({
             ...prev,
-            [indicatorId]: { ...(prev[indicatorId] || {}), consultant_verdict: verdict }
+            [String(indicatorId)]: { ...(prev[String(indicatorId)] || {}), consultant_verdict: verdict }
         }))
+
         try {
-            await supabase.from('case_indicator_states').upsert({
+            // 1. Update/Insert current state
+            const currentIndState = indicatorStates[String(indicatorId)] || {}
+            const { data: updatedState, error: upsertError } = await supabase.from('case_indicator_states').upsert({
                 case_id: id,
                 indicator_id: indicatorId,
-                audit_type: selectedAudit || 'initial',
-                status: indicatorStates[indicatorId]?.status || 'to_do',
+                audit_type: type,
+                status: currentIndState.status || 'to_do',
                 consultant_verdict: verdict
-            }, { onConflict: 'case_id,indicator_id,audit_type' })
+            }, { onConflict: 'case_id,indicator_id,audit_type' }).select().single()
+
+            if (upsertError) throw upsertError
+
+            // 2. Refresh all states to calculate accurate progress
+            const { data: allStates } = await supabase.from('case_indicator_states').select('*').eq('case_id', id)
+            if (allStates) setAllIndicatorStates(allStates)
+
+            // 3. Refined Progress Calculation ("Bien fait")
+            // Weighted average of ALL indicators for the selected audit type
+            const totalIndicators = criteriaData.reduce((acc, crit) => acc + (crit.indicators?.length || 0), 0)
+
+            if (totalIndicators > 0) {
+                const auditStates = (allStates || []).filter(s => {
+                    const sType = s.audit_type || 'initial'
+                    return isInitialAudit(type) ? isInitialAudit(sType) : sType === type
+                })
+
+                // Create a map for quick lookup
+                const stateMap = {}
+                auditStates.forEach(s => { stateMap[s.indicator_id] = s })
+
+                let totalWeightedScore = 0
+                criteriaData.forEach(crit => {
+                    crit.indicators?.forEach(ind => {
+                        const s = stateMap[ind.id]
+                        if (s) {
+                            if (s.consultant_verdict === 'validated') {
+                                totalWeightedScore += 100
+                            } else if (s.status === 'doing') {
+                                totalWeightedScore += 50
+                            } else if (s.status === 'done' && !s.consultant_verdict) {
+                                // Client finished but consultant hasn't reviewed yet
+                                totalWeightedScore += 75
+                            }
+                        }
+                    })
+                })
+
+                const newProgress = calculateWeightedProgress(auditStates, totalIndicators)
+
+                // 4. Determine final status
+                // We consider it "validated" ONLY if all indicators are either 'validated' or 'non_applicable' by consultant
+                const allReviewed = criteriaData.every(crit =>
+                    crit.indicators?.every(ind => {
+                        const v = stateMap[ind.id]?.consultant_verdict
+                        return v === 'validated' || v === 'non_conforme' || v === 'non_applicable'
+                    })
+                )
+                const finalStatus = allReviewed ? 'validated' : 'active'
+
+                // 5. Update case in DB
+                const { error: updateError } = await supabase.from('cases').update({
+                    progress: newProgress,
+                    status: finalStatus
+                }).eq('id', id)
+
+                if (updateError) {
+                    console.error("Error updating case progress:", updateError)
+                    throw updateError
+                }
+
+                // Update local state - ensure progress is reflected
+                setCaseData(prev => ({ ...prev, progress: newProgress, status: finalStatus }))
+            }
+
         } catch (err) {
-            console.error('Error saving verdict:', err)
+            console.error('Error saving verdict or updating progress:', err)
         }
         setSelectedIndicatorId(null) // collapse after verdict
     }
 
-    // Update the global case status
-    const handleCaseStatusUpdate = async (newStatus) => {
-        try {
-            const { error } = await supabase
-                .from('cases')
-                .update({ status: newStatus })
-                .eq('id', id)
-            if (error) throw error
-            // Optimistic update
-            setCaseData(prev => ({ ...prev, status: newStatus }))
-        } catch (err) {
-            console.error('Error updating case status:', err)
-        }
-    }
+
 
     // Save consultant comment for a criterion
     const handleSaveCriterionComment = async (criterionId) => {
@@ -592,7 +723,7 @@ export default function CaseDetails() {
         // -- CRITERIA LOOP --
         criteriaData.forEach((crit) => {
             const critIndicators = crit.indicators || []
-            const clientProgress = Math.round((critIndicators.filter(i => indicatorStates[i.id]?.status === 'done').length / critIndicators.length) * 100)
+            const consultantProgress = Math.round((critIndicators.filter(i => indicatorStates[i.id]?.consultant_verdict).length / critIndicators.length) * 100)
 
             // Criterion Title
             yPos += 10
@@ -601,7 +732,7 @@ export default function CaseDetails() {
             doc.setFontSize(12)
             doc.setTextColor(0, 0, 0)
             doc.setFont('helvetica', 'bold')
-            doc.text(`${crit.label} (${clientProgress}%)`, 20, yPos)
+            doc.text(`${crit.label} (${consultantProgress}%)`, 20, yPos)
             yPos += 8
 
             // Quiz Section (Top)
@@ -725,10 +856,8 @@ export default function CaseDetails() {
 
     if (!caseData) return <div className="p-8 text-center text-gray-500">Dossier introuvable (Data is null)</div>
 
-    // Dynamic Global Progress (Client based)
-    const allIndicators = criteriaData.flatMap(c => c.indicators || [])
-    const globalDone = allIndicators.filter(i => indicatorStates[i.id]?.status === 'done').length
-    const progressPercent = Math.round((globalDone / (allIndicators.length || 1)) * 100) || 0
+    // Global Progress based on dynamic calculation using weighted scores
+    // (removed redundant redeclaration)
 
     // Get Initials for Logo
     const getInitials = (name) => name ? name.substring(0, 2).toUpperCase() : '??'
@@ -795,14 +924,16 @@ export default function CaseDetails() {
                                 {/* Case Status Badge */}
                                 <div className="mt-2 flex items-center gap-2">
                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Statut :</span>
-                                    {caseData.status !== 'validated' ? (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold">
-                                            ● Non Terminé
+                                    {caseData.status === 'validated' ? (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
+                                            <CheckCircle className="h-3.5 w-3.5" /> Validé
+                                        </span>
+                                    ) : (caseData.status === 'active' || (progressPercent > 0)) ? (
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-100 shadow-sm">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span> En cours
                                         </span>
                                     ) : (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
-                                            <CheckCircle className="h-3.5 w-3.5" /> Terminé
-                                        </span>
+                                        <span className="text-gray-300 font-bold px-4">—</span>
                                     )}
                                 </div>
                             </div>
@@ -986,12 +1117,23 @@ export default function CaseDetails() {
                             ) : (
                                 criteriaData.map((crit) => {
                                     const critIndicators = crit.indicators || []
-                                    const verdictCount = critIndicators.filter(i => indicatorStates[i.id]?.consultant_verdict === 'validated').length
-                                    const nonConformeCount = critIndicators.filter(i => indicatorStates[i.id]?.consultant_verdict === 'non_conforme').length
+                                    const verdictCount = critIndicators.filter(i => indicatorStates[String(i.id)]?.consultant_verdict).length
+                                    const nonConformeCount = critIndicators.filter(i => indicatorStates[String(i.id)]?.consultant_verdict === 'non_conforme').length
+                                    const validatedCount = critIndicators.filter(i => indicatorStates[String(i.id)]?.consultant_verdict === 'validated').length
 
-                                    // Client Progress: based on status = 'done'
-                                    const clientDoneCount = critIndicators.filter(i => indicatorStates[i.id]?.status === 'done').length
-                                    const percent = Math.round((clientDoneCount / critIndicators.length) * 100) || 0
+                                    // Weighted progress for this criterion
+                                    let critWeightedScore = 0
+                                    critIndicators.forEach(i => {
+                                        const state = indicatorStates[String(i.id)] || {}
+                                        if (state.consultant_verdict === 'validated') {
+                                            critWeightedScore += 100
+                                        } else if (state.status === 'doing') {
+                                            critWeightedScore += 50
+                                        } else if (state.status === 'done' && !state.consultant_verdict) {
+                                            critWeightedScore += 75
+                                        }
+                                    })
+                                    const percent = Math.round(critWeightedScore / (critIndicators.length || 1))
 
                                     const quiz = quizUploads[crit.id]?.[selectedAudit || 'initial']
                                     const savedComment = quiz?.consultant_comment || ''
@@ -1007,7 +1149,7 @@ export default function CaseDetails() {
                                                     </div>
                                                     <div>
                                                         <h3 className="text-sm font-bold text-gray-900">{crit.label}</h3>
-                                                        <p className="text-xs text-gray-400 mt-0.5">{clientDoneCount}/{critIndicators.length} indicateurs terminés</p>
+                                                        <p className="text-xs text-gray-400 mt-0.5">{validatedCount}/{critIndicators.length} indicateurs validés</p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-3">
@@ -1040,7 +1182,7 @@ export default function CaseDetails() {
                                             {/* ── Indicator List ── */}
                                             <div className="divide-y divide-gray-50">
                                                 {critIndicators.map((ind, idx) => {
-                                                    const state = indicatorStates[ind.id] || {}
+                                                    const state = indicatorStates[String(ind.id)] || {}
                                                     const verdict = state.consultant_verdict
                                                     const isOpen = selectedIndicatorId === ind.id
 
@@ -1069,14 +1211,14 @@ export default function CaseDetails() {
                                                                             <CheckCircle className="h-3.5 w-3.5" /> Conforme
                                                                         </span>
                                                                     )}
-                                                                    {verdict === 'non_applicable' && (
-                                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
-                                                                            <CircleOff className="h-3.5 w-3.5" /> Non Applicable
-                                                                        </span>
-                                                                    )}
                                                                     {verdict === 'non_conforme' && (
                                                                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold">
                                                                             <XCircle className="h-3.5 w-3.5" /> Non Conforme
+                                                                        </span>
+                                                                    )}
+                                                                    {verdict === 'non_applicable' && (
+                                                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                                                                            <CircleOff className="h-3.5 w-3.5" /> Non Applicable
                                                                         </span>
                                                                     )}
                                                                     {!verdict && (
@@ -1092,23 +1234,18 @@ export default function CaseDetails() {
                                                             {isOpen && (
                                                                 <div className="px-6 pb-5 pt-3 bg-indigo-50 border-t border-indigo-100 space-y-4">
 
-                                                                    {/* Client self-assessment */}
-                                                                    <div className="bg-white rounded-xl border border-indigo-100 p-4">
-                                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Statut déclaré par le client</p>
+                                                                    {/* Statut Client (ReadOnly display) */}
+                                                                    <div className="bg-white rounded-xl border border-slate-100 p-4">
+                                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Statut déclaré par le client</p>
                                                                         <div className="flex gap-2">
-                                                                            {/* Conforme */}
-                                                                            <div className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-bold bg-white text-gray-300 border-gray-100">
-                                                                                <CheckCircle className="h-4 w-4" /> Conforme
+                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all ${state.status === 'done' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-white text-slate-200 border-slate-50'}`}>
+                                                                                <CheckCircle className="h-3.5 w-3.5" /> Fait
                                                                             </div>
-
-                                                                            {/* Non Applicable */}
-                                                                            <div className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-bold bg-white text-gray-300 border-gray-100">
-                                                                                <CircleOff className="h-4 w-4" /> Non Applicable
+                                                                            <div className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all bg-white text-slate-200 border-slate-50">
+                                                                                <Clock className="h-3.5 w-3.5" /> En cours
                                                                             </div>
-
-                                                                            {/* Non Conforme */}
-                                                                            <div className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-bold bg-white text-gray-300 border-gray-100">
-                                                                                <XCircle className="h-4 w-4" /> Non Conforme
+                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all ${state.status === 'non_applicable' ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-white text-slate-200 border-slate-50'}`}>
+                                                                                <CircleOff className="h-3.5 w-3.5" /> Non Applicable
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -1133,7 +1270,16 @@ export default function CaseDetails() {
                                                                                     : 'border-red-200 text-red-600 bg-white hover:bg-red-50'
                                                                                     }`}
                                                                             >
-                                                                                <XCircle className="h-4 w-4" /> Non Conforme
+                                                                                <XCircle className="h-4 w-4" /> Non conforme
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleVerdict(ind.id, 'non_applicable')}
+                                                                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all border-2 ${verdict === 'non_applicable'
+                                                                                    ? 'bg-slate-500 border-slate-500 text-white shadow-lg shadow-slate-200'
+                                                                                    : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'
+                                                                                    }`}
+                                                                            >
+                                                                                <CircleOff className="h-4 w-4" /> Non Applicable
                                                                             </button>
                                                                         </div>
                                                                     </div>
@@ -1208,52 +1354,7 @@ export default function CaseDetails() {
                         </div>
                     )}
 
-                    {/* ── CASE STATUS BUTTONS — inside audit tab only ── */}
-                    {activeTab === 'suivi_rno' && (
-                        <div className="mt-6">
-                            {statusMessage && (
-                                <div className={`mb-3 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold border ${statusMessage.type === 'success'
-                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                                        : 'bg-orange-50 border-orange-200 text-orange-700'
-                                    }`}>
-                                    {statusMessage.type === 'success'
-                                        ? <CheckCircle className="h-4 w-4 flex-shrink-0" />
-                                        : <XCircle className="h-4 w-4 flex-shrink-0" />
-                                    }
-                                    {statusMessage.text}
-                                </div>
-                            )}
-                            <div className="flex items-center gap-3">
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-2 whitespace-nowrap">Statut du dossier :</p>
-                                <button
-                                    onClick={() => {
-                                        handleCaseStatusUpdate('active')
-                                        setStatusMessage({ type: 'info', text: 'Le dossier a été marqué comme Non Terminé.' })
-                                        setTimeout(() => setStatusMessage(null), 4000)
-                                    }}
-                                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${caseData.status === 'active'
-                                        ? 'bg-orange-500 border-orange-500 text-white shadow-sm'
-                                        : 'border-orange-200 text-orange-500 bg-white hover:bg-orange-50'
-                                        }`}
-                                >
-                                    <XCircle className="h-4 w-4" /> Non Terminé
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        handleCaseStatusUpdate('validated')
-                                        setStatusMessage({ type: 'success', text: 'Félicitations ! Le dossier de ce client est validé et marqué comme Terminé.' })
-                                        setTimeout(() => setStatusMessage(null), 5000)
-                                    }}
-                                    className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${caseData.status === 'validated'
-                                        ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm'
-                                        : 'border-emerald-200 text-emerald-600 bg-white hover:bg-emerald-50'
-                                        }`}
-                                >
-                                    <CheckCircle className="h-4 w-4" /> Terminé
-                                </button>
-                            </div>
-                        </div>
-                    )}
+
 
                     {/* VUE PLANIFICATION (Timeline Mockup) */}
                     {
