@@ -45,9 +45,12 @@ function App() {
             <Route path="/consultant/resources" element={<Ressources />} />
           </Route>
 
-          {/* Client (OF) Routes */}
+          {/* Client (OF) Routes - All point to Dashboard tabs */}
           <Route element={<ProtectedRoute allowedRoles={['of']} />}>
             <Route path="/client/dashboard" element={<ClientDashboard />} />
+            <Route path="/client/audit" element={<ClientDashboard />} />
+            <Route path="/client/documents" element={<ClientDashboard />} />
+            <Route path="/client/messages" element={<ClientDashboard />} />
           </Route>
 
           {/* Default Route - Redirect logic could be here or inside Login */}

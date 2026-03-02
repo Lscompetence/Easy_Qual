@@ -1,16 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { useNavigate } from 'react-router-dom'
 import {
     FileText, Upload, CheckCircle, Clock, AlertTriangle,
-    LogOut, Download, XCircle, MessageSquare, ChevronDown, ChevronUp, CircleOff
+    Download, XCircle, MessageSquare, ChevronDown, ChevronUp, CircleOff,
+    CheckSquare, Target, BookOpen, Layers
 } from 'lucide-react'
-import Logo from '../../components/Logo'
+import ClientSidebar from '../../components/client/ClientSidebar'
+import ClientTopBar from '../../components/client/ClientTopBar'
 
 export default function ClientDashboard() {
-    const { user, logout, profile } = useAuth()
+    const { user, profile, logout } = useAuth()
     const navigate = useNavigate()
+    const location = useLocation()
+
+    // Tab Logic
+    const activeTab = location.pathname.split('/').pop() || 'dashboard'
 
     const [tenant, setTenant] = useState(null)
     const [myCase, setMyCase] = useState(null)
@@ -137,10 +143,6 @@ export default function ClientDashboard() {
         }
     }
 
-    const handleLogout = async () => {
-        try { await logout(); navigate('/login?role=client') } catch (e) { console.error(e) }
-    }
-
     // Calc Progress
     const totalIndicators = indicators.length
     const doneCount = Object.values(indicatorStates).filter(s => s?.status === 'done' || s?.status === 'non_applicable').length
@@ -160,243 +162,275 @@ export default function ClientDashboard() {
         non_applicable: { label: 'Non Applicable', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: <CircleOff className="h-3.5 w-3.5" /> },
     }
 
-    return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Navbar */}
-            <div className="bg-white shadow-sm border-b border-gray-200">
-                <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="relative flex justify-between items-center h-16">
-                        <div className="flex items-center gap-3">
-                            <Logo size="small" />
-                            <span className="px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 text-xs font-bold border border-teal-100">Client</span>
-                        </div>
-                        <div className="absolute left-1/2 -translate-x-1/2 hidden md:block text-center">
-                            <span className="text-sm font-semibold text-teal-600">Bonjour {profile?.first_name} {profile?.last_name}</span>
-                            {tenant && <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{tenant.name}</p>}
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => navigate('/profile')} className="text-sm font-medium text-gray-500 hover:text-teal-600 transition-colors">Mon Profil</button>
-                            <button onClick={handleLogout} className="flex items-center text-gray-500 hover:text-red-600 transition-colors">
-                                <LogOut className="h-5 w-5 mr-1" />
-                                <span className="hidden sm:inline text-sm">Déconnexion</span>
-                            </button>
-                        </div>
-                    </div>
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex">
+                <ClientSidebar />
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-500 mx-auto" />
                 </div>
             </div>
+        )
+    }
 
-            <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    return (
+        <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
+            <ClientSidebar />
 
-                {/* Header Card */}
-                <div className="bg-white rounded-2xl shadow-sm p-6 mb-8 border border-gray-100">
-                    <div className="flex items-start justify-between mb-5">
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">Mon Audit Qualiopi</h1>
-                            <p className="text-gray-400 text-sm mt-1">
-                                Dossier N° {myCase?.id?.slice(0, 8) || '…'} • {myCase?.category === 'multi-site' ? 'Multi-site' : 'Mono-site'}
-                            </p>
+            <div className="flex-1 flex flex-col min-w-0">
+                <ClientTopBar />
+
+                <main className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto w-full space-y-8">
+
+                    {/* Header Summary */}
+                    <div className="flex flex-col md:flex-row gap-6">
+                        <div className="flex-1 bg-white rounded-3xl p-8 border border-gray-100 shadow-sm relative overflow-hidden">
+                            {/* Accent background */}
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-teal-50 rounded-full -mr-16 -mt-16 z-0"></div>
+
+                            <div className="relative z-10">
+                                <h1 className="text-3xl font-black text-gray-900 mb-2">Suivi de votre Audit</h1>
+                                <p className="text-gray-400 text-sm mb-8">Préparez sereinement votre certification Qualiopi.</p>
+
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-end">
+                                        <span className="text-xs font-black text-teal-600 uppercase tracking-widest">Progression Globale</span>
+                                        <span className="text-2xl font-black text-teal-600">{progressPercent}%</span>
+                                    </div>
+                                    <div className="h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                                        <div
+                                            className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(20,184,166,0.3)]"
+                                            style={{ width: `${progressPercent}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex gap-4 pt-2">
+                                        <div className="px-3 py-1 bg-teal-50 border border-teal-100 rounded-full text-[10px] font-bold text-teal-700 uppercase tracking-wider">
+                                            {doneCount}/{totalIndicators} Indicateurs
+                                        </div>
+                                        <div className="px-3 py-1 bg-amber-50 border border-amber-100 rounded-full text-[10px] font-bold text-amber-700 uppercase tracking-wider">
+                                            {myCase?.audit_type?.[0] || 'Initial'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold bg-blue-100 text-blue-700">
-                            <Clock className="h-4 w-4" /> En cours
-                        </span>
-                    </div>
-                    {/* Progress */}
-                    <div>
-                        <div className="flex justify-between text-sm mb-2">
-                            <span className="text-gray-500 font-medium">Progression globale</span>
-                            <span className="font-bold text-gray-900">{progressPercent}% <span className="text-gray-400 font-normal">({doneCount}/{totalIndicators} indicateurs)</span></span>
-                        </div>
-                        <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                            <div
-                                className="h-full rounded-full transition-all duration-700"
-                                style={{
-                                    width: `${progressPercent}%`,
-                                    background: 'linear-gradient(90deg, #14b8a6, #0ea5e9)'
-                                }}
-                            />
-                        </div>
-                    </div>
-                </div>
 
-                {/* Indicators by Criterion */}
-                {loading ? (
-                    <div className="text-center py-16">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-teal-500 mx-auto" />
-                        <p className="mt-4 text-gray-400 text-sm">Chargement du référentiel…</p>
-                    </div>
-                ) : (
-                    <div className="space-y-6">
-                        {Object.values(groupedIndicators).map((criterion) => {
-                            const allDone = criterion.items.every(ind => indicatorStates[ind.id]?.status === 'done')
-                            const doneCnt = criterion.items.filter(ind => indicatorStates[ind.id]?.status === 'done' || indicatorStates[ind.id]?.status === 'non_applicable').length
-                            const critPct = criterion.items.length > 0 ? Math.round((doneCnt / criterion.items.length) * 100) : 0
-                            const quizUploaded = quizUploads[criterion.id]
-                            const isExpanded = expandedCriteria[criterion.id] !== false // default expanded
-
-                            return (
-                                <div key={criterion.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-
-                                    {/* Criterion Header */}
+                        <div className="w-full md:w-80 space-y-4 flex flex-col">
+                            <div className="flex-1 bg-emerald-600 rounded-3xl p-6 text-white shadow-lg shadow-emerald-100 relative overflow-hidden">
+                                <div className="relative z-10">
+                                    <h3 className="text-lg font-bold mb-1">Besoin d'aide ?</h3>
+                                    <p className="text-emerald-100 text-xs mb-4">Votre consultant est prêt à répondre à toutes vos questions via la messagerie.</p>
                                     <button
-                                        className="w-full flex items-center justify-between px-6 py-4 bg-gray-50 hover:bg-gray-100 transition-colors border-b border-gray-100"
-                                        onClick={() => setExpandedCriteria(prev => ({ ...prev, [criterion.id]: !isExpanded }))}
+                                        onClick={() => navigate('/client/messages')}
+                                        className="w-full py-3 bg-white text-emerald-600 rounded-xl font-black text-sm hover:bg-emerald-50 transition-colors shadow-xl shadow-emerald-700/20"
                                     >
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-8 w-8 rounded-lg bg-teal-600 flex items-center justify-center flex-shrink-0">
-                                                <FileText className="h-4 w-4 text-white" />
-                                            </div>
-                                            <div className="text-left">
-                                                <h2 className="text-sm font-bold text-gray-900">{criterion.label}</h2>
-                                                <p className="text-xs text-gray-400">{doneCnt}/{criterion.items.length} indicateurs terminés</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            {/* Mini progress */}
-                                            <div className="hidden sm:flex items-center gap-2">
-                                                <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-teal-500 rounded-full transition-all" style={{ width: `${critPct}%` }} />
-                                                </div>
-                                                <span className="text-xs font-bold text-gray-500">{critPct}%</span>
-                                            </div>
-                                            {quizUploaded && (
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
-                                                    <FileText className="h-3 w-3" /> Quiz soumis
-                                                </span>
-                                            )}
-                                            {isExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
-                                        </div>
+                                        Contacter le consultant
                                     </button>
+                                </div>
+                                <MessageSquare className="absolute -right-4 -bottom-4 h-24 w-24 text-emerald-500/30" />
+                            </div>
+                            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between group cursor-pointer hover:border-teal-200 transition-all">
+                                <div>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Prochain RDV</p>
+                                    <p className="text-sm font-black text-gray-900">Aucun planifié</p>
+                                </div>
+                                <div className="h-10 w-10 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center group-hover:bg-teal-600 group-hover:text-white transition-all">
+                                    <ChevronRight className="h-5 w-5" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                                    {isExpanded && (
-                                        <>
-                                            {/* Indicators */}
-                                            <div className="divide-y divide-gray-50">
-                                                {criterion.items.map((ind) => {
-                                                    const state = indicatorStates[ind.id] || {}
-                                                    const status = state.status || 'to_do'
-                                                    const consultantVerdict = state.consultant_verdict
-                                                    const consultantComment = state.consultant_comment
-                                                    const vCfg = verdictConfig[consultantVerdict]
+                    {/* Referential Action Items */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-2 space-y-6">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 bg-indigo-50 rounded-xl">
+                                        <CheckSquare className="h-5 w-5 text-indigo-600" />
+                                    </div>
+                                    <h2 className="text-xl font-black text-gray-900">Plan d'action Qualiopi</h2>
+                                </div>
+                                <div className="flex bg-white border border-gray-100 rounded-xl p-1 shadow-sm">
+                                    <button className="px-3 py-1.5 text-xs font-bold bg-gray-50 text-gray-900 rounded-lg">Tous</button>
+                                    <button className="px-3 py-1.5 text-xs font-bold text-gray-400 hover:text-gray-600">À faire</button>
+                                    <button className="px-3 py-1.5 text-xs font-bold text-gray-400 hover:text-gray-600">Terminés</button>
+                                </div>
+                            </div>
 
-                                                    return (
-                                                        <div key={ind.id} className="px-6 py-5">
-                                                            <div className="flex items-start justify-between gap-4">
-                                                                <div className="flex-1 min-w-0">
-                                                                    <div className="flex items-center gap-2 mb-1.5">
-                                                                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-black rounded">{ind.code}</span>
-                                                                        <h3 className="text-sm font-semibold text-gray-900 leading-snug">{ind.label}</h3>
+                            <div className="space-y-4">
+                                {Object.values(groupedIndicators).map((criterion) => {
+                                    const isExpanded = expandedCriteria[criterion.id] !== false
+                                    const doneCnt = criterion.items.filter(ind => indicatorStates[ind.id]?.status === 'done' || indicatorStates[ind.id]?.status === 'non_applicable').length
+                                    const critPct = criterion.items.length > 0 ? Math.round((doneCnt / criterion.items.length) * 100) : 0
+                                    const quizUploaded = quizUploads[criterion.id]
+
+                                    return (
+                                        <div key={criterion.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:border-teal-200 transition-all overflow-hidden">
+                                            <button
+                                                className="w-full px-6 py-5 flex items-center justify-between text-left group"
+                                                onClick={() => setExpandedCriteria(prev => ({ ...prev, [criterion.id]: !isExpanded }))}
+                                            >
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`h-12 w-12 rounded-2xl flex items-center justify-center text-sm font-black transition-all ${critPct === 100 ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100' : 'bg-gray-100 text-gray-500 group-hover:bg-teal-50 group-hover:text-teal-600'}`}>
+                                                        C{criterion.id}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="font-bold text-gray-900">{criterion.label}</h3>
+                                                        <div className="flex items-center gap-2 mt-0.5">
+                                                            <span className="text-xs text-gray-400 font-bold">{doneCnt}/{criterion.items.length} indicateurs</span>
+                                                            {quizUploaded && <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">• Quiz prêt</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-6">
+                                                    <div className="hidden sm:flex flex-col items-end gap-1">
+                                                        <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                                            <div className={`h-full transition-all ${critPct === 100 ? 'bg-emerald-500' : 'bg-teal-500'}`} style={{ width: `${critPct}%` }} />
+                                                        </div>
+                                                        <span className="text-[10px] font-black text-gray-400">{critPct}%</span>
+                                                    </div>
+                                                    {isExpanded ? <ChevronUp className="h-5 w-5 text-gray-300" /> : <ChevronDown className="h-5 w-5 text-gray-300" />}
+                                                </div>
+                                            </button>
+
+                                            {isExpanded && (
+                                                <div className="px-6 pb-6 pt-2 space-y-4">
+                                                    <div className="h-px bg-gray-50 mb-4" />
+                                                    <div className="space-y-1">
+                                                        {criterion.items.map((ind) => {
+                                                            const state = indicatorStates[ind.id] || {}
+                                                            const status = state.status || 'to_do'
+                                                            const consultantVerdict = state.consultant_verdict
+                                                            const verdictCfg = verdictConfig[consultantVerdict]
+
+                                                            return (
+                                                                <div key={ind.id} className="group/item flex items-center justify-between py-3 px-4 hover:bg-gray-50 rounded-2xl transition-all border border-transparent hover:border-gray-100">
+                                                                    <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
+                                                                        <div className={`h-8 w-8 rounded-full border-2 flex items-center justify-center transition-all ${status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-200 text-transparent group-hover/item:border-teal-300'}`}>
+                                                                            <CheckCircle className="h-4 w-4" />
+                                                                        </div>
+                                                                        <div className="min-w-0">
+                                                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-0.5">{ind.code}</p>
+                                                                            <p className="text-sm font-bold text-gray-800 truncate">{ind.label}</p>
+                                                                            {verdictCfg && (
+                                                                                <div className="flex items-center gap-1.5 mt-1 text-[10px] font-black text-emerald-600 uppercase">
+                                                                                    {verdictCfg.icon} {verdictCfg.label}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
 
-                                                                    {/* Consultant verdict badge */}
-                                                                    {vCfg && (
-                                                                        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border mb-2 ${vCfg.color}`}>
-                                                                            {vCfg.icon} {vCfg.label} par le consultant
-                                                                        </div>
-                                                                    )}
-
-                                                                    {/* Consultant comment */}
-                                                                    {consultantComment && (
-                                                                        <div className="flex items-start gap-2 mt-2 p-3 bg-purple-50 border border-purple-100 rounded-xl">
-                                                                            <MessageSquare className="h-4 w-4 text-purple-500 flex-shrink-0 mt-0.5" />
-                                                                            <p className="text-xs text-purple-800 font-medium">{consultantComment}</p>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-
-                                                                {/* Status selector */}
-                                                                <div className="flex-shrink-0">
-                                                                    <div className="flex flex-col gap-1.5">
-                                                                        {/* En cours */}
-                                                                        <button
-                                                                            onClick={() => handleStatusChange(ind.id, 'to_do')}
-                                                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${status === 'to_do' ? 'bg-orange-500 border-orange-500 text-white shadow-sm' : 'border-gray-100 text-gray-400 hover:border-orange-200'}`}
-                                                                        >
-                                                                            <Clock className="h-3.5 w-3.5" /> En cours
-                                                                        </button>
-                                                                        {/* Fait */}
+                                                                    <div className="flex items-center gap-2">
                                                                         <button
                                                                             onClick={() => handleStatusChange(ind.id, 'done')}
-                                                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white shadow-sm' : 'border-gray-100 text-gray-400 hover:border-emerald-200'}`}
+                                                                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${status === 'done' ? 'bg-emerald-500 text-white' : 'bg-white border border-gray-100 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200'}`}
                                                                         >
-                                                                            <CheckCircle className="h-3.5 w-3.5" /> Fait
+                                                                            {status === 'done' ? 'Terminé' : 'Marquer Fait'}
                                                                         </button>
-                                                                        {/* Non Applicable */}
                                                                         <button
-                                                                            onClick={() => handleStatusChange(ind.id, 'non_applicable')}
-                                                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${status === 'non_applicable' ? 'bg-slate-500 border-slate-500 text-white shadow-sm' : 'border-gray-100 text-gray-400 hover:border-slate-200'}`}
+                                                                            onClick={() => handleStatusChange(ind.id, 'to_do')}
+                                                                            className={`h-8 w-8 rounded-xl flex items-center justify-center transition-all ${status === 'to_do' ? 'bg-amber-100 text-amber-700' : 'bg-gray-50 text-gray-300 hover:text-amber-500'}`}
+                                                                            title="En cours"
                                                                         >
-                                                                            <CircleOff className="h-3.5 w-3.5" /> Non Applicable
+                                                                            <Clock className="h-4 w-4" />
                                                                         </button>
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                })}
-                                            </div>
+                                                            )
+                                                        })}
+                                                    </div>
 
-                                            {/* Quiz Upload Zone — shown when all indicators are done */}
-                                            <div className={`mx-6 mb-6 rounded-xl border-2 transition-all ${allDone ? 'border-indigo-200 bg-indigo-50' : 'border-dashed border-gray-200 bg-gray-50 opacity-60'}`}>
-                                                {quizUploaded ? (
-                                                    <div className="p-4 flex items-center gap-3">
-                                                        <div className="h-10 w-10 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                                                            <FileText className="h-5 w-5 text-white" />
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-sm font-bold text-indigo-900 truncate">{quizUploaded.file_name}</p>
-                                                            <p className="text-xs text-indigo-500">Soumis le {new Date(quizUploaded.uploaded_at).toLocaleDateString('fr-FR')}</p>
-                                                        </div>
-                                                        <a href={quizUploaded.file_url} target="_blank" rel="noopener noreferrer"
-                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors">
-                                                            <Download className="h-3.5 w-3.5" /> Voir
-                                                        </a>
-                                                        {allDone && (
-                                                            <button
-                                                                onClick={() => { setPendingCriterionId(criterion.id); fileInputRef.current?.click() }}
-                                                                className="flex items-center gap-1.5 px-3 py-1.5 border border-indigo-300 text-indigo-700 text-xs font-bold rounded-lg hover:bg-indigo-100 transition-colors"
-                                                            >
-                                                                <Upload className="h-3.5 w-3.5" /> Remplacer
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <div className="p-5 text-center">
-                                                        {allDone ? (
-                                                            <>
-                                                                <div className="h-12 w-12 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                                                    <Upload className="h-6 w-6 text-indigo-600" />
+                                                    {/* Quiz Submissions */}
+                                                    <div className={`mt-6 p-5 rounded-3xl border-2 transition-all ${critPct === 100 ? 'bg-teal-50/50 border-teal-100' : 'bg-gray-50 border-dashed border-gray-200 opacity-60'}`}>
+                                                        {quizUploaded ? (
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="h-12 w-12 bg-white rounded-2xl flex items-center justify-center text-teal-600 shadow-sm border border-teal-100">
+                                                                    <FileText className="h-6 w-6" />
                                                                 </div>
-                                                                <p className="text-sm font-bold text-indigo-900 mb-1">Tous les indicateurs sont terminés !</p>
-                                                                <p className="text-xs text-indigo-500 mb-3">Téléchargez, remplissez et uploadez le quiz de ce critère.</p>
-                                                                <button
-                                                                    onClick={() => { setPendingCriterionId(criterion.id); fileInputRef.current?.click() }}
-                                                                    disabled={uploadingFor === criterion.id}
-                                                                    className="inline-flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
-                                                                >
-                                                                    {uploadingFor === criterion.id ? (
-                                                                        <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> Upload en cours…</>
-                                                                    ) : (
-                                                                        <><Upload className="h-4 w-4" /> Uploader le quiz complété</>
-                                                                    )}
-                                                                </button>
-                                                            </>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-xs font-black text-teal-700 uppercase tracking-widest leading-tight mb-1">Dossier de preuves (Quiz)</p>
+                                                                    <p className="text-sm font-bold text-teal-900 truncate">{quizUploaded.file_name}</p>
+                                                                </div>
+                                                                <div className="flex gap-2">
+                                                                    <a href={quizUploaded.file_url} target="_blank" rel="noopener noreferrer" className="p-2.5 rounded-xl bg-white text-teal-600 hover:bg-teal-600 hover:text-white transition-all border border-teal-100 shadow-sm">
+                                                                        <Download className="h-4 w-4" />
+                                                                    </a>
+                                                                    <button
+                                                                        onClick={() => { setPendingCriterionId(criterion.id); fileInputRef.current?.click() }}
+                                                                        className="p-2.5 rounded-xl bg-white text-gray-400 hover:text-teal-600 transition-all border border-gray-100 shadow-sm"
+                                                                    >
+                                                                        <Upload className="h-4 w-4" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         ) : (
-                                                            <div className="flex items-center justify-center gap-2 py-2">
-                                                                <AlertTriangle className="h-4 w-4 text-gray-400" />
-                                                                <p className="text-xs text-gray-400">Terminez tous les indicateurs pour soumettre le quiz</p>
+                                                            <div className="text-center">
+                                                                <p className="text-sm font-bold text-gray-600 mb-3">{critPct === 100 ? 'Prêt à uploader le dossier de preuves' : 'Terminez tous les indicateurs pour uploader le quiz'}</p>
+                                                                <button
+                                                                    disabled={critPct < 100 || uploadingFor === criterion.id}
+                                                                    onClick={() => { setPendingCriterionId(criterion.id); fileInputRef.current?.click() }}
+                                                                    className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl text-sm font-black transition-all ${critPct === 100 ? 'bg-teal-600 text-white hover:bg-teal-700 shadow-lg shadow-teal-100' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                                                                >
+                                                                    {uploadingFor === criterion.id ? 'Upload...' : 'Uploader le Quiz'}
+                                                                </button>
                                                             </div>
                                                         )}
                                                     </div>
-                                                )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Right Sidebar Assets */}
+                        <div className="space-y-8">
+                            <div>
+                                <h3 className="text-lg font-black text-gray-900 mb-4 flex items-center gap-2">
+                                    <BookOpen className="h-5 w-5 text-teal-600" />
+                                    Guide d'audit
+                                </h3>
+                                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-2">
+                                    {[
+                                        { title: 'Information du public', sub: 'Critère 1', time: '5 min' },
+                                        { title: 'Conception des prestations', sub: 'Critère 2', time: '10 min' },
+                                        { title: 'Accompagnement du public', sub: 'Critère 3', time: '8 min' },
+                                    ].map((guide, i) => (
+                                        <div key={i} className="flex items-center gap-4 p-4 hover:bg-gray-50 rounded-2xl transition-all group cursor-pointer border border-transparent hover:border-gray-50">
+                                            <div className="h-12 w-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 group-hover:bg-teal-50 group-hover:text-teal-600 transition-all">
+                                                <Target className="h-5 w-5" />
                                             </div>
-                                        </>
-                                    )}
+                                            <div className="flex-1">
+                                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">{guide.sub}</p>
+                                                <p className="text-sm font-bold text-gray-900 leading-tight">{guide.title}</p>
+                                                <p className="text-[10px] text-teal-600 font-bold mt-0.5 flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" /> {guide.time}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            )
-                        })}
+                            </div>
+
+                            <div className="bg-gradient-to-br from-gray-900 to-slate-800 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+                                <Layers className="absolute -right-4 -bottom-4 h-24 w-24 text-white/5" />
+                                <div className="relative z-10">
+                                    <h3 className="text-xl font-normal leading-tight mb-4">
+                                        <span className="font-black">95%</span> des organismes réussissent leur audit avec <span className="text-teal-400 font-bold italic">EasyQual</span>.
+                                    </h3>
+                                    <div className="h-1 w-12 bg-teal-500 mb-6 rounded-full"></div>
+                                    <p className="text-gray-400 text-xs leading-relaxed">
+                                        Assurez-vous de bien uploader vos dossiers de preuves pour chaque critère terminé avant le jour J.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                )}
-            </main>
+
+                </main>
+            </div>
 
             {/* Hidden file input */}
             <input

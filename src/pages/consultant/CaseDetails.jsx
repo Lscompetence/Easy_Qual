@@ -125,10 +125,16 @@ export default function CaseDetails() {
     })
 
     const totalPossibleIndicators = criteriaData.reduce((acc, crit) => acc + (crit.indicators?.length || 0), 0)
+
+    // Global Progress across ALL audits in the case (Average completion of all declared audits)
+    const activeAuditTypes = caseData?.audit_type || ['initial']
+    const totalPossibleGlobal = totalPossibleIndicators * activeAuditTypes.length
+    const globalProgress = calculateWeightedProgress(allIndicatorStates, totalPossibleGlobal)
+
     const calculatedProgress = calculateWeightedProgress(currentAuditStates, totalPossibleIndicators)
 
-    // Use dynamic if we have states, otherwise fallback to DB value to avoid 0% flicker
-    const progressPercent = (allIndicatorStates.length > 0) ? calculatedProgress : (caseData?.progress || 0)
+    // Use globalProgress for the overall dashboard value and DB sync
+    const progressPercent = (allIndicatorStates.length > 0) ? globalProgress : (caseData?.progress || 0)
 
     // Auto-sync progress to DB if it differs from stored value
     useEffect(() => {
@@ -472,64 +478,39 @@ export default function CaseDetails() {
             const { data: allStates } = await supabase.from('case_indicator_states').select('*').eq('case_id', id)
             if (allStates) setAllIndicatorStates(allStates)
 
-            // 3. Refined Progress Calculation ("Bien fait")
-            // Weighted average of ALL indicators for the selected audit type
+            // 3. Global Progress Calculation (Across all audit types)
             const totalIndicators = criteriaData.reduce((acc, crit) => acc + (crit.indicators?.length || 0), 0)
+            const activeAuditTypes = caseData?.audit_type || ['initial']
+            const totalPossibleGlobal = totalIndicators * activeAuditTypes.length
 
-            if (totalIndicators > 0) {
-                const auditStates = (allStates || []).filter(s => {
-                    const sType = s.audit_type || 'initial'
-                    return isInitialAudit(type) ? isInitialAudit(sType) : sType === type
-                })
+            const newProgress = calculateWeightedProgress(allStates || [], totalPossibleGlobal)
 
-                // Create a map for quick lookup
-                const stateMap = {}
-                auditStates.forEach(s => { stateMap[s.indicator_id] = s })
-
-                let totalWeightedScore = 0
-                criteriaData.forEach(crit => {
-                    crit.indicators?.forEach(ind => {
-                        const s = stateMap[ind.id]
-                        if (s) {
-                            if (s.consultant_verdict === 'validated') {
-                                totalWeightedScore += 100
-                            } else if (s.status === 'doing') {
-                                totalWeightedScore += 50
-                            } else if (s.status === 'done' && !s.consultant_verdict) {
-                                // Client finished but consultant hasn't reviewed yet
-                                totalWeightedScore += 75
-                            }
-                        }
-                    })
-                })
-
-                const newProgress = calculateWeightedProgress(auditStates, totalIndicators)
-
-                // 4. Determine final status
-                // We consider it "validated" ONLY if all indicators are either 'validated' or 'non_applicable' by consultant
-                const allReviewed = criteriaData.every(crit =>
+            // 4. Determine final status (validated only if ALL indicators of ALL audits are reviewed)
+            // This is a strict check: every indicator in every audit must have a verdict.
+            const allReviewed = activeAuditTypes.every(aType => {
+                const typeStates = (allStates || []).filter(s => (s.audit_type || 'initial') === aType)
+                return criteriaData.every(crit =>
                     crit.indicators?.every(ind => {
-                        const v = stateMap[ind.id]?.consultant_verdict
-                        return v === 'validated' || v === 'non_conforme' || v === 'non_applicable'
+                        const s = typeStates.find(st => st.indicator_id === ind.id)
+                        return s?.consultant_verdict && (s.consultant_verdict !== 'to_do')
                     })
                 )
-                const finalStatus = allReviewed ? 'validated' : 'active'
+            })
+            const finalStatus = allReviewed ? 'validated' : 'active'
 
-                // 5. Update case in DB
-                const { error: updateError } = await supabase.from('cases').update({
-                    progress: newProgress,
-                    status: finalStatus
-                }).eq('id', id)
+            // 5. Update case in DB
+            const { error: updateError } = await supabase.from('cases').update({
+                progress: newProgress,
+                status: finalStatus
+            }).eq('id', id)
 
-                if (updateError) {
-                    console.error("Error updating case progress:", updateError)
-                    throw updateError
-                }
-
-                // Update local state - ensure progress is reflected
-                setCaseData(prev => ({ ...prev, progress: newProgress, status: finalStatus }))
+            if (updateError) {
+                console.error("Error updating case progress:", updateError)
+                throw updateError
             }
 
+            // Update local state - ensure progress is reflected
+            setCaseData(prev => ({ ...prev, progress: newProgress, status: finalStatus }))
         } catch (err) {
             console.error('Error saving verdict or updating progress:', err)
         }
@@ -1106,7 +1087,7 @@ export default function CaseDetails() {
 
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-lg font-bold text-gray-900">
-                                    Détail de l'Audit : <span className="text-indigo-600 capitalize">{selectedAudit}</span>
+                                    Détail de l'Audit : <span className="text-indigo-600 capitalize">{selectedAudit}</span> <span className="text-indigo-400 text-sm font-medium ml-2">({calculatedProgress}%)</span>
                                 </h2>
                             </div>
 

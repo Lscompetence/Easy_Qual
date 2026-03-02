@@ -98,18 +98,20 @@ export default function ConsultantSidebar() {
                     </nav>
                 </div>
 
-                {/* Navigation - OUTILS */}
-                <div>
+                <div className="pt-4 border-t border-gray-100">
                     <h3 className="px-3 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
                         Outils
                     </h3>
                     <nav className="space-y-1">
                         <Link
-                            to="/consultant/resources" // Placeholder
-                            className="flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-600 hover:bg-gray-50 hover:text-gray-900 group transition-colors"
+                            to="/consultant/resources"
+                            className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive('/consultant/resources')
+                                ? 'bg-purple-50 text-purple-700'
+                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                }`}
                         >
-                            <BookOpen className="h-5 w-5 mr-3 text-gray-400 group-hover:text-gray-500 transition-colors" />
-                            Ressources
+                            <BookOpen className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/resources') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'}`} />
+                            Audit Qualiopi Manager
                         </Link>
                     </nav>
                 </div>

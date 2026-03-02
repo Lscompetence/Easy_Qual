@@ -57,7 +57,7 @@ export default function ConsultantDashboard() {
                 .from('cases')
                 .select(`
                     *,
-                    tenants (name, siret, owner_id)
+                    tenants (name, siret, owner_id, client_email, initial_password)
                 `)
                 .order('created_at', { ascending: false })
 
@@ -284,7 +284,8 @@ export default function ConsultantDashboard() {
                                     <thead>
                                         <tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50">
                                             <th className="pb-3 pl-2">Client</th>
-                                            <th className="pb-3">Catégorie de formation</th>
+                                            <th className="pb-3">Catégorie</th>
+                                            <th className="pb-3 text-center">Accès Client</th>
                                             <th className="pb-3">Progression</th>
                                             <th className="pb-3 text-right pr-2">Statut</th>
                                         </tr>
@@ -341,6 +342,22 @@ export default function ConsultantDashboard() {
                                                                         +{c.training_categories.length - 2}
                                                                     </span>
                                                                 )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-6">
+                                                            <div className="flex flex-col gap-1 items-center">
+                                                                <div className="flex items-center gap-1.5 text-[10px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">
+                                                                    <Mail className="h-3 w-3 text-purple-400" strokeWidth={2.5} />
+                                                                    <span className="font-bold select-all cursor-pointer hover:text-purple-600">
+                                                                        {c.tenants?.client_email || '—'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">
+                                                                    <Lock className="h-3 w-3 text-amber-500" strokeWidth={2.5} />
+                                                                    <span className="font-mono font-black select-all cursor-pointer hover:text-amber-700">
+                                                                        {c.tenants?.initial_password || '—'}
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                         </td>
                                                         <td className="py-6 w-1/4">

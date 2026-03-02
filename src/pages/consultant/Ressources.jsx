@@ -2,55 +2,19 @@ import { useState } from 'react'
 import {
     BookOpen, FileText, ExternalLink, ChevronDown, ChevronUp,
     Download, Link2, HelpCircle, CheckCircle, Award,
-    ArrowRight, Shield, Layers, Users, Clock
+    ArrowRight, Shield, Layers, Users, Clock,
+    LayoutDashboard, Target, Globe, TrendingUp
 } from 'lucide-react'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
 
 // ─── Data ─────────────────────────────────────────────────────────
-const documents = [
-    {
-        icon: <Shield className="h-5 w-5" />,
-        title: "Référentiel National Qualité",
-        desc: "Les 7 critères et 32 indicateurs Qualiopi — texte officiel France Compétences.",
-        tag: "Officiel", tagCls: "bg-purple-100 text-purple-700",
-        url: "https://www.francecompetences.fr/referentiel_qualite/"
-    },
-    {
-        icon: <Layers className="h-5 w-5" />,
-        title: "Guide de lecture du référentiel",
-        desc: "Aide à l'interprétation des indicateurs pour les audits initiaux et de surveillance.",
-        tag: "Guide", tagCls: "bg-blue-100 text-blue-700",
-        url: "https://www.francecompetences.fr/referentiel_qualite/"
-    },
-    {
-        icon: <CheckCircle className="h-5 w-5" />,
-        title: "Grille d'autoévaluation",
-        desc: "Modèle de grille à remettre au client avant l'audit pour son autoévaluation.",
-        tag: "Modèle", tagCls: "bg-emerald-100 text-emerald-700",
-        url: "#"
-    },
-    {
-        icon: <FileText className="h-5 w-5" />,
-        title: "Rapport d'audit type",
-        desc: "Trame de rapport d'audit initial ou de surveillance à compléter et personnaliser.",
-        tag: "Modèle", tagCls: "bg-emerald-100 text-emerald-700",
-        url: "#"
-    },
-    {
-        icon: <Award className="h-5 w-5" />,
-        title: "Fiche de non-conformité",
-        desc: "Document pour formaliser une non-conformité et définir un plan d'action.",
-        tag: "Modèle", tagCls: "bg-emerald-100 text-emerald-700",
-        url: "#"
-    },
-    {
-        icon: <Users className="h-5 w-5" />,
-        title: "Livret d'accueil client",
-        desc: "Présentation du process de certification à remettre à chaque nouveau client.",
-        tag: "Modèle", tagCls: "bg-emerald-100 text-emerald-700",
-        url: "#"
-    },
+
+const categoryDocs = [
+    { title: "Actions de Formation", sub: "OF - L.6313-1-1°", file: "Formation Qualiopi - Actions de Formation.pdf", icon: <BookOpen className="h-6 w-6" />, cls: "from-blue-500 to-indigo-600" },
+    { title: "Bilan de Compétences", sub: "BC - L.6313-1-2°", file: "Formation Qualiopi - Bilan de Compétences.pdf", icon: <TrendingUp className="h-6 w-6" />, cls: "from-emerald-500 to-teal-600" },
+    { title: "CFA Apprentissage", sub: "CFA - L.6313-1-4°", file: "Formation Qualiopi - CFA Apprentissage.pdf", icon: <Users className="h-6 w-6" />, cls: "from-purple-500 to-fuchsia-600" },
+    { title: "Actions de VAE", sub: "VAE - L.6313-1-3°", file: "Formation Qualiopi - VAE.pdf", icon: <Award className="h-6 w-6" />, cls: "from-amber-500 to-orange-600" },
 ]
 
 const links = [
@@ -110,7 +74,7 @@ export default function Ressources() {
                         <div className="relative max-w-6xl mx-auto px-8 py-12 flex items-center justify-between gap-8">
                             <div>
                                 <p className="text-indigo-300 text-xs font-bold uppercase tracking-widest mb-3">EasyQual · Espace consultant</p>
-                                <h1 className="text-4xl font-black text-white mb-3 leading-tight">Centre de ressources</h1>
+                                <h1 className="text-4xl font-black text-white mb-3 leading-tight">Audit Qualiopi Manager</h1>
                                 <p className="text-indigo-200 text-sm max-w-lg leading-relaxed">
                                     Documents officiels, modèles d'audit et liens utiles pour conduire vos missions Qualiopi avec efficacité.
                                 </p>
@@ -140,29 +104,35 @@ export default function Ressources() {
                             </div>
                         </section>
 
-                        {/* ── Documents & Modèles ── */}
+
+
+                        {/* ── Guides par Catégories d'Actions ── */}
                         <section>
                             <div className="flex items-center gap-2.5 mb-5">
-                                <div className="p-2 bg-purple-100 rounded-lg">
-                                    <Download className="h-4 w-4 text-purple-600" />
+                                <div className="p-2 bg-indigo-100 rounded-lg">
+                                    <BookOpen className="h-4 w-4 text-indigo-600" />
                                 </div>
-                                <h2 className="text-base font-bold text-gray-900">Documents & Modèles</h2>
+                                <h2 className="text-base font-bold text-gray-900">Guides par Catégories d'Actions</h2>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {documents.map((doc, i) => (
-                                    <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer"
-                                        className="group flex flex-col bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-purple-200 transition-all">
-                                        <div className="flex items-start justify-between mb-4">
-                                            <div className="p-2.5 rounded-xl bg-purple-50 text-purple-600 group-hover:bg-purple-100 transition-colors">
-                                                {doc.icon}
-                                            </div>
-                                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${doc.tagCls}`}>{doc.tag}</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {categoryDocs.map((cat, i) => (
+                                    <a
+                                        key={i}
+                                        href={`/docs/criteria/${cat.file}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="group relative bg-white border border-gray-100 rounded-3xl p-6 shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all duration-300 flex flex-col items-center text-center overflow-hidden"
+                                    >
+                                        <div className={`absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r ${cat.cls}`} />
+                                        <div className="p-4 rounded-2xl bg-gray-50 text-gray-700 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors mb-4">
+                                            {cat.icon}
                                         </div>
-                                        <p className="text-sm font-bold text-gray-900 mb-1.5">{doc.title}</p>
-                                        <p className="text-xs text-gray-500 leading-relaxed flex-1">{doc.desc}</p>
-                                        <div className="mt-4 flex items-center gap-1 text-xs font-bold text-purple-600 group-hover:text-purple-700 transition-colors">
-                                            <span>Accéder</span>
-                                            <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+                                        <p className="text-sm font-black text-gray-900 mb-1">{cat.title}</p>
+                                        <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{cat.sub}</p>
+
+                                        <div className="mt-6 flex items-center gap-2 text-xs font-bold text-gray-400 group-hover:text-indigo-600 transition-colors">
+                                            <span>Consulter le guide</span>
+                                            <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
                                         </div>
                                     </a>
                                 ))}

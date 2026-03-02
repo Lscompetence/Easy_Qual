@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { Search, Filter, Plus, FileText, CheckCircle, AlertTriangle, MoreVertical, Building } from 'lucide-react'
+import { Search, Filter, Plus, FileText, CheckCircle, AlertTriangle, MoreVertical, Building, Mail, Lock } from 'lucide-react'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
 import NewCaseModal from '../../components/consultant/NewCaseModal'
@@ -94,7 +94,7 @@ export default function ConsultantCases() {
                 .from('cases')
                 .select(`
                     *,
-                    tenants (name, siret, logo_url)
+                    tenants (name, siret, logo_url, client_email, initial_password)
                 `)
                 .order('created_at', { ascending: false })
 
@@ -193,6 +193,7 @@ export default function ConsultantCases() {
                                         <th className="px-6 py-4">Client</th>
                                         <th className="px-6 py-4">Type de Site</th>
                                         <th className="px-6 py-4">Audits</th>
+                                        <th className="px-6 py-4">Accès Client</th>
                                         <th className="px-6 py-4">Progression</th>
                                         <th className="px-6 py-4 text-right">Statut</th>
                                         <th className="px-6 py-4"></th>
@@ -238,6 +239,22 @@ export default function ConsultantCases() {
                                                                 {type.replace('Audit ', '')}
                                                             </span>
                                                         ))}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4" onClick={() => navigate(`/consultant/case/${c.id}`)}>
+                                                    <div className="flex flex-col gap-1">
+                                                        <div className="flex items-center gap-1.5 text-[11px] text-gray-600 bg-gray-50 px-2 py-0.5 rounded border border-gray-100 w-fit">
+                                                            <Mail className="h-3 w-3 text-purple-400" strokeWidth={2.5} />
+                                                            <span className="font-bold select-all cursor-pointer hover:text-purple-600">
+                                                                {c.tenants?.client_email || '—'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 text-[11px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 w-fit">
+                                                            <Lock className="h-3 w-3 text-amber-500" strokeWidth={2.5} />
+                                                            <span className="font-mono font-black select-all cursor-pointer hover:text-amber-700">
+                                                                {c.tenants?.initial_password || '—'}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 w-1/5" onClick={() => navigate(`/consultant/case/${c.id}`)}>

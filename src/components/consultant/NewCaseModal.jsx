@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../../supabaseClient'
-import { Building, Mail, CheckCircle, AlertCircle } from 'lucide-react'
+import { Building, Mail, CheckCircle, AlertCircle, Lock } from 'lucide-react'
 
 export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onSuccess }) {
     const [actionLoading, setActionLoading] = useState(false)
@@ -10,6 +10,7 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
         tenantName: '',
         siret: '',
         clientEmail: '',
+        password: '', // Nouveau champ
         category: 'mono-site',
         auditTypes: [],
         trainingCategories: []
@@ -38,7 +39,9 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                     p_siret: newCaseData.siret,
                     p_case_category: newCaseData.category,
                     p_audit_type: newCaseData.auditTypes,
-                    p_training_categories: newCaseData.trainingCategories
+                    p_training_categories: newCaseData.trainingCategories,
+                    p_client_email: newCaseData.clientEmail,
+                    p_initial_password: newCaseData.password
                 })
 
             if (rpcError) throw rpcError
@@ -51,6 +54,7 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 tenantName: '',
                 siret: '',
                 clientEmail: '',
+                password: '',
                 category: 'mono-site',
                 auditTypes: [],
                 trainingCategories: []
@@ -60,6 +64,7 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
             supabase.functions.invoke('invite-client', {
                 body: {
                     email: newCaseData.clientEmail,
+                    password: newCaseData.password, // On envoie le password à la fonction
                     tenant_id: rpcData.tenant_id,
                     tenant_name: newCaseData.tenantName
                 }
@@ -245,7 +250,24 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                                     onChange={(e) => setNewCaseData({ ...newCaseData, clientEmail: e.target.value })}
                                 />
                             </div>
-                            <p className="mt-2 text-[10px] text-gray-400 font-medium italic underline underline-offset-2">Un email d'invitation sera envoyé à cette adresse.</p>
+                        </div>
+
+                        <div>
+                            <label className="block text-[13px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Mot de passe provisoire</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Lock className="h-4 w-4 text-gray-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    required
+                                    className="w-full pl-10 px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all placeholder-gray-400 text-sm font-semibold"
+                                    placeholder="Ex: Qualiopi2024!"
+                                    value={newCaseData.password}
+                                    onChange={(e) => setNewCaseData({ ...newCaseData, password: e.target.value })}
+                                />
+                            </div>
+                            <p className="mt-2 text-[10px] text-gray-400 font-medium italic underline underline-offset-2">Communiquez ce mot de passe au client pour sa première connexion.</p>
                         </div>
                     </div>
 
