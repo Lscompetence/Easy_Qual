@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { Building, FileText, CheckCircle, AlertCircle, Mail, Calendar, FolderOpen, Clock, AlertTriangle } from 'lucide-react'
+import { Building, FileText, CheckCircle, AlertCircle, Mail, Calendar, FolderOpen, Clock, AlertTriangle, Lock } from 'lucide-react'
 import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
@@ -12,7 +12,8 @@ export default function ConsultantDashboard() {
     const { user, logout } = useAuth() // specific logout not needed here if Sidebar handles it, but kept for logic
     const navigate = useNavigate() // Sidebar uses Link, but we might need it for programmatic navigation
 
-    // Data State
+
+
     const [wallet, setWallet] = useState({ balance: 0 })
     const [cases, setCases] = useState([])
     const [loading, setLoading] = useState(true)
@@ -37,6 +38,30 @@ export default function ConsultantDashboard() {
 
     useEffect(() => {
         if (user) fetchConsultantData()
+    }, [user])
+
+    // ✅ Real-time: listen to tenants table changes
+    //    When a client updates their password, it updates tenants.initial_password
+    //    and the consultant sees it immediately without refreshing
+    useEffect(() => {
+        if (!user) return
+        const channel = supabase
+            .channel('tenants-realtime')
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'tenants'
+            }, (payload) => {
+                const updated = payload.new
+                setCases(prev => prev.map(c =>
+                    c.tenant_id === updated.id
+                        ? { ...c, tenants: { ...c.tenants, ...updated } }
+                        : c
+                ))
+            })
+            .subscribe()
+
+        return () => { supabase.removeChannel(channel) }
     }, [user])
 
     const fetchConsultantData = async () => {
@@ -285,8 +310,8 @@ export default function ConsultantDashboard() {
                                         <tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50">
                                             <th className="pb-3 pl-2">Client</th>
                                             <th className="pb-3">Catégorie</th>
-                                            <th className="pb-3 text-center">Accès Client</th>
-                                            <th className="pb-3">Progression</th>
+                                            <th className="pb-3 text-center">Accès Plateforme</th>
+                                            <th className="pb-3 pr-4">Progression</th>
                                             <th className="pb-3 text-right pr-2">Statut</th>
                                         </tr>
                                     </thead>
@@ -344,17 +369,42 @@ export default function ConsultantDashboard() {
                                                                 )}
                                                             </div>
                                                         </td>
-                                                        <td className="py-6">
-                                                            <div className="flex flex-col gap-1 items-center">
-                                                                <div className="flex items-center gap-1.5 text-[10px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">
-                                                                    <Mail className="h-3 w-3 text-purple-400" strokeWidth={2.5} />
-                                                                    <span className="font-bold select-all cursor-pointer hover:text-purple-600">
-                                                                        {c.tenants?.client_email || '—'}
+                                                        <td className="py-6 min-w-[220px]">
+                                                            <div className="flex flex-col gap-2 pr-4">
+                                                                {/* EMAIL — read-only, click to copy */}
+                                                                <div
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        if (c.tenants?.client_email) {
+                                                                            navigator.clipboard.writeText(c.tenants.client_email)
+                                                                        }
+                                                                    }}
+                                                                    className="group/item flex items-center gap-2 w-full bg-slate-50 hover:bg-purple-50 border border-slate-200/60 hover:border-purple-200 px-3 py-1.5 rounded-xl transition-all cursor-copy"
+                                                                    title="Cliquer pour copier l'email"
+                                                                >
+                                                                    <div className="flex-shrink-0 bg-white p-1.5 rounded-lg shadow-sm border border-slate-100">
+                                                                        <Mail className="h-4 w-4 text-slate-400 group-hover/item:text-purple-500" />
+                                                                    </div>
+                                                                    <span className="text-xs font-bold text-slate-700 whitespace-nowrap truncate">
+                                                                        {c.tenants?.client_email || 'Non défini'}
                                                                     </span>
                                                                 </div>
-                                                                <div className="flex items-center gap-1.5 text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100">
-                                                                    <Lock className="h-3 w-3 text-amber-500" strokeWidth={2.5} />
-                                                                    <span className="font-mono font-black select-all cursor-pointer hover:text-amber-700">
+
+                                                                {/* PASSWORD — read-only, auto-updated via Realtime */}
+                                                                <div
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        if (c.tenants?.initial_password) {
+                                                                            navigator.clipboard.writeText(c.tenants.initial_password)
+                                                                        }
+                                                                    }}
+                                                                    className="group/item flex items-center gap-2 w-full bg-amber-50 hover:bg-amber-100 border border-amber-200/60 hover:border-amber-300 px-3 py-1.5 rounded-xl transition-all cursor-copy"
+                                                                    title="Cliquer pour copier le mot de passe"
+                                                                >
+                                                                    <div className="flex-shrink-0 bg-white p-1.5 rounded-lg shadow-sm border border-amber-100">
+                                                                        <Lock className="h-4 w-4 text-amber-500" />
+                                                                    </div>
+                                                                    <span className="text-xs font-mono font-black text-amber-800 whitespace-nowrap">
                                                                         {c.tenants?.initial_password || '—'}
                                                                     </span>
                                                                 </div>

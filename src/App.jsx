@@ -9,6 +9,7 @@ import ConsultantDashboard from './pages/consultant/ConsultantDashboard'
 import ConsultantCases from './pages/consultant/ConsultantCases'
 import CaseDetails from './pages/consultant/CaseDetails'
 import ClientDashboard from './pages/client/ClientDashboard'
+import ClientProfile from './pages/client/ClientProfile'
 import AgendaVisios from './pages/consultant/AgendaVisios'
 import Ressources from './pages/consultant/Ressources'
 import Profile from './pages/Profile'
@@ -51,6 +52,9 @@ function App() {
             <Route path="/client/audit" element={<ClientDashboard />} />
             <Route path="/client/documents" element={<ClientDashboard />} />
             <Route path="/client/messages" element={<ClientDashboard />} />
+            <Route path="/client/sessions" element={<ClientDashboard />} />
+            <Route path="/client/criterion/:id" element={<ClientDashboard />} />
+            <Route path="/client/profile" element={<ClientProfile />} />
           </Route>
 
           {/* Default Route - Redirect logic could be here or inside Login */}

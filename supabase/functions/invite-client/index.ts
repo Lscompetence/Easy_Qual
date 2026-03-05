@@ -12,53 +12,111 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-    // Handle CORS
+    // 1. Handle CORS FIRST, and aggressively
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
     try {
+        // Test logging to see if function starts
+        console.log("Function invite-client started for method: ", req.method);
         // 1. Parse Input
-        const { email, tenant_id, tenant_name } = await req.json()
+        const { email, password, tenant_id, tenant_name } = await req.json()
 
         if (!email || !tenant_id) {
             throw new Error('Email et Tenant ID sont obligatoires')
         }
 
         // 2. Initialize Supabase Admin Client
-        const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+        const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-        // 3. Check if user already exists
-        const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers()
-        const existingUser = existingUsers.users.find((u) => u.email === email)
+        if (!supabaseUrl || !serviceRoleKey) {
+            console.error("Missing Supabase configuration");
+            throw new Error("Erreur de configuration serveur (Clés manquantes)");
+        }
+
+        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
+
+        // 3. Robustly check if user already exists across all pages
+        let existingUser = null;
+        let page = 1;
+        while (true) {
+            const { data: pageData, error: pageError } = await supabaseAdmin.auth.admin.listUsers({
+                page: page,
+                perPage: 1000
+            });
+            if (pageError || !pageData || !pageData.users || pageData.users.length === 0) break;
+            existingUser = pageData.users.find((u: any) => u.email === email);
+            if (existingUser) break;
+            page++;
+        }
 
         let userId
-        let tempPassword
+        let tempPassword = password
         let isNewUser = false
 
         if (existingUser) {
             userId = existingUser.id
-            // If user exists, we don't change their password, just link them
-            // But user requested a "new folder for a client" and "email for each user"
-            // Assuming new users for now. If exists, we proceed to link.
+            console.log(`User found via listUsers: ${email} (${userId}). Synchronizing...`)
         } else {
-            // 4. Create New User
+            // 4. Try to create new user
             isNewUser = true
-            tempPassword = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10) // Stronger temp password
+            console.log(`Creating new user: ${email}`)
+            if (!tempPassword) {
+                tempPassword = Math.random().toString(36).slice(-10) + Math.random().toString(36).slice(-10)
+            }
 
-            // Create user with 'of' role (Client)
             const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
                 email: email,
                 password: tempPassword,
                 email_confirm: true,
                 user_metadata: {
-                    role: 'of', // Organisme de Formation
+                    role: 'of',
                     full_name: tenant_name || 'Client',
                 }
             })
 
-            if (createError) throw createError
-            userId = newUser.user.id
+            if (createError) {
+                if (createError.message && createError.message.includes('already been registered')) {
+                    console.log(`User already exists but listUsers missed it. Hunting...`)
+                    // Fallback: search again or try to get ID from profiles if you have a trigger, 
+                    // or just return success with instructions. 
+                    // BUT let's try one last listUsers specifically if it failed before.
+
+                    // If we are here, isNewUser is false now
+                    isNewUser = false
+                    const { data: huntData } = await supabaseAdmin.auth.admin.listUsers()
+                    const hunted = huntData?.users.find((u: any) => u.email.toLowerCase() === email.toLowerCase())
+                    if (hunted) {
+                        userId = hunted.id
+                        console.log(`Hunter found: ${userId}`)
+                    } else {
+                        // Still didn't find? Return success but warn
+                        return new Response(
+                            JSON.stringify({
+                                success: true,
+                                message: "Compte existant. Veuillez utiliser votre mot de passe habituel."
+                            }),
+                            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+                        )
+                    }
+                } else {
+                    throw createError
+                }
+            } else {
+                userId = newUser.user.id
+            }
+        }
+
+        // 5. If we have a userId, let's SYNC the password (important for Repair Access)
+        if (userId && tempPassword) {
+            console.log(`Final sync for ${userId}...`)
+            const { error: syncError } = await supabaseAdmin.auth.admin.updateUserById(
+                userId,
+                { password: tempPassword }
+            )
+            if (syncError) console.error('Sync error (non-blocking):', syncError)
         }
 
         // 5. Link User to Tenant (Update owner_id)

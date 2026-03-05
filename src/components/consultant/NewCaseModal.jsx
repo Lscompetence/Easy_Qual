@@ -46,10 +46,15 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
 
             if (rpcError) throw rpcError
 
-            // ✅ Show success immediately — don't wait for email
-            setSuccessMsg(`Dossier créé avec succès ! Un email d'invitation sera envoyé à ${newCaseData.clientEmail}.`)
+            // ✅ Sauvegarder les valeurs AVANT de réinitialiser le formulaire
+            const savedEmail = newCaseData.clientEmail
+            const savedPassword = newCaseData.password
+            const savedTenantName = newCaseData.tenantName
 
-            // 🔁 Reset form
+            // ✅ Show success immediately — don't wait for email
+            setSuccessMsg(`Dossier créé avec succès ! Un email d'invitation sera envoyé à ${savedEmail}.`)
+
+            // 🔁 Reset form (après avoir sauvegardé les valeurs importantes)
             setNewCaseData({
                 tenantName: '',
                 siret: '',
@@ -60,17 +65,46 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 trainingCategories: []
             })
 
-            // 📧 Send invite in background (non-blocking)
-            supabase.functions.invoke('invite-client', {
-                body: {
-                    email: newCaseData.clientEmail,
-                    password: newCaseData.password, // On envoie le password à la fonction
-                    tenant_id: rpcData.tenant_id,
-                    tenant_name: newCaseData.tenantName
-                }
-            }).catch(err => console.warn('Invite email failed (background):', err))
+            // 📧 Création du compte (Bloquant pour vérification - Via FETCH direct)
+            try {
+                const { data: sessionData } = await supabase.auth.getSession();
 
-            // 🚀 Call onSuccess immediately to refresh credits in parent
+                const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-client`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${sessionData.session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`
+                    },
+                    body: JSON.stringify({
+                        email: savedEmail,       // ✅ Utilisation des valeurs sauvegardées
+                        password: savedPassword, // ✅ Utilisation des valeurs sauvegardées
+                        tenant_id: rpcData.tenant_id,
+                        tenant_name: savedTenantName
+                    })
+                });
+
+                let inviteData = {};
+                try {
+                    inviteData = await response.json();
+                } catch (e) {
+                    // Ignore JSON parse error
+                }
+
+                if (!response.ok) {
+                    throw new Error(inviteData.error || response.statusText || "Erreur réseau inconnue");
+                }
+
+                if (!inviteData?.success) {
+                    throw new Error(inviteData?.error || "L'email existe déjà ou est invalide.");
+                }
+
+                setSuccessMsg(`Dossier créé et compte client activé pour ${savedEmail} !`)
+            } catch (authErr) {
+                console.error('Auth check error:', authErr)
+                setSuccessMsg(`Le dossier a été créé, mais il y a eu un souci avec l'accès client : ${authErr.message || "Erreur de connexion."}`)
+            }
+
+            // 🚀 Call onSuccess immediately to refresh credits and list
             if (onSuccess) onSuccess()
 
             // ⏱ Close modal after 2s

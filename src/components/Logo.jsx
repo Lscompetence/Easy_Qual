@@ -30,9 +30,9 @@ export default function Logo({ className = "", size = "normal", color = "blue", 
             shadow: 'shadow-gray-200'
         },
         client: {
-            bg: 'bg-[rgb(216,158,158)]',
-            text: 'text-[rgb(216,158,158)]',
-            shadow: 'shadow-[rgb(216,158,158)]/50'
+            bg: 'bg-[#cc6d3e]',
+            text: 'text-[#cc6d3e]',
+            shadow: 'shadow-[#cc6d3e]/20'
         }
     }
 

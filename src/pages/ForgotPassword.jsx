@@ -33,24 +33,24 @@ export default function ForgotPassword() {
                     title: 'Espace Consultant',
                     welcome: 'Réinitialisation Mot de Passe',
                     color: 'purple',
-                    buttonClass: 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500 shadow-purple-600/20',
+                    buttonClass: 'bg-[#cc6d3e] hover:bg-[#b35d32] focus:ring-purple-500 shadow-purple-600/20',
                     inputClass: 'focus:border-purple-500 focus:ring-purple-500/20',
-                    iconClass: 'text-purple-600',
-                    iconBgClass: 'bg-purple-100',
-                    linkClass: 'text-purple-600 hover:text-purple-500',
-                    badgeClass: 'bg-purple-50 text-purple-600 border-purple-100'
+                    iconClass: 'text-[#cc6d3e]',
+                    iconBgClass: 'bg-[#f5e2d6]',
+                    linkClass: 'text-[#cc6d3e] hover:text-[#cc6d3e]',
+                    badgeClass: 'bg-[#faf1ec] text-[#cc6d3e] border-[#f5e2d6]'
                 }
             case 'client':
                 return {
                     title: 'Espace Client',
                     welcome: 'Réinitialisation Mot de Passe',
                     color: 'client',
-                    buttonClass: 'bg-[rgb(216,158,158)] hover:bg-[rgb(196,138,138)] focus:ring-[rgb(216,158,158)] shadow-[rgb(216,158,158)]/20',
-                    inputClass: 'focus:border-[rgb(216,158,158)] focus:ring-[rgb(216,158,158)]/20',
-                    iconClass: 'text-[rgb(216,158,158)]',
-                    iconBgClass: 'bg-[rgb(216,158,158)]/10',
-                    linkClass: 'text-[rgb(216,158,158)] hover:text-[rgb(196,138,138)]',
-                    badgeClass: 'bg-[rgb(216,158,158)]/10 text-[rgb(216,158,158)] border-[rgb(216,158,158)]/20'
+                    buttonClass: 'bg-[#cc6d3e] hover:bg-[#b35d32] focus:ring-purple-500 shadow-purple-600/20',
+                    inputClass: 'focus:border-purple-500 focus:ring-purple-500/20',
+                    iconClass: 'text-[#cc6d3e]',
+                    iconBgClass: 'bg-[#f5e2d6]',
+                    linkClass: 'text-[#cc6d3e] hover:text-[#cc6d3e]',
+                    badgeClass: 'bg-[#faf1ec] text-[#cc6d3e] border-[#f5e2d6]'
                 }
             default:
                 return {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { Search, Filter, Plus, FileText, CheckCircle, AlertTriangle, MoreVertical, Building, Mail, Lock } from 'lucide-react'
+import { Search, Filter, Plus, FileText, CheckCircle, AlertTriangle, MoreVertical, Building, Mail, Lock, RefreshCw } from 'lucide-react'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
 import NewCaseModal from '../../components/consultant/NewCaseModal'
@@ -11,6 +11,42 @@ import DeleteModal from '../../components/DeleteModal'
 export default function ConsultantCases() {
     const { user } = useAuth()
     const navigate = useNavigate()
+
+    const [loadingRepair, setLoadingRepair] = useState(null)
+
+    const handleRepairAccess = async (e, caseItem) => {
+        e.stopPropagation()
+        if (!caseItem.tenants?.client_email) return
+
+        setLoadingRepair(caseItem.id)
+        try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-client`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${sessionData.session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify({
+                    email: caseItem.tenants.client_email,
+                    password: caseItem.tenants.initial_password,
+                    tenant_id: caseItem.tenant_id,
+                    tenant_name: caseItem.tenants.name
+                })
+            });
+
+            if (!response.ok) throw new Error("Erreur serveur");
+            const data = await response.json();
+            if (!data?.success) throw new Error(data?.error || "Erreur de réparation")
+
+            alert(`Accès synchronisé avec succès pour ${caseItem.tenants.client_email} !`)
+        } catch (err) {
+            console.error('Repair failed:', err)
+            alert("Erreur lors de la synchronisation : " + err.message)
+        } finally {
+            setLoadingRepair(null)
+        }
+    }
 
     const [cases, setCases] = useState([])
     const [loading, setLoading] = useState(true)
@@ -193,7 +229,7 @@ export default function ConsultantCases() {
                                         <th className="px-6 py-4">Client</th>
                                         <th className="px-6 py-4">Type de Site</th>
                                         <th className="px-6 py-4">Audits</th>
-                                        <th className="px-6 py-4">Accès Client</th>
+                                        <th className="px-6 py-4 text-center">Accès Plateforme</th>
                                         <th className="px-6 py-4">Progression</th>
                                         <th className="px-6 py-4 text-right">Statut</th>
                                         <th className="px-6 py-4"></th>
@@ -241,17 +277,45 @@ export default function ConsultantCases() {
                                                         ))}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4" onClick={() => navigate(`/consultant/case/${c.id}`)}>
-                                                    <div className="flex flex-col gap-1">
-                                                        <div className="flex items-center gap-1.5 text-[11px] text-gray-600 bg-gray-50 px-2 py-0.5 rounded border border-gray-100 w-fit">
-                                                            <Mail className="h-3 w-3 text-purple-400" strokeWidth={2.5} />
-                                                            <span className="font-bold select-all cursor-pointer hover:text-purple-600">
-                                                                {c.tenants?.client_email || '—'}
+                                                <td className="px-6 py-4 min-w-[240px]">
+                                                    <div className="flex flex-col gap-2 items-center justify-center pr-4">
+                                                        <div
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (c.tenants?.client_email) navigator.clipboard.writeText(c.tenants.client_email);
+                                                            }}
+                                                            className="group/item relative flex items-center gap-2 w-full bg-slate-50 hover:bg-purple-100/50 border border-slate-200/60 hover:border-purple-300 px-3 py-1.5 rounded-xl transition-all cursor-copy"
+                                                        >
+                                                            <div className="flex-shrink-0 bg-white p-1.5 rounded-lg shadow-sm border border-slate-100">
+                                                                <Mail className="h-4 w-4 text-slate-400 group-hover/item:text-purple-600" />
+                                                            </div>
+                                                            <span className="text-xs font-bold text-slate-700 group-hover/item:text-purple-900 whitespace-nowrap">
+                                                                {c.tenants?.client_email || 'Non défini'}
                                                             </span>
+
+                                                            <button
+                                                                onClick={(e) => handleRepairAccess(e, c)}
+                                                                className="absolute -right-2 -top-2 bg-white p-1 rounded-full shadow-md border-slate-200 border text-slate-400 hover:text-purple-600 hover:border-purple-300 opacity-0 group-hover/item:opacity-100 transition-all z-10"
+                                                                title="Synchroniser ce compte"
+                                                            >
+                                                                {loadingRepair === c.id ? (
+                                                                    <RefreshCw className="h-4 w-4 animate-spin text-purple-600" />
+                                                                ) : (
+                                                                    <RefreshCw className="h-4 w-4" />
+                                                                )}
+                                                            </button>
                                                         </div>
-                                                        <div className="flex items-center gap-1.5 text-[11px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 w-fit">
-                                                            <Lock className="h-3 w-3 text-amber-500" strokeWidth={2.5} />
-                                                            <span className="font-mono font-black select-all cursor-pointer hover:text-amber-700">
+                                                        <div
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (c.tenants?.initial_password) navigator.clipboard.writeText(c.tenants.initial_password);
+                                                            }}
+                                                            className="group/item flex items-center gap-2 w-full bg-amber-50 hover:bg-amber-100 border border-amber-200/50 hover:border-amber-300 px-3 py-1.5 rounded-xl transition-all cursor-copy"
+                                                        >
+                                                            <div className="flex-shrink-0 bg-white p-1.5 rounded-lg shadow-sm border border-amber-100">
+                                                                <Lock className="h-4 w-4 text-amber-600" />
+                                                            </div>
+                                                            <span className="text-xs font-mono font-black text-amber-800 whitespace-nowrap">
                                                                 {c.tenants?.initial_password || '—'}
                                                             </span>
                                                         </div>

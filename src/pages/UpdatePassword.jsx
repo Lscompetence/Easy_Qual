@@ -23,14 +23,14 @@ export default function UpdatePassword() {
             case 'consultant':
                 return {
                     color: 'purple',
-                    buttonClass: 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500 shadow-purple-600/20',
+                    buttonClass: 'bg-[#cc6d3e] hover:bg-[#b35d32] focus:ring-purple-500 shadow-purple-600/20',
                     inputClass: 'focus:border-purple-500 focus:ring-purple-500/20',
                 }
             case 'client':
                 return {
                     color: 'client',
-                    buttonClass: 'bg-[rgb(216,158,158)] hover:bg-[rgb(196,138,138)] focus:ring-[rgb(216,158,158)] shadow-[rgb(216,158,158)]/20',
-                    inputClass: 'focus:border-[rgb(216,158,158)] focus:ring-[rgb(216,158,158)]/20',
+                    buttonClass: 'bg-[#cc6d3e] hover:bg-[#b35d32] focus:ring-purple-500 shadow-purple-600/20',
+                    inputClass: 'focus:border-purple-500 focus:ring-purple-500/20',
                 }
             default:
                 return {

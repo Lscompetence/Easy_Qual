@@ -43,10 +43,10 @@ export default function Login() {
                     title: 'Espace Client',
                     welcome: 'Bienvenue Client',
                     color: 'client',
-                    buttonClass: 'bg-[rgb(216,158,158)] hover:bg-[rgb(196,138,138)] focus:ring-[rgb(216,158,158)] shadow-[rgb(216,158,158)]/20',
-                    inputClass: 'focus:border-[rgb(216,158,158)] focus:ring-[rgb(216,158,158)]/20',
-                    linkClass: 'text-[rgb(216,158,158)] hover:text-[rgb(196,138,138)]',
-                    badgeClass: 'bg-[rgb(216,158,158)]/10 text-[rgb(216,158,158)] border-[rgb(216,158,158)]/20'
+                    buttonClass: 'bg-[#cc6d3e] hover:bg-[#e08c50] focus:ring-[#cc6d3e] shadow-[#cc6d3e]/20',
+                    inputClass: 'focus:border-[#cc6d3e] focus:ring-[#cc6d3e]/20',
+                    linkClass: 'text-[#cc6d3e] hover:text-[#e08c50]',
+                    badgeClass: 'bg-[#cc6d3e]/10 text-[#cc6d3e] border-[#cc6d3e]/20'
                 }
             default:
                 return {
@@ -68,33 +68,26 @@ export default function Login() {
         setError(null)
         setLoading(true)
 
+        // Nettoyer les espaces invisibles (autofill peut en ajouter)
+        const cleanEmail = email.trim()
+        const cleanPassword = password.trim()
+
+        console.log('🔑 Tentative de connexion avec:', cleanEmail, '| longueur mot de passe:', cleanPassword.length)
+
         try {
             // Race between Login and a 30s Timeout (Supabase Cold Start mitigation)
-            const loginPromise = login(email, password)
+            const loginPromise = login(cleanEmail, cleanPassword)
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Timeout')), 30000)
             )
 
             const { user } = await Promise.race([loginPromise, timeoutPromise])
 
-            // 1. Get User Role
+            // 1. Get User Role from metadata
             const actualRole = user?.user_metadata?.role || 'of'
 
-            // 2. ENFORCE ROLE MATCHING (Security)
-            // If a specific portal is requested (e.g., ?role=admin), ensure the user matches it.
-            if (roleParam) {
-                // Map 'of' metadata to 'client' param for consistency
-                const mappedActualRole = actualRole === 'of' ? 'client' : actualRole
-
-                if (mappedActualRole !== roleParam) {
-                    console.warn(`Role mismatch: User is ${actualRole}, but tried to enter ${roleParam} portal.`)
-                    // Force logout to clear session
-                    await logout()
-                    throw new Error('Désolé, vos identifiants ne correspondent pas à cet espace de connexion. Veuillez vous déconnecter avant.')
-                }
-            }
-
-            // 3. REDIRECT based on role
+            // 2. REDIRECT based on role
+            // 'of' (Organisme de Formation) maps to the Client Dashboard
             if (actualRole === 'admin') {
                 navigate('/admin/dashboard')
             } else if (actualRole === 'consultant') {
@@ -102,16 +95,17 @@ export default function Login() {
             } else if (actualRole === 'of') {
                 navigate('/client/dashboard')
             } else {
+                // Fallback: If no role, try to guess or go home
                 navigate('/')
             }
         } catch (err) {
-            console.error('Login error:', err)
+            console.error('Full Login Error:', err)
             if (err.message === 'Timeout') {
                 setError('Le serveur met trop de temps à répondre. Vérifiez votre connexion.')
-            } else if (err.message.includes('identifiants ne correspondent pas')) {
-                setError(err.message)
+            } else if (err.status === 400 || err.message?.includes('Invalid login credentials')) {
+                setError('Email ou mot de passe incorrect.')
             } else {
-                setError('Identifiants incorrects ou erreur de connexion.')
+                setError(err.message || 'Une erreur est survenue lors de la connexion.')
             }
         } finally {
             setLoading(false)

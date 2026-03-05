@@ -1,44 +1,55 @@
-import { useState, useEffect } from 'react'
-import { Search, Bell, Menu, FileText, ChevronRight, MessageSquare } from 'lucide-react'
-import { supabase } from '../../supabaseClient'
-import { useAuth } from '../../contexts/AuthContext'
-import { useNavigate } from 'react-router-dom'
+﻿import { useNavigate } from 'react-router-dom'
+import { MessageSquare, Check } from 'lucide-react'
 
-export default function ClientTopBar() {
-    const { user, profile } = useAuth()
+export default function ClientTopBar({ breadcrumbs = [], consultantName = '', onContact }) {
     const navigate = useNavigate()
 
     return (
-        <header className="h-16 bg-white border-b border-gray-100 sticky top-0 z-30 flex items-center justify-between px-6 lg:px-8">
-            <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-2xl bg-teal-500 flex items-center justify-center text-white text-xl font-bold">
-                    {profile?.commercial_name?.[0] || 'Q'}
-                </div>
-                <div>
-                    <h1 className="text-lg font-bold text-gray-900 leading-tight truncate">{profile?.commercial_name || 'Mon Organisme'}</h1>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none">Espace de Préparation Qualiopi</p>
-                </div>
-            </div>
+        <header className="h-14 bg-white border-b border-gray-100 sticky top-0 z-30 flex items-center justify-between px-8">
+            {/* Breadcrumbs */}
+            <nav className="flex items-center gap-2 text-sm">
+                {breadcrumbs.map((crumb, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                        {i > 0 && <span className="text-gray-300 font-light">›</span>}
+                        {crumb.path ? (
+                            <button
+                                onClick={() => navigate(crumb.path)}
+                                className="text-gray-400 hover:text-[#cc6d3e] transition-colors font-medium"
+                            >
+                                {crumb.label}
+                            </button>
+                        ) : (
+                            <span className="text-gray-800 font-bold">{crumb.label}</span>
+                        )}
+                    </div>
+                ))}
+            </nav>
 
+            {/* Right: Consultant + Contact */}
             <div className="flex items-center gap-6">
-                <div className="hidden md:flex items-center gap-2 p-1.5 bg-gray-50 border border-gray-100 rounded-xl px-4 py-2 text-xs font-bold text-gray-500 shadow-inner">
-                    <div className="h-2 w-2 rounded-full bg-teal-500"></div>
-                    Dossier actif
-                </div>
-
-                <div className="flex items-center gap-3">
+                {consultantName && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50/80 rounded-full border border-gray-100 shadow-sm">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-1">Consultant</span>
+                        <div className="h-5 w-5 rounded-full bg-[#cc6d3e] flex items-center justify-center text-white text-[9px] font-black relative">
+                            {consultantName[0]}
+                            <div className="absolute -bottom-0.5 -right-0.5 h-2 w-2 bg-emerald-500 rounded-full border border-white flex items-center justify-center">
+                                <Check className="h-1 w-1 text-white stroke-[5px]" />
+                            </div>
+                        </div>
+                        <span className="text-xs font-black text-gray-800">{consultantName}</span>
+                    </div>
+                )}
+                {onContact && (
                     <button
-                        onClick={() => navigate('/client/messages')}
-                        className="p-2.5 rounded-xl bg-white border border-gray-100 text-gray-400 hover:text-teal-600 hover:bg-teal-50 hover:border-teal-100 transition-all relative shadow-sm"
+                        onClick={onContact}
+                        className="flex items-center gap-2 px-4 py-1.5 bg-[#faf1ec] hover:bg-[#f8e9df] text-[#cc6d3e] rounded-full text-xs font-black transition-all border border-[#f5e2d6] shadow-sm"
                     >
-                        <MessageSquare className="h-5 w-5" />
-                        <span className="absolute -top-1 -right-1 h-3.5 w-3.5 border-2 border-white rounded-full bg-red-500"></span>
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        Contacter
                     </button>
-                    <button className="p-2.5 rounded-xl bg-white border border-gray-100 text-gray-400 hover:text-teal-600 hover:bg-teal-50 hover:border-teal-100 transition-all relative shadow-sm">
-                        <Bell className="h-5 w-5" />
-                    </button>
-                </div>
+                )}
             </div>
         </header>
     )
 }
+
