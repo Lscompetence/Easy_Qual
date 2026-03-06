@@ -93,16 +93,25 @@ export default function ClientDashboard() {
                 setIndicators(indicatorsData)
             }
 
-            // 2. Fetch Tenant & Case (Optional)
-            const { data: tenantData } = await supabase
-                .from('tenants').select('*').eq('owner_id', user.id).single()
+            // 2. Fetch Tenants & Cases
+            const { data: tenantsData } = await supabase
+                .from('tenants').select('*').eq('owner_id', user.id)
 
-            if (tenantData) {
-                setTenant(tenantData)
-                const { data: caseData } = await supabase
-                    .from('cases').select('*').eq('tenant_id', tenantData.id).single()
+            if (tenantsData && tenantsData.length > 0) {
+                const tenantIds = tenantsData.map(t => t.id)
+                const { data: casesData } = await supabase
+                    .from('cases').select('*').in('tenant_id', tenantIds)
+
+                const caseData = casesData?.sort((a, b) => {
+                    const aScore = (a.training_categories?.length || 0) + (a.audit_type?.length || 0)
+                    const bScore = (b.training_categories?.length || 0) + (b.audit_type?.length || 0)
+                    if (aScore !== bScore) return bScore - aScore
+                    return new Date(b.created_at) - new Date(a.created_at)
+                })?.[0]
 
                 if (caseData) {
+                    const tenantData = tenantsData.find(t => t.id === caseData.tenant_id)
+                    setTenant(tenantData)
                     setMyCase(caseData)
 
                     // Fetch consultant name
@@ -601,13 +610,13 @@ export default function ClientDashboard() {
                     <div className="mb-6">
                         <h1 className="text-2xl font-black text-gray-900 mb-3">Tableau de bord de votre audit</h1>
                         <div className="flex gap-2 flex-wrap">
-                            {myCase?.audit_type?.map((type, i) => (
+                            {(Array.isArray(myCase?.audit_type) ? myCase.audit_type : []).map((type, i) => (
                                 <span key={i} className="flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-bold text-gray-600 shadow-sm">
                                     <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
                                     {type.toUpperCase()}
                                 </span>
                             ))}
-                            {myCase?.training_categories?.map((cat, i) => (
+                            {(Array.isArray(myCase?.training_categories) ? myCase.training_categories : []).map((cat, i) => (
                                 <span key={i} className="flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-bold text-gray-600 shadow-sm">
                                     <span className="h-2 w-2 rounded-full bg-blue-500"></span>
                                     ACTION DE FORMATION ({cat})

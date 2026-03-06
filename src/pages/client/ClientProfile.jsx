@@ -69,9 +69,20 @@ export default function ClientProfile() {
                 }
 
                 // 2. Fetch Consultant Name
-                const { data: tenantData } = await supabase.from('tenants').select('id').eq('owner_id', user.id).single()
-                if (tenantData) {
-                    const { data: caseData } = await supabase.from('cases').select('consultant_id').eq('tenant_id', tenantData.id).single()
+                const { data: tenantsData } = await supabase.from('tenants').select('id').eq('owner_id', user.id)
+
+                if (tenantsData && tenantsData.length > 0) {
+                    const tenantIds = tenantsData.map(t => t.id)
+                    const { data: casesData } = await supabase
+                        .from('cases').select('*').in('tenant_id', tenantIds)
+
+                    const caseData = casesData?.sort((a, b) => {
+                        const aScore = (a.training_categories?.length || 0) + (a.audit_type?.length || 0)
+                        const bScore = (b.training_categories?.length || 0) + (b.audit_type?.length || 0)
+                        if (aScore !== bScore) return bScore - aScore
+                        return new Date(b.created_at) - new Date(a.created_at)
+                    })?.[0]
+
                     if (caseData?.consultant_id) {
                         const { data: p } = await supabase.from('profiles').select('first_name, last_name').eq('id', caseData.consultant_id).single()
                         if (p) setConsultantName(`${p.first_name || ''} ${p.last_name || ''}`.trim())
@@ -144,11 +155,13 @@ export default function ClientProfile() {
 
             // 2. ✅ Also save the new password in tenants.initial_password
             //    so the consultant can always see the current password
-            const { data: tenantData } = await supabase
+            const { data: tenantsData } = await supabase
                 .from('tenants')
                 .select('id')
                 .eq('owner_id', user.id)
-                .single()
+                .order('created_at', { ascending: false })
+                .limit(1)
+            const tenantData = tenantsData?.[0]
 
             if (tenantData?.id) {
                 await supabase

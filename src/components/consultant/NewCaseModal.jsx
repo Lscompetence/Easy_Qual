@@ -65,43 +65,31 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 trainingCategories: []
             })
 
-            // 📧 Création du compte (Bloquant pour vérification - Via FETCH direct)
+            // 📧 Création ou Synchronisation du compte client via Edge Function
             try {
-                const { data: sessionData } = await supabase.auth.getSession();
-
-                const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-client`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${sessionData.session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`
-                    },
-                    body: JSON.stringify({
-                        email: savedEmail,       // ✅ Utilisation des valeurs sauvegardées
-                        password: savedPassword, // ✅ Utilisation des valeurs sauvegardées
+                const { data: inviteData, error: inviteError } = await supabase.functions.invoke('invite-client', {
+                    body: {
+                        email: savedEmail,
+                        password: savedPassword,
                         tenant_id: rpcData.tenant_id,
                         tenant_name: savedTenantName
-                    })
+                    }
                 });
 
-                let inviteData = {};
-                try {
-                    inviteData = await response.json();
-                } catch (e) {
-                    // Ignore JSON parse error
+                if (inviteError) {
+                    throw new Error(inviteError.message || "Erreur lors de la création de l'accès client");
                 }
 
-                if (!response.ok) {
-                    throw new Error(inviteData.error || response.statusText || "Erreur réseau inconnue");
-                }
-
-                if (!inviteData?.success) {
-                    throw new Error(inviteData?.error || "L'email existe déjà ou est invalide.");
+                if (inviteData?.error) {
+                    throw new Error(inviteData.error);
                 }
 
                 setSuccessMsg(`Dossier créé et compte client activé pour ${savedEmail} !`)
             } catch (authErr) {
-                console.error('Auth check error:', authErr)
-                setSuccessMsg(`Le dossier a été créé, mais il y a eu un souci avec l'accès client : ${authErr.message || "Erreur de connexion."}`)
+                console.error('Auth sync error:', authErr)
+                // On prévient que le dossier est là mais que l'accès est à vérifier
+                setError(`Dossier créé mais l'accès client a échoué : ${authErr.message}. Allez dans le profil client pour réinitialiser le mot de passe.`);
+                setSuccessMsg(null);
             }
 
             // 🚀 Call onSuccess immediately to refresh credits and list

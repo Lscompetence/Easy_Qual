@@ -27,48 +27,54 @@ serve(async (req) => {
 
         const results = [];
 
-        // Fetch all users to avoid rate limit or excessive listing in loop
-        const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ perPage: 10000 });
-        const usersMap = new Map((authUsers?.users || []).map(u => [u.email?.toLowerCase(), u]));
-
         for (const tenant of tenants) {
             const email = tenant.client_email?.toLowerCase();
             if (!email) continue;
 
-            const existingUser = usersMap.get(email);
-            const targetPassword = tenant.initial_password || 'Yassine12345';
+            const targetPassword = tenant.initial_password || '123456';
 
-            if (existingUser) {
-                console.log(`Syncing existing user: ${email}`);
-                const { error: syncErr } = await supabaseAdmin.auth.admin.updateUserById(
-                    existingUser.id,
-                    { password: targetPassword }
-                );
+            console.log(`Processing ${email}...`);
 
-                // Also ensures owner_id is set
-                if (tenant.owner_id !== existingUser.id) {
-                    await supabaseAdmin.from('tenants').update({ owner_id: existingUser.id }).eq('id', tenant.id);
-                }
+            // Attempt to create. This is the fastest way to check existence + handle creation in one go.
+            const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+                email: email,
+                password: targetPassword,
+                email_confirm: true,
+                user_metadata: { role: 'of', full_name: tenant.name }
+            });
 
-                results.push({ email, status: 'synced', error: syncErr?.message });
-            } else {
-                console.log(`Creating missing user: ${email}`);
-                const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-                    email: email,
-                    password: targetPassword,
-                    email_confirm: true,
-                    user_metadata: {
-                        role: 'of',
-                        full_name: tenant.name,
+            if (createError) {
+                if (createError.message?.includes('already been registered')) {
+                    console.log(`User ${email} exists. Syncing password...`);
+
+                    // Since it exists, we HUNT for the ID
+                    let foundUser = null;
+                    let page = 1;
+                    // Exhaustive search (up to 50 pages / 50k users)
+                    while (page <= 50) {
+                        const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+                        if (!listData?.users || listData.users.length === 0) break;
+                        foundUser = listData.users.find((u: any) => u.email?.toLowerCase() === email);
+                        if (foundUser) break;
+                        page++;
                     }
-                });
 
-                if (newUser?.user) {
-                    await supabaseAdmin.from('tenants').update({ owner_id: newUser.user.id }).eq('id', tenant.id);
-                    results.push({ email, status: 'created' });
+                    if (foundUser) {
+                        const { error: syncErr } = await supabaseAdmin.auth.admin.updateUserById(
+                            foundUser.id,
+                            { password: targetPassword }
+                        );
+                        await supabaseAdmin.from('tenants').update({ owner_id: foundUser.id }).eq('id', tenant.id);
+                        results.push({ email, status: 'synced', id: foundUser.id, error: syncErr?.message });
+                    } else {
+                        results.push({ email, status: 'not_found_in_list', error: "Email registered but invisible in listing pages 1-50." });
+                    }
                 } else {
-                    results.push({ email, status: 'error', error: createError?.message });
+                    results.push({ email, status: 'error', error: createError.message });
                 }
+            } else if (newUser?.user) {
+                await supabaseAdmin.from('tenants').update({ owner_id: newUser.user.id }).eq('id', tenant.id);
+                results.push({ email, status: 'created', id: newUser.user.id });
             }
         }
 
@@ -77,7 +83,7 @@ serve(async (req) => {
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
         )
 
-    } catch (error) {
+    } catch (error: any) {
         return new Response(
             JSON.stringify({ error: error.message }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
