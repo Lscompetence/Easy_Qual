@@ -11,6 +11,7 @@ export default function AgendaVisios() {
     const navigate = useNavigate()
     const [clientRows, setClientRows] = useState([])
     const [loading, setLoading] = useState(true)
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
 
     useEffect(() => {
         if (user) fetchData()
@@ -74,9 +75,12 @@ export default function AgendaVisios() {
 
     return (
         <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
-            <ConsultantSidebar />
+            <ConsultantSidebar isOpen={showMobileMenu} onClose={() => setShowMobileMenu(false)} />
             <div className="flex-1 flex flex-col min-w-0">
-                <ConsultantTopBar />
+                <ConsultantTopBar
+                    showMobileMenu={showMobileMenu}
+                    setShowMobileMenu={setShowMobileMenu}
+                />
 
                 <main className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-[2000px] mx-auto w-full">
 

@@ -10,72 +10,107 @@ serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
     try {
-        const { email, password, tenant_id, tenant_name } = await req.json()
-        if (!email || !password || !tenant_id) throw new Error('Missing email, password or tenant_id');
+        let { email, password, tenant_id, tenant_name } = await req.json()
+
+        // Nettoyage des entrées
+        email = email?.trim()?.toLowerCase();
+        tenant_name = tenant_name?.trim();
+
+        console.log(`🚀 Start invite-client for: ${email}`);
+
+        if (!email || !password || !tenant_id) {
+            throw new Error('Champs manquants: email, mot de passe ou tenant_id');
+        }
 
         const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+
+        if (!supabaseServiceKey) {
+            console.error("❌ SUPABASE_SERVICE_ROLE_KEY is missing in environment variables.");
+            throw new Error("Configuration serveur incomplète (Service Key manquante).");
+        }
+
         const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
         let userId;
 
-        // 1. Try to create user
-        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-            email,
-            password,
-            email_confirm: true,
-            user_metadata: { role: 'of', full_name: tenant_name }
-        });
+        // 1. Check if user already exists in auth.users using our RPC
+        console.log(`🔍 Checking if user ${email} exists in Auth...`);
+        const { data: existingUserId, error: rpcError } = await supabaseAdmin.rpc('get_auth_user_id', { p_email: email });
 
-        if (createError) {
-            // 2. If user already exists, find their ID via profiles table
-            if (createError.message && createError.message.includes('already been registered')) {
-                console.log(`User ${email} already registered. Searching for ID in profiles...`);
-
-                const { data: profile, error: pErr } = await supabaseAdmin
-                    .from('profiles')
-                    .select('id')
-                    .ilike('email', email)
-                    .maybeSingle();
-
-                if (profile) {
-                    userId = profile.id;
-                    console.log(`Found existing User ID: ${userId} via profile.`);
-
-                    // Sync password!
-                    const { error: updErr } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
-                    if (updErr) throw new Error("Sync failed: " + updErr.message);
-                } else {
-                    // One last ditch attempt: find tenant with this email who might have the owner_id
-                    const { data: tenant } = await supabaseAdmin.from('tenants').select('owner_id').eq('client_email', email).not('owner_id', 'is', null).limit(1).maybeSingle();
-                    if (tenant?.owner_id) {
-                        userId = tenant.owner_id;
-                        await supabaseAdmin.auth.admin.updateUserById(userId, { password });
-                    } else {
-                        throw new Error(`Le compte ${email} existe déjà dans le système d'accès mais n'a pas pu être lié à votre nouveau dossier. Veuillez contacter l'administrateur.`);
-                    }
-                }
-            } else {
-                throw createError;
-            }
-        } else {
-            userId = newUser.user.id;
-            console.log(`New user created: ${userId}`);
+        if (rpcError) {
+            console.warn("⚠️ RPC get_auth_user_id failed, falling back to createUser:", rpcError.message);
         }
 
-        // 3. Link to Tenant
-        console.log(`Linking tenant ${tenant_id} to owner ${userId}...`);
-        const { error: tErr } = await supabaseAdmin.from('tenants').update({ owner_id: userId }).eq('id', tenant_id);
-        if (tErr) console.error("Link error (non-blocking for login):", tErr.message);
+        if (existingUserId) {
+            userId = existingUserId;
+            console.log(`✅ User found (ID: ${userId}). Syncing profile and password...`);
 
-        return new Response(JSON.stringify({ success: true, userId, message: "Accès client configuré avec succès." }), {
+            const { error: updErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+                password: password,
+                email_confirm: true,
+                user_metadata: { role: 'of', full_name: tenant_name }
+            });
+
+            if (updErr) {
+                console.error("❌ Failed to update user:", updErr.message);
+                let customMsg = updErr.message;
+                if (updErr.message.includes("short")) customMsg = "Le mot de passe est trop court. Supabase exige généralement 6 ou 8 caractères.";
+                throw new Error(customMsg);
+            }
+        } else {
+            // 2. Create new user
+            console.log(`🆕 Creating new user for: ${email}`);
+            const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+                email,
+                password,
+                email_confirm: true,
+                user_metadata: { role: 'of', full_name: tenant_name }
+            });
+
+            if (createError) {
+                console.error("❌ Error during user creation:", createError.message);
+                let customMsg = createError.message;
+                if (createError.message.includes("short")) {
+                    customMsg = "Le mot de passe est trop court pour la politique de sécurité Supabase (min 6 ou 8 caractères).";
+                }
+                throw new Error(customMsg);
+            }
+
+            userId = newUser.user.id;
+            console.log(`✅ New user created successfully (ID: ${userId})`);
+        }
+
+        // 3. Link to Tenant (Update owner_id)
+        console.log(`🔗 Linking tenant ${tenant_id} to owner ${userId}...`);
+        const { error: tErr } = await supabaseAdmin
+            .from('tenants')
+            .update({ owner_id: userId })
+            .eq('id', tenant_id);
+
+        if (tErr) {
+            console.error("⚠️ Link error (non-blocking for login):", tErr.message);
+        } else {
+            console.log(`✅ Tenant linked successfully.`);
+        }
+
+        return new Response(JSON.stringify({
+            success: true,
+            userId,
+            message: existingUserId ? "Compte synchronisé" : "Compte créé avec succès"
+        }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200
         });
 
     } catch (error) {
-        console.error("Invite Error:", error.message);
-        return new Response(JSON.stringify({ error: error.message }), {
+        console.error("🛑 INVITE CRASH:", error.message);
+        return new Response(JSON.stringify({
+            error: error.message,
+            tip: error.message.includes("court")
+                ? "Vérifiez la 'Minimum Password Length' dans Supabase > Auth > Settings."
+                : "Assurez-vous que les variables d'environnement (SERVICE_ROLE_KEY) sont bien configurées."
+        }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 400
         });

@@ -21,6 +21,10 @@ export default function ClientProfile() {
     const [message, setMessage] = useState({ type: '', content: '' })
     const [initialized, setInitialized] = useState(false)
     const [consultantName, setConsultantName] = useState('')
+    const [indicatorStates, setIndicatorStates] = useState({})
+    const [myCase, setMyCase] = useState(null)
+    const [quizUploads, setQuizUploads] = useState({})
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
 
     const [formData, setFormData] = useState({ first_name: '', last_name: '', email: '' })
     const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' })
@@ -68,7 +72,7 @@ export default function ClientProfile() {
                     setIndicators(indicatorsData)
                 }
 
-                // 2. Fetch Consultant Name
+                // 2. Fetch Tenants & Cases
                 const { data: tenantsData } = await supabase.from('tenants').select('id').eq('owner_id', user.id)
 
                 if (tenantsData && tenantsData.length > 0) {
@@ -83,9 +87,28 @@ export default function ClientProfile() {
                         return new Date(b.created_at) - new Date(a.created_at)
                     })?.[0]
 
-                    if (caseData?.consultant_id) {
-                        const { data: p } = await supabase.from('profiles').select('first_name, last_name').eq('id', caseData.consultant_id).single()
-                        if (p) setConsultantName(`${p.first_name || ''} ${p.last_name || ''}`.trim())
+                    if (caseData) {
+                        setMyCase(caseData)
+                        if (caseData.consultant_id) {
+                            const { data: p } = await supabase.from('profiles').select('first_name, last_name').eq('id', caseData.consultant_id).single()
+                            if (p) setConsultantName(`${p.first_name || ''} ${p.last_name || ''}`.trim())
+                        }
+
+                        // 3. Fetch Indicator States
+                        const { data: statesData } = await supabase
+                            .from('case_indicator_states')
+                            .select('indicator_id, status, consultant_comment, consultant_verdict')
+                            .eq('case_id', caseData.id)
+
+                        const statesMap = {}
+                        statesData?.forEach(s => {
+                            statesMap[s.indicator_id] = {
+                                status: s.status,
+                                consultant_comment: s.consultant_comment,
+                                consultant_verdict: s.consultant_verdict
+                            }
+                        })
+                        setIndicatorStates(statesMap)
                     }
                 }
             }
@@ -179,13 +202,21 @@ export default function ClientProfile() {
         }
     }
 
-    const fullName = `${formData.first_name} ${formData.last_name}`.trim()
+    const fullName = (formData.first_name || formData.last_name)
+        ? `${formData.first_name || ''} ${formData.last_name || ''}`.trim()
+        : profile?.commercial_name || 'Mon Profil'
     const initial = fullName[0]?.toUpperCase() || 'C'
-    const tenantName = profile?.commercial_name || 'Mon Organisme'
 
     if (loading) return (
         <div className="min-h-screen bg-gray-50 flex">
-            <ClientSidebar caseData={null} indicators={indicators} indicatorStates={{}} consultantName={consultantName} />
+            <ClientSidebar
+                caseData={null}
+                indicators={indicators}
+                indicatorStates={{}}
+                consultantName={consultantName}
+                isOpen={showMobileMenu}
+                onClose={() => setShowMobileMenu(false)}
+            />
             <div className="flex-1 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#cc6d3e]" />
             </div>
@@ -194,7 +225,14 @@ export default function ClientProfile() {
 
     return (
         <div className="bg-gray-50 min-h-screen flex font-sans">
-            <ClientSidebar caseData={null} indicators={indicators} indicatorStates={{}} consultantName={consultantName} />
+            <ClientSidebar
+                caseData={myCase}
+                indicators={indicators}
+                indicatorStates={indicatorStates}
+                consultantName={consultantName}
+                isOpen={showMobileMenu}
+                onClose={() => setShowMobileMenu(false)}
+            />
 
             <div className="flex-1 flex flex-col min-w-0">
                 <ClientTopBar
@@ -204,6 +242,7 @@ export default function ClientProfile() {
                     ]}
                     consultantName={consultantName}
                     onContact={null}
+                    setShowMobileMenu={setShowMobileMenu}
                 />
 
                 <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">

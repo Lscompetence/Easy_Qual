@@ -35,7 +35,9 @@ import {
     Trash2,
     Video,
     CircleOff,
-    AlertTriangle
+    AlertTriangle,
+    Settings,
+    Shield
 } from 'lucide-react'
 
 // Icon mapping for Criteria
@@ -74,6 +76,7 @@ export default function CaseDetails() {
     const [stats, setStats] = useState({ total: 32, validated: 0 })
     const [showNewCaseModal, setShowNewCaseModal] = useState(false)
     const [quizUploads, setQuizUploads] = useState({}) // { criterion_id: { audit_type: quiz } }
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
 
     // NEW TABS STATE
     const [activeTab, setActiveTab] = useState('suivi_rno')
@@ -845,10 +848,14 @@ export default function CaseDetails() {
 
     return (
         <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
-            <ConsultantSidebar />
+            <ConsultantSidebar isOpen={showMobileMenu} onClose={() => setShowMobileMenu(false)} />
 
             <div className="flex-1 flex flex-col min-w-0">
-                <ConsultantTopBar onNewFolder={() => setShowNewCaseModal(true)} />
+                <ConsultantTopBar
+                    onNewFolder={() => setShowNewCaseModal(true)}
+                    showMobileMenu={showMobileMenu}
+                    setShowMobileMenu={setShowMobileMenu}
+                />
 
                 <div className="p-4 sm:p-6 lg:p-8 max-w-[2000px] mx-auto w-full">
                     {/* BREADCRUMB */}
@@ -918,13 +925,15 @@ export default function CaseDetails() {
                                     )}
                                 </div>
                             </div>
-                            <button
-                                onClick={handleGenerateReport}
-                                className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold text-sm rounded-xl shadow-sm hover:bg-gray-50 transition-colors flex items-center gap-2 print:hidden"
-                            >
-                                <FileText className="h-4 w-4" />
-                                Rapport
-                            </button>
+                            <div className="flex items-center gap-3 print:hidden">
+                                <button
+                                    onClick={handleGenerateReport}
+                                    className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold text-sm rounded-xl shadow-sm hover:bg-gray-50 transition-colors flex items-center gap-2"
+                                >
+                                    <FileText className="h-4 w-4" />
+                                    Rapport
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -1489,6 +1498,6 @@ export default function CaseDetails() {
                 user={user}
                 onSuccess={() => { setShowNewCaseModal(false); navigate('/consultant/cases') }}
             />
-        </div >
+        </div>
     )
 }

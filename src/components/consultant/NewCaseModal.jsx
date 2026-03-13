@@ -32,74 +32,89 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 throw new Error(`Solde insuffisant. Coût: ${cost} crédits. Solde: ${walletBalance}.`)
             }
 
+            const cleanedEmail = newCaseData.clientEmail.trim().toLowerCase()
+            const cleanedPassword = newCaseData.password.trim()
+            const cleanedTenantName = newCaseData.tenantName.trim()
+
             const { data: rpcData, error: rpcError } = await supabase
                 .rpc('create_case_and_debit', {
                     p_consultant_id: user.id,
-                    p_tenant_name: newCaseData.tenantName,
-                    p_siret: newCaseData.siret,
+                    p_tenant_name: cleanedTenantName,
+                    p_siret: newCaseData.siret.trim(),
                     p_case_category: newCaseData.category,
                     p_audit_type: newCaseData.auditTypes,
                     p_training_categories: newCaseData.trainingCategories,
-                    p_client_email: newCaseData.clientEmail,
-                    p_initial_password: newCaseData.password
+                    p_client_email: cleanedEmail,
+                    p_initial_password: cleanedPassword
                 })
 
             if (rpcError) throw rpcError
 
-            // ✅ Sauvegarder les valeurs AVANT de réinitialiser le formulaire
-            const savedEmail = newCaseData.clientEmail
-            const savedPassword = newCaseData.password
-            const savedTenantName = newCaseData.tenantName
-
-            // ✅ Show success immediately — don't wait for email
-            setSuccessMsg(`Dossier créé avec succès ! Un email d'invitation sera envoyé à ${savedEmail}.`)
-
-            // 🔁 Reset form (après avoir sauvegardé les valeurs importantes)
-            setNewCaseData({
-                tenantName: '',
-                siret: '',
-                clientEmail: '',
-                password: '',
-                category: 'mono-site',
-                auditTypes: [],
-                trainingCategories: []
-            })
-
             // 📧 Création ou Synchronisation du compte client via Edge Function
             try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token;
+                const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
                 const { data: inviteData, error: inviteError } = await supabase.functions.invoke('invite-client', {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        apikey: anonKey
+                    },
                     body: {
-                        email: savedEmail,
-                        password: savedPassword,
+                        email: cleanedEmail,
+                        password: cleanedPassword,
                         tenant_id: rpcData.tenant_id,
-                        tenant_name: savedTenantName
+                        tenant_name: cleanedTenantName
                     }
                 });
 
                 if (inviteError) {
-                    throw new Error(inviteError.message || "Erreur lors de la création de l'accès client");
+                    console.error('Invite error details:', inviteError);
+                    let details = inviteError.message;
+                    try {
+                        const response = inviteError.context || inviteError.response;
+                        if (response && typeof response.json === 'function') {
+                            const errBody = await response.json();
+                            if (errBody.error) details = errBody.error;
+                            if (errBody.tip) details += ` (${errBody.tip})`;
+                        }
+                    } catch (e) { console.warn('Failed to parse error body:', e); }
+                    throw new Error(details || "L'Edge Function a retourné une erreur");
                 }
 
-                if (inviteData?.error) {
-                    throw new Error(inviteData.error);
-                }
+                if (inviteData?.error) throw new Error(inviteData.error);
 
-                setSuccessMsg(`Dossier créé et compte client activé pour ${savedEmail} !`)
+                setSuccessMsg(`Dossier créé et compte client activé pour ${cleanedEmail} !`)
+
+                // 🔁 Reset form
+                setNewCaseData({
+                    tenantName: '',
+                    siret: '',
+                    clientEmail: '',
+                    password: '',
+                    category: 'mono-site',
+                    auditTypes: [],
+                    trainingCategories: []
+                })
+
             } catch (authErr) {
                 console.error('Auth sync error:', authErr)
                 // On prévient que le dossier est là mais que l'accès est à vérifier
-                setError(`Dossier créé mais l'accès client a échoué : ${authErr.message}. Allez dans le profil client pour réinitialiser le mot de passe.`);
+                setError(`Dossier créé mais l'accès client a échoué : ${authErr.message}.`);
                 setSuccessMsg(null);
             }
 
             // 🚀 Call onSuccess immediately to refresh credits and list
             if (onSuccess) onSuccess()
 
-            // ⏱ Close modal after 2s
-            setTimeout(() => {
-                setSuccessMsg(null)
-                onClose()
-            }, 2000)
+            // ⏱ Close modal after 2s if success
+            if (!error) {
+                setTimeout(() => {
+                    setSuccessMsg(null)
+                    onClose()
+                }, 2000)
+            }
 
         } catch (error) {
             console.error('Error creating case:', error)
@@ -128,7 +143,7 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 </div>
 
                 {error && (
-                    <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 flex items-center text-red-700 text-sm">
+                    <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 flex items-center text-red-700 text-sm italic">
                         <AlertCircle className="h-4 w-4 mr-2" />
                         {error}
                     </div>

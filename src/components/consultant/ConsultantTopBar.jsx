@@ -60,8 +60,16 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
 
     return (
         <header className="h-16 bg-white border-b border-gray-100 sticky top-0 z-30 flex items-center justify-between px-4 sm:px-6 lg:px-8">
+            {/* Mobile Menu Button */}
+            <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="p-2 -ml-2 text-gray-400 hover:text-purple-600 lg:hidden"
+            >
+                <Menu className="h-6 w-6" />
+            </button>
+
             {/* Left: Search Bar */}
-            <div className="flex items-center flex-1 max-w-lg">
+            <div className="flex items-center flex-1 max-w-lg ml-2 lg:ml-0">
                 {showSearch && (
                     <div className="relative w-full max-w-md hidden sm:block">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

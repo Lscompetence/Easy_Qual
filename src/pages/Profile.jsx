@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
-import { User, Lock, Mail, Save, ArrowLeft, Check, Eye, EyeOff, Camera, AlertCircle } from 'lucide-react'
+import { User, Lock, Mail, Save, ArrowLeft, Check, Eye, EyeOff, Camera, AlertCircle, Menu } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import ConsultantSidebar from '../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../components/consultant/ConsultantTopBar'
@@ -16,6 +16,7 @@ export default function Profile() {
     const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
     const [message, setMessage] = useState({ type: '', content: '' })
     const [showSuccessModal, setShowSuccessModal] = useState(false)
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
     const [initialized, setInitialized] = useState(false)
 
@@ -372,47 +373,58 @@ export default function Profile() {
         </div>
     )
 
-    // Layout Wrapper
-    if (isConsultant) {
-        return (
-            <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
-                <ConsultantSidebar />
-                <div className="flex-1 ml-64 flex flex-col">
-                    <ConsultantTopBar onNewFolder={() => { }} />
-                    <div className="p-4 sm:p-6 lg:p-8 w-full max-w-6xl">
-                        {content}
-                    </div>
-                </div>
+    // Layout Wrapper - Flex layout with Sidebar on the left
+    return (
+        <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
+            {/* Sidebar for Consultant */}
+            {isConsultant && (
+                <ConsultantSidebar isOpen={showMobileMenu} onClose={() => setShowMobileMenu(false)} />
+            )}
 
-                {/* Success Modal */}
-                {showSuccessModal && (
-                    <div className="fixed inset-0 bg-gray-900/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-                        <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl animate-bounce-in">
-                            <div className="h-20 w-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                <Check className="h-10 w-10 text-green-600" />
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col min-w-0">
+                {/* No TopBar as requested, but we need the Mobile Menu toggle for small screens */}
+                {isConsultant && (
+                    <div className="lg:hidden p-4 bg-white border-b border-slate-100 flex items-center justify-between sticky top-0 z-40">
+                        <button
+                            onClick={() => setShowMobileMenu(true)}
+                            className="p-2 text-gray-500 hover:text-indigo-600 transition-colors"
+                        >
+                            <Menu className="h-6 w-6" />
+                        </button>
+                        <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+                                <User className="h-4 w-4 text-white" />
                             </div>
-                            <h3 className="text-2xl font-bold text-gray-900 mb-2">Mot de Passe Modifié !</h3>
-                            <p className="text-gray-500 mb-8">Votre compte est sécurisé.</p>
-                            <button onClick={() => setShowSuccessModal(false)} className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-colors">
-                                Fermer
-                            </button>
+                            <span className="text-xs font-black uppercase tracking-widest">Mon Profil</span>
                         </div>
                     </div>
                 )}
-            </div>
-        )
-    }
 
-    // Default Layout (Admin/OF/Other)
-    return (
-        <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 font-sans">
-            <div className="max-w-3xl mx-auto">
-                <button onClick={() => navigate(-1)} className="mb-6 flex items-center text-gray-400 hover:text-gray-600 transition-colors font-medium group">
-                    <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-                    Retour
-                </button>
-                {content}
+                <div className="flex-1 overflow-y-auto">
+                    <div className="min-h-full flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+                        <div className="w-full max-w-4xl space-y-8 animate-fadeIn">
+                            {/* Navigation Header for non-consultants or secondary navigation */}
+                            {!isConsultant && (
+                                <div className="flex items-center justify-between mb-8">
+                                    <button
+                                        onClick={() => navigate(-1)}
+                                        className="flex items-center text-gray-400 hover:text-indigo-600 transition-colors font-bold group bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100"
+                                    >
+                                        <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+                                        Retour
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Center Profile Content */}
+                            {content}
+                        </div>
+                    </div>
+                </div>
             </div>
+
+            {/* Success Modal */}
             {showSuccessModal && (
                 <div className="fixed inset-0 bg-gray-900/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl animate-bounce-in">
@@ -421,7 +433,7 @@ export default function Profile() {
                         </div>
                         <h3 className="text-2xl font-bold text-gray-900 mb-2">Mot de Passe Modifié !</h3>
                         <p className="text-gray-500 mb-8">Votre compte est sécurisé.</p>
-                        <button onClick={() => setShowSuccessModal(false)} className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-colors">
+                        <button onClick={() => setShowSuccessModal(false)} className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100">
                             Fermer
                         </button>
                     </div>

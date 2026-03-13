@@ -68,15 +68,15 @@ export default function Login() {
         setError(null)
         setLoading(true)
 
-        // Nettoyer les espaces invisibles (autofill peut en ajouter)
-        const cleanEmail = email.trim()
-        const cleanPassword = password.trim()
+        // Nettoyer l'email, mais GARDER le mot de passe tel quel (les espaces comptent)
+        const cleanEmail = email.trim().toLowerCase()
+        const rawPassword = password
 
-        console.log('🔑 Tentative de connexion avec:', cleanEmail, '| longueur mot de passe:', cleanPassword.length)
+        console.log('🔑 Tentative de connexion avec:', cleanEmail, '| longueur:', rawPassword.length)
 
         try {
-            // Race between Login and a 30s Timeout (Supabase Cold Start mitigation)
-            const loginPromise = login(cleanEmail, cleanPassword)
+            // Race between Login and a 30s Timeout
+            const loginPromise = login(cleanEmail, rawPassword)
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Timeout')), 30000)
             )

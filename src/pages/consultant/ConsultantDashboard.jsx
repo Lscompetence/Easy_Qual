@@ -23,6 +23,7 @@ export default function ConsultantDashboard() {
     const [filterStatus, setFilterStatus] = useState('all') // 'all', 'active'
     const [hasNotifications, setHasNotifications] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
 
     // Create Case Form State
     const [showCreateModal, setShowCreateModal] = useState(false)
@@ -184,7 +185,7 @@ export default function ConsultantDashboard() {
     return (
         <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
             {/* 1. Sidebar */}
-            <ConsultantSidebar />
+            <ConsultantSidebar isOpen={showMobileMenu} onClose={() => setShowMobileMenu(false)} />
 
             {/* 2. Main Content Area */}
             <div className="flex-1 flex flex-col min-w-0">
@@ -202,6 +203,8 @@ export default function ConsultantDashboard() {
                     onNotificationClick={() => setHasNotifications(false)}
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
+                    showMobileMenu={showMobileMenu}
+                    setShowMobileMenu={setShowMobileMenu}
                 />
 
                 {/* 2.2 Dashboard Content */}
@@ -304,7 +307,7 @@ export default function ConsultantDashboard() {
                                 <button className="text-xs font-bold text-purple-600 hover:text-purple-700">Voir tout</button>
                             </div>
 
-                            <div className="overflow-x-auto">
+                            <div className="overflow-x-auto overflow-y-auto max-h-[500px] custom-scrollbar">
                                 <table className="w-full">
                                     <thead>
                                         <tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50">
@@ -481,9 +484,8 @@ export default function ConsultantDashboard() {
 
                             const monoCount = cases.filter(c => c.category !== 'multi-site').length
                             const multiCount = cases.filter(c => c.category === 'multi-site').length
-
                             return (
-                                <div className="rounded-2xl overflow-hidden shadow-xl flex flex-col h-full"
+                                <div className="lg:sticky lg:top-28 rounded-2xl overflow-hidden shadow-xl flex flex-col self-start w-full"
                                     style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)' }}>
 
                                     {/* Header */}
@@ -502,7 +504,7 @@ export default function ConsultantDashboard() {
                                     </div>
 
                                     {/* SVG Line Chart */}
-                                    <div className="px-4 flex-1">
+                                    <div className="px-4 py-4">
                                         <svg viewBox={`0 0 ${W} ${H + 18}`} className="w-full" style={{ overflow: 'visible' }}>
                                             <defs>
                                                 <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">

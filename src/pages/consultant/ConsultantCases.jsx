@@ -12,46 +12,11 @@ export default function ConsultantCases() {
     const { user } = useAuth()
     const navigate = useNavigate()
 
-    const [loadingRepair, setLoadingRepair] = useState(null)
-
-    const handleRepairAccess = async (e, caseItem) => {
-        e.stopPropagation()
-        if (!caseItem.tenants?.client_email) return
-
-        setLoadingRepair(caseItem.id)
-        try {
-            const { data: sessionData } = await supabase.auth.getSession();
-            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-client`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${sessionData.session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`
-                },
-                body: JSON.stringify({
-                    email: caseItem.tenants.client_email,
-                    password: caseItem.tenants.initial_password,
-                    tenant_id: caseItem.tenant_id,
-                    tenant_name: caseItem.tenants.name
-                })
-            });
-
-            if (!response.ok) throw new Error("Erreur serveur");
-            const data = await response.json();
-            if (!data?.success) throw new Error(data?.error || "Erreur de réparation")
-
-            alert(`Accès synchronisé avec succès pour ${caseItem.tenants.client_email} !`)
-        } catch (err) {
-            console.error('Repair failed:', err)
-            alert("Erreur lors de la synchronisation : " + err.message)
-        } finally {
-            setLoadingRepair(null)
-        }
-    }
-
     const [cases, setCases] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState('')
     const [filterStatus, setFilterStatus] = useState('all')
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
 
     const [showCreateModal, setShowCreateModal] = useState(false)
 
@@ -181,13 +146,15 @@ export default function ConsultantCases() {
 
     return (
         <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
-            <ConsultantSidebar />
+            <ConsultantSidebar isOpen={showMobileMenu} onClose={() => setShowMobileMenu(false)} />
 
             <div className="flex-1 flex flex-col min-w-0">
                 <ConsultantTopBar
                     onNewFolder={() => setShowCreateModal(true)}
                     searchQuery={searchQuery}
                     onSearchChange={setSearchQuery}
+                    showMobileMenu={showMobileMenu}
+                    setShowMobileMenu={setShowMobileMenu}
                 />
 
                 <main className="p-4 sm:p-6 lg:p-8 max-w-[2000px] mx-auto w-full">
@@ -222,7 +189,7 @@ export default function ConsultantCases() {
 
                     {/* List */}
                     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="overflow-x-auto">
+                        <div className="overflow-x-auto overflow-y-auto max-h-[700px] custom-scrollbar">
                             <table className="w-full">
                                 <thead className="bg-gray-50/50">
                                     <tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider">
@@ -280,38 +247,18 @@ export default function ConsultantCases() {
                                                 <td className="px-6 py-4 min-w-[240px]">
                                                     <div className="flex flex-col gap-2 items-center justify-center pr-4">
                                                         <div
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (c.tenants?.client_email) navigator.clipboard.writeText(c.tenants.client_email);
-                                                            }}
-                                                            className="group/item relative flex items-center gap-2 w-full bg-slate-50 hover:bg-purple-100/50 border border-slate-200/60 hover:border-purple-300 px-3 py-1.5 rounded-xl transition-all cursor-copy"
+                                                            className="flex items-center gap-2 w-full bg-slate-50 border border-slate-200/60 px-3 py-1.5 rounded-xl"
                                                         >
                                                             <div className="flex-shrink-0 bg-white p-1.5 rounded-lg shadow-sm border border-slate-100">
-                                                                <Mail className="h-4 w-4 text-slate-400 group-hover/item:text-purple-600" />
+                                                                <Mail className="h-4 w-4 text-slate-400" />
                                                             </div>
-                                                            <span className="text-xs font-bold text-slate-700 group-hover/item:text-purple-900 whitespace-nowrap">
+                                                            <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
                                                                 {c.tenants?.client_email || 'Non défini'}
                                                             </span>
 
-                                                            <button
-                                                                onClick={(e) => handleRepairAccess(e, c)}
-                                                                className="absolute -right-2 -top-2 bg-white p-1 rounded-full shadow-md border-slate-200 border text-slate-400 hover:text-purple-600 hover:border-purple-300 opacity-0 group-hover/item:opacity-100 transition-all z-10"
-                                                                title="Synchroniser ce compte"
-                                                            >
-                                                                {loadingRepair === c.id ? (
-                                                                    <RefreshCw className="h-4 w-4 animate-spin text-purple-600" />
-                                                                ) : (
-                                                                    <RefreshCw className="h-4 w-4" />
-                                                                )}
-                                                            </button>
+
                                                         </div>
-                                                        <div
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                if (c.tenants?.initial_password) navigator.clipboard.writeText(c.tenants.initial_password);
-                                                            }}
-                                                            className="group/item flex items-center gap-2 w-full bg-amber-50 hover:bg-amber-100 border border-amber-200/50 hover:border-amber-300 px-3 py-1.5 rounded-xl transition-all cursor-copy"
-                                                        >
+                                                        <div className="flex items-center gap-2 w-full bg-amber-50 border border-amber-200/50 px-3 py-1.5 rounded-xl">
                                                             <div className="flex-shrink-0 bg-white p-1.5 rounded-lg shadow-sm border border-amber-100">
                                                                 <Lock className="h-4 w-4 text-amber-600" />
                                                             </div>

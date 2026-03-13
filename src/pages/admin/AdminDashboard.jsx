@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell } from 'lucide-react'
+import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell, Menu } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Logo from '../../components/Logo'
 
@@ -93,6 +93,7 @@ export default function AdminDashboard() {
     // Notifications & Diagnostics State
     const [notifications, setNotifications] = useState([])
     const [showNotifications, setShowNotifications] = useState(false)
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
     const [financialStats, setFinancialStats] = useState({
         totalDistributed: 0,
         totalPurchased: 0,
@@ -632,14 +633,21 @@ export default function AdminDashboard() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 flex flex-col">
             {/* Navbar */}
-            <div className="bg-white shadow-sm border-b border-gray-200">
+            <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-[60]">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 sm:gap-4">
+                            {/* Mobile Menu Toggle */}
+                            <button
+                                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                                className="lg:hidden p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                            >
+                                <Menu className="h-6 w-6" />
+                            </button>
                             <Logo size="small" />
-                            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                            <span className="hidden xs:inline-block px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
                                 Admin
                             </span>
                         </div>
@@ -688,7 +696,7 @@ export default function AdminDashboard() {
                         </div>
                     </div>
                 </div>
-            </div>
+            </header>
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
@@ -869,7 +877,7 @@ export default function AdminDashboard() {
                         </button>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
@@ -1021,8 +1029,8 @@ export default function AdminDashboard() {
                             </tbody>
                         </table>
                     </div>
-                </div >
-            </main >
+                </div>
+            </main>
 
             {/* Modal: Create Consultant (Provisioning) */}
             {
@@ -1713,6 +1721,41 @@ export default function AdminDashboard() {
                     </div>
                 )
             }
-        </div >
+            {/* Mobile Sidebar Overlay */}
+            {
+                showMobileMenu && (
+                    <div
+                        className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm z-[70] lg:hidden"
+                        onClick={() => setShowMobileMenu(false)}
+                    />
+                )
+            }
+
+            {/* Mobile Sidebar */}
+            <aside className={`fixed inset-y-0 left-0 w-64 bg-white shadow-2xl z-[80] lg:hidden transform transition-transform duration-300 ease-in-out ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className="h-16 flex items-center px-6 border-b border-gray-100 justify-between">
+                    <Logo size="small" />
+                    <button onClick={() => setShowMobileMenu(false)} className="text-gray-400">
+                        <X className="h-6 w-6" />
+                    </button>
+                </div>
+                <div className="p-4 space-y-2">
+                    <button
+                        onClick={() => { navigate('/profile'); setShowMobileMenu(false) }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-all"
+                    >
+                        <Users className="h-5 w-5" />
+                        Mon Profil
+                    </button>
+                    <button
+                        onClick={() => { handleLogout(); setShowMobileMenu(false) }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-red-600 hover:bg-red-50 transition-all"
+                    >
+                        <LogOut className="h-5 w-5" />
+                        Déconnexion
+                    </button>
+                </div>
+            </aside>
+        </div>
     )
 }

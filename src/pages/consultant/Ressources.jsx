@@ -58,12 +58,19 @@ function FAQItem({ q, a }) {
 
 // ─── Page ─────────────────────────────────────────────────────────
 export default function Ressources() {
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
     return (
         <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
-            <ConsultantSidebar />
+            <ConsultantSidebar isOpen={showMobileMenu} onClose={() => setShowMobileMenu(false)} />
 
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                <ConsultantTopBar showNewFolder={false} showCredits={false} showSearch={false} />
+                <ConsultantTopBar
+                    showNewFolder={false}
+                    showCredits={false}
+                    showSearch={false}
+                    showMobileMenu={showMobileMenu}
+                    setShowMobileMenu={setShowMobileMenu}
+                />
 
                 <main className="flex-1 overflow-y-auto">
 

@@ -1,29 +1,39 @@
 ﻿import { useNavigate } from 'react-router-dom'
-import { MessageSquare, Check } from 'lucide-react'
+import { MessageSquare, Check, Menu } from 'lucide-react'
 
-export default function ClientTopBar({ breadcrumbs = [], consultantName = '', onContact }) {
+export default function ClientTopBar({ breadcrumbs = [], consultantName = '', onContact, setShowMobileMenu }) {
     const navigate = useNavigate()
 
     return (
-        <header className="h-14 bg-white border-b border-gray-100 sticky top-0 z-30 flex items-center justify-between px-8">
-            {/* Breadcrumbs */}
-            <nav className="flex items-center gap-2 text-sm">
-                {breadcrumbs.map((crumb, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                        {i > 0 && <span className="text-gray-300 font-light">›</span>}
-                        {crumb.path ? (
-                            <button
-                                onClick={() => navigate(crumb.path)}
-                                className="text-gray-400 hover:text-[#cc6d3e] transition-colors font-medium"
-                            >
-                                {crumb.label}
-                            </button>
-                        ) : (
-                            <span className="text-gray-800 font-bold">{crumb.label}</span>
-                        )}
-                    </div>
-                ))}
-            </nav>
+        <header className="h-16 bg-white border-b border-gray-100 sticky top-0 z-30 flex items-center justify-between px-4 sm:px-8">
+            <div className="flex items-center gap-4">
+                {/* Mobile Menu Toggle */}
+                <button
+                    onClick={() => setShowMobileMenu(true)}
+                    className="lg:hidden p-2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                >
+                    <Menu className="h-6 w-6" />
+                </button>
+
+                {/* Breadcrumbs */}
+                <nav className="flex items-center gap-2 text-sm">
+                    {breadcrumbs.map((crumb, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                            {i > 0 && <span className="text-gray-300 font-light">›</span>}
+                            {crumb.path ? (
+                                <button
+                                    onClick={() => navigate(crumb.path)}
+                                    className="text-gray-400 hover:text-[#cc6d3e] transition-colors font-medium"
+                                >
+                                    {crumb.label}
+                                </button>
+                            ) : (
+                                <span className="text-gray-800 font-bold">{crumb.label}</span>
+                            )}
+                        </div>
+                    ))}
+                </nav>
+            </div>
 
             {/* Right: Consultant + Contact */}
             <div className="flex items-center gap-6">

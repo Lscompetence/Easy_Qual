@@ -10,7 +10,7 @@ BEGIN
   -- Search in auth.users (requires security definer and access to auth schema)
   SELECT id INTO v_user_id
   FROM auth.users
-  WHERE email = p_email
+  WHERE lower(email) = lower(p_email)
   LIMIT 1;
 
   RETURN v_user_id;

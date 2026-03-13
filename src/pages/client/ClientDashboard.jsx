@@ -4,8 +4,8 @@ import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import {
     CheckCircle, Clock, XCircle, CircleOff, AlertTriangle,
-    Upload, Download, FileText, ChevronDown, Send, MessageSquare,
-    ArrowRight, CheckSquare
+    Upload, Download, FileText, ChevronDown, ChevronUp, Send, MessageSquare,
+    ArrowRight, CheckSquare, Check, Trash2, Video, Sun, Flag, Ban
 } from 'lucide-react'
 import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
@@ -20,12 +20,13 @@ export default function ClientDashboard() {
     const [indicators, setIndicators] = useState([
         { id: 1, criterion_id: 1, label: "Information accessible au public, détaillée et vérifiable.", criteria: { id: 1, label: "Information du public" } },
         { id: 2, criterion_id: 1, label: "Indicateurs de résultats adaptés à la nature des prestations.", criteria: { id: 1, label: "Information du public" } },
-        { id: 3, criterion_id: 2, label: "Objectifs de la prestation.", criteria: { id: 2, label: "Objectifs & public" } },
-        { id: 4, criterion_id: 3, label: "Adaptation aux publics.", criteria: { id: 3, label: "Adaptation aux publics" } },
-        { id: 5, criterion_id: 4, label: "Moyens pédagogiques.", criteria: { id: 4, label: "Moyens pédagogiques" } },
-        { id: 6, criterion_id: 5, label: "Qualification formateurs.", criteria: { id: 5, label: "Qualification formateurs" } },
-        { id: 7, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Inscription socio-éco" } },
-        { id: 8, criterion_id: 7, label: "Amélioration continue.", criteria: { id: 7, label: "Amélioration continue" } }
+        { id: 3, criterion_id: 1, label: "Taux d'obtention des certifications.", criteria: { id: 1, label: "Information du public" } },
+        { id: 4, criterion_id: 2, label: "Objectifs de la prestation.", criteria: { id: 2, label: "Objectifs & public" } },
+        { id: 5, criterion_id: 3, label: "Adaptation aux publics.", criteria: { id: 3, label: "Adaptation aux publics" } },
+        { id: 6, criterion_id: 4, label: "Moyens pédagogiques.", criteria: { id: 4, label: "Moyens pédagogiques" } },
+        { id: 7, criterion_id: 5, label: "Qualification formateurs.", criteria: { id: 5, label: "Qualification formateurs" } },
+        { id: 8, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Inscription socio-éco" } },
+        { id: 9, criterion_id: 7, label: "Amélioration continue.", criteria: { id: 7, label: "Amélioration continue" } }
     ])
     const [indicatorStates, setIndicatorStates] = useState({})
     const [quizUploads, setQuizUploads] = useState({})
@@ -38,10 +39,12 @@ export default function ClientDashboard() {
     const [consultantName, setConsultantName] = useState('')
     const fileInputRef = useRef(null)
     const [pendingCriterionId, setPendingCriterionId] = useState(null)
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
     const messagesEndRef = useRef(null)
 
     // Determine current page from URL
     const isMessages = location.pathname === '/client/messages'
+    const isSessions = location.pathname === '/client/sessions'
     const isCriterion = location.pathname.startsWith('/client/criterion/')
     const criterionId = isCriterion ? location.pathname.split('/').pop() : null
 
@@ -81,12 +84,13 @@ export default function ClientDashboard() {
                 const fallback = [
                     { id: 1, criterion_id: 1, label: "Information accessible au public, détaillée et vérifiable.", criteria: { id: 1, label: "Information du public" } },
                     { id: 2, criterion_id: 1, label: "Indicateurs de résultats adaptés à la nature des prestations.", criteria: { id: 1, label: "Information du public" } },
-                    { id: 3, criterion_id: 2, label: "Objectifs de la prestation.", criteria: { id: 2, label: "Objectifs & public" } },
-                    { id: 4, criterion_id: 3, label: "Adaptation aux publics.", criteria: { id: 3, label: "Adaptation aux publics" } },
-                    { id: 5, criterion_id: 4, label: "Moyens pédagogiques.", criteria: { id: 4, label: "Moyens pédagogiques" } },
-                    { id: 6, criterion_id: 5, label: "Qualification formateurs.", criteria: { id: 5, label: "Qualification formateurs" } },
-                    { id: 7, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Inscription socio-éco" } },
-                    { id: 8, criterion_id: 7, label: "Amélioration continue.", criteria: { id: 7, label: "Amélioration continue" } }
+                    { id: 3, criterion_id: 1, label: "Taux d'obtention des certifications.", criteria: { id: 1, label: "Information du public" } },
+                    { id: 4, criterion_id: 2, label: "Objectifs de la prestation.", criteria: { id: 2, label: "Objectifs & public" } },
+                    { id: 5, criterion_id: 3, label: "Adaptation aux publics.", criteria: { id: 3, label: "Adaptation aux publics" } },
+                    { id: 6, criterion_id: 4, label: "Moyens pédagogiques.", criteria: { id: 4, label: "Moyens pédagogiques" } },
+                    { id: 7, criterion_id: 5, label: "Qualification formateurs.", criteria: { id: 5, label: "Qualification formateurs" } },
+                    { id: 8, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Inscription socio-éco" } },
+                    { id: 9, criterion_id: 7, label: "Amélioration continue.", criteria: { id: 7, label: "Amélioration continue" } }
                 ]
                 setIndicators(fallback)
             } else {
@@ -206,6 +210,26 @@ export default function ClientDashboard() {
         }
     }
 
+    const handleDeleteFile = async (criterionId) => {
+        if (!myCase) return
+        if (!confirm('Voulez-vous supprimer ce document ?')) return
+        try {
+            const { error } = await supabase.from('criterion_quiz_uploads')
+                .delete()
+                .eq('case_id', myCase.id)
+                .eq('criterion_id', criterionId)
+                .eq('audit_type', myCase.audit_type?.[0] || 'initial')
+            if (error) throw error
+            setQuizUploads(prev => {
+                const next = { ...prev }
+                delete next[criterionId]
+                return next
+            })
+        } catch (err) {
+            alert('Erreur suppression : ' + err.message)
+        }
+    }
+
     const handleSendMessage = async (e) => {
         e.preventDefault()
         if (!newMessage.trim() || !myCase) return
@@ -268,7 +292,14 @@ export default function ClientDashboard() {
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex">
-                <ClientSidebar caseData={myCase} indicators={[]} indicatorStates={{}} consultantName={consultantName} />
+                <ClientSidebar
+                    caseData={myCase}
+                    indicators={[]}
+                    indicatorStates={{}}
+                    consultantName={consultantName}
+                    isOpen={showMobileMenu}
+                    onClose={() => setShowMobileMenu(false)}
+                />
                 <div className="flex-1 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#cc6d3e]" />
                 </div>
@@ -280,7 +311,15 @@ export default function ClientDashboard() {
     if (isMessages) {
         return (
             <div className="bg-gray-50 min-h-screen flex font-sans">
-                <ClientSidebar caseData={myCase} indicators={indicators} indicatorStates={indicatorStates} consultantName={consultantName} />
+                <ClientSidebar
+                    caseData={myCase}
+                    indicators={indicators}
+                    indicatorStates={indicatorStates}
+                    consultantName={consultantName}
+                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                    isOpen={showMobileMenu}
+                    onClose={() => setShowMobileMenu(false)}
+                />
                 <div className="flex-1 flex flex-col min-w-0">
                     <ClientTopBar
                         breadcrumbs={[
@@ -289,6 +328,7 @@ export default function ClientDashboard() {
                         ]}
                         consultantName={consultantName}
                         onContact={() => navigate('/client/messages')}
+                        setShowMobileMenu={setShowMobileMenu}
                     />
                     <main className="flex-1 flex items-center justify-center p-8">
                         <div className="w-full max-w-xl bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -358,11 +398,88 @@ export default function ClientDashboard() {
         )
     }
 
+    // ─── SESSIONS & VISIOS VIEW ────────────────────────────────────────────────
+    if (isSessions) {
+        return (
+            <div className="bg-gray-50 min-h-screen flex font-sans">
+                <ClientSidebar
+                    caseData={myCase}
+                    indicators={indicators}
+                    indicatorStates={indicatorStates}
+                    consultantName={consultantName}
+                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                    isOpen={showMobileMenu}
+                    onClose={() => setShowMobileMenu(false)}
+                />
+                <div className="flex-1 flex flex-col min-w-0">
+                    <ClientTopBar
+                        breadcrumbs={[
+                            { label: 'Formation', path: '/client/dashboard' },
+                            { label: 'Agenda' }
+                        ]}
+                        consultantName={consultantName}
+                        onContact={() => navigate('/client/messages')}
+                        setShowMobileMenu={setShowMobileMenu}
+                    />
+                    <main className="flex-1 flex items-center justify-center p-8">
+                        <div className="w-full max-w-xl bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all">
+                            <div className="p-10 text-center">
+                                <div className="h-20 w-20 rounded-3xl bg-[#faf1ec] flex items-center justify-center mx-auto mb-6 transform -rotate-3 hover:rotate-0 transition-transform duration-300 shadow-md">
+                                    <Video className="h-10 w-10 text-[#cc6d3e]" />
+                                </div>
+                                <h2 className="text-3xl font-black text-gray-900 mb-3">Vos Rendez-vous</h2>
+                                <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
+                                    Retrouvez ici le lien visio pour votre prochain point de mentoring avec <span className="text-[#cc6d3e] font-bold">{consultantName || 'votre consultant'}</span>.
+                                </p>
+                            </div>
+
+                            <div className="px-10 pb-6">
+                                <div className="bg-[#faf1ec]/30 rounded-2xl p-6 border border-[#f5e2d6] flex items-center justify-between group hover:bg-white hover:shadow-lg transition-all duration-300">
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black text-[#cc6d3e] uppercase tracking-widest bg-white/80 px-2 py-0.5 rounded-full inline-block mb-1 border border-[#f5e2d6]/40">Prochain RDV</p>
+                                        <h3 className="text-lg font-black text-gray-900">Suivi Mi-Parcours</h3>
+                                        <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+                                            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                                            <span>Demain, 14:00 (Google Meet)</span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => window.open('https://meet.google.com', '_blank')}
+                                        className="h-12 px-8 bg-[#cc6d3e] text-white rounded-xl text-sm font-bold shadow-lg shadow-[#cc6d3e]/20 hover:bg-[#b55d32] hover:scale-105 active:scale-95 transition-all"
+                                    >
+                                        Rejoindre
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="p-6 text-center border-t border-gray-50">
+                                <button
+                                    onClick={() => navigate('/client/dashboard')}
+                                    className="text-sm text-gray-400 hover:text-gray-900 font-bold transition-colors py-2 px-4"
+                                >
+                                    Retour
+                                </button>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            </div>
+        )
+    }
+
     // ─── CRITERION DETAIL VIEW ────────────────────────────────────────────────
     if (isCriterion && currentCriterion) {
         return (
             <div className="bg-gray-50 min-h-screen flex font-sans">
-                <ClientSidebar caseData={myCase} indicators={indicators} indicatorStates={indicatorStates} consultantName={consultantName} />
+                <ClientSidebar
+                    caseData={myCase}
+                    indicators={indicators}
+                    indicatorStates={indicatorStates}
+                    consultantName={consultantName}
+                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                    isOpen={showMobileMenu}
+                    onClose={() => setShowMobileMenu(false)}
+                />
                 <div className="flex-1 flex flex-col min-w-0">
                     <ClientTopBar
                         breadcrumbs={[
@@ -371,6 +488,7 @@ export default function ClientDashboard() {
                         ]}
                         consultantName={consultantName}
                         onContact={() => navigate('/client/messages')}
+                        setShowMobileMenu={setShowMobileMenu}
                     />
                     <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
                         {/* Criterion Header */}
@@ -463,7 +581,7 @@ export default function ClientDashboard() {
 
                             <div className="space-y-10 relative">
                                 {/* Vertical connector line */}
-                                <div className="absolute left-[13px] top-4 bottom-4 w-0.5 bg-gray-100 -z-0" />
+                                <div className="absolute left-[13px] top-8 bottom-8 w-0.5 bg-gray-100 -z-0" />
 
                                 {currentCriterion.items.map((ind, idx) => {
                                     const state = indicatorStates[ind.id] || {}
@@ -471,103 +589,134 @@ export default function ClientDashboard() {
                                     const verdict = state.consultant_verdict
                                     const fileData = quizUploads[ind.id + '_ind']
 
-                                    const isDone = status === 'done' || verdict === 'validated'
+                                    const isDone = status === 'done'
+                                    const isNonApplicable = status === 'non_applicable'
 
                                     return (
-                                        <div key={ind.id} className="relative z-10">
-                                            {/* Indicator header with status badge */}
-                                            <div className="flex items-center gap-4 mb-4">
-                                                <div className={`h-[28px] w-[28px] rounded-full border-2 flex items-center justify-center flex-shrink-0 text-[11px] font-black shadow-sm transition-all ${isDone ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-white border-gray-200 text-gray-400'
+                                        <div key={ind.id} className="relative z-10 group">
+                                            {/* Indicator header */}
+                                            <div className="flex items-start gap-4 mb-4">
+                                                <div className={`mt-3 h-[28px] w-[28px] rounded-full border-2 flex items-center justify-center flex-shrink-0 text-[11px] font-black shadow-sm transition-all ${isDone ? 'bg-[#10b981] border-[#10b981] text-white' :
+                                                    isNonApplicable ? 'bg-slate-400 border-slate-400 text-white' :
+                                                        'bg-white border-gray-200 text-gray-400'
                                                     }`}>
-                                                    {isDone ? '✓' : idx + 1}
+                                                    {isDone ? <Check className="h-3.5 w-3.5" /> : (isNonApplicable ? '–' : idx + 1)}
                                                 </div>
-                                                <div className="flex-1 min-w-0">
+                                                <div className="flex-1 min-w-0 bg-slate-50/50 rounded-[20px] px-6 py-4 border border-slate-100/50 group-hover:bg-slate-50 transition-colors">
                                                     <div className="flex items-center gap-3">
-                                                        <h3 className="text-sm font-black text-gray-900">Indicateur {idx + 1}</h3>
-                                                        {isDone ? (
-                                                            <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded uppercase tracking-wider">Fait</span>
-                                                        ) : (
-                                                            <span className="text-[9px] font-black text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded uppercase tracking-wider">En cours</span>
-                                                        )}
+                                                        <h3 className="text-base font-black text-slate-900">Indicateur {idx + 1}</h3>
+                                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${status === 'done' ? 'text-emerald-600 bg-emerald-50' :
+                                                            status === 'non_applicable' ? 'text-slate-500 bg-slate-50' :
+                                                                'text-blue-600 bg-blue-50'
+                                                            }`}>
+                                                            {status === 'done' ? 'FAIT' : (status === 'non_applicable' ? 'NA' : 'EN COURS')}
+                                                        </span>
                                                     </div>
-                                                    <p className="text-xs text-gray-500 mt-0.5">{ind.label}</p>
+                                                    <p className="text-sm text-slate-500 mt-1.5 font-medium leading-relaxed">{ind.label}</p>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 hover:text-gray-600">
-                                                        <FileText className="h-3.5 w-3.5" />
-                                                        Fichier joint
-                                                        <ChevronDown className="h-3 w-3" />
+                                                <div className="mt-4 flex items-center gap-3">
+                                                    {fileData && (
+                                                        <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 rounded-full border border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider">
+                                                            <CheckCircle className="h-3 w-3 text-gray-400" /> Fichier joint
+                                                        </div>
+                                                    )}
+                                                    <button className="p-2 text-gray-300 hover:text-gray-600 transition-colors">
+                                                        <ChevronUp className="h-5 w-5" />
                                                     </button>
                                                 </div>
                                             </div>
 
                                             {/* Content Card */}
                                             <div className="ml-[14px] pl-8">
-                                                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 grid grid-cols-1 lg:grid-cols-2 gap-8 ring-1 ring-black/5 hover:ring-[#cc6d3e]/20 transition-all">
-                                                    {/* Status Selection */}
-                                                    <div>
-                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Déclarez votre statut</p>
-                                                        <div className="space-y-2">
-                                                            {[
-                                                                { val: 'to_do', label: 'En cours', icon: Clock },
-                                                                { val: 'done', label: 'Fait', icon: CheckCircle },
-                                                                { val: 'non_applicable', label: 'Non applicable', icon: CircleOff },
-                                                            ].map(opt => (
-                                                                <button
-                                                                    key={opt.val}
-                                                                    onClick={() => handleStatusChange(ind.id, opt.val)}
-                                                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${status === opt.val
-                                                                        ? 'border-emerald-500 bg-emerald-50/30 text-emerald-700'
-                                                                        : 'border-gray-100 bg-gray-50/50 text-gray-500 hover:border-gray-200 hover:bg-white'
-                                                                        }`}
-                                                                >
-                                                                    <div className="flex items-center gap-2.5">
-                                                                        <opt.icon className={`h-4 w-4 ${status === opt.val ? 'text-emerald-500' : 'text-gray-300'}`} />
-                                                                        {opt.label}
-                                                                    </div>
-                                                                    {status === opt.val && <CheckCircle className="h-4 w-4 text-emerald-500" />}
-                                                                </button>
-                                                            ))}
-                                                        </div>
+                                                <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_4px_24px_rgba(0,0,0,0.04)] p-8 relative transition-all">
+                                                    {/* Top Right Model Button */}
+                                                    <div className="absolute top-6 right-8">
+                                                        <button className="flex items-center gap-2 px-4 py-2 bg-[#f5f0ff] text-[#7c3aed] rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-[#ede5ff] transition-all">
+                                                            <Download className="h-3.5 w-3.5" /> Télécharger le modèle type
+                                                        </button>
                                                     </div>
 
-                                                    {/* File Control */}
-                                                    <div>
-                                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Preuve documentaire</p>
-                                                        {fileData ? (
-                                                            <div className="group relative bg-gray-50 border border-gray-100 rounded-xl p-3 flex items-center gap-3 hover:bg-white hover:border-[#cc6d3e]/30 transition-all">
-                                                                <div className="h-10 w-10 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-red-500 shadow-sm">
-                                                                    <FileText className="h-6 w-6" />
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="text-xs font-black text-gray-800 truncate">{fileData.file_name}</p>
-                                                                    <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 mt-0.5">
-                                                                        <Check className="h-2.5 w-2.5" /> Prêt pour l'audit
-                                                                    </p>
-                                                                </div>
-                                                                <button className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
-                                                                    <XCircle className="h-4 w-4" />
-                                                                </button>
+                                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+                                                        {/* Status Selection (Left) */}
+                                                        <div className="lg:col-span-4">
+                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-5">Déclarez votre statut</p>
+                                                            <div className="space-y-2.5">
+                                                                {[
+                                                                    { val: 'to_do', label: 'En cours', icon: Sun, color: 'text-blue-600', active: 'border-blue-200 bg-blue-50 text-blue-700' },
+                                                                    { val: 'done', label: 'Fait', icon: Flag, color: 'text-emerald-500', active: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
+                                                                    { val: 'non_applicable', label: 'Non applicable', icon: Ban, color: 'text-slate-500', active: 'border-slate-300 bg-slate-50 text-slate-700' },
+                                                                ].map(opt => (
+                                                                    <button
+                                                                        key={opt.val}
+                                                                        onClick={() => handleStatusChange(ind.id, opt.val)}
+                                                                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 text-[13px] font-bold transition-all ${status === opt.val
+                                                                            ? opt.active
+                                                                            : 'border-transparent bg-gray-50/50 text-gray-400 hover:bg-gray-50'
+                                                                            }`}
+                                                                    >
+                                                                        <div className="flex items-center gap-3">
+                                                                            <opt.icon className={`h-4 w-4 ${status === opt.val ? '' : 'text-gray-300'}`} />
+                                                                            {opt.label}
+                                                                        </div>
+                                                                        {status === opt.val && <CheckCircle className={`h-4 w-4`} />}
+                                                                    </button>
+                                                                ))}
                                                             </div>
-                                                        ) : (
-                                                            <button
-                                                                onClick={() => { setPendingCriterionId(ind.id + '_ind'); fileInputRef.current?.click() }}
-                                                                disabled={uploadingFor === ind.id + '_ind'}
-                                                                className="w-full h-[98px] flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-100 text-gray-400 hover:border-[#cc6d3e]/30 hover:bg-[#faf1ec]/30 hover:text-[#cc6d3e] transition-all group"
-                                                            >
-                                                                <Upload className="h-5 w-5 group-hover:scale-110 transition-transform" />
-                                                                <span className="text-[11px] font-black uppercase tracking-wider">Téléverser le modèle type</span>
-                                                            </button>
-                                                        )}
-                                                        {status === 'non_applicable' && (
-                                                            <div className="mt-3">
-                                                                <textarea
-                                                                    placeholder="Justification de non-applicabilité..."
-                                                                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs text-gray-600 outline-none focus:border-[#cc6d3e] focus:ring-2 focus:ring-[#cc6d3e]/10 resize-none bg-gray-50/30"
-                                                                    rows={2}
-                                                                />
-                                                            </div>
-                                                        )}
+                                                        </div>
+
+                                                        {/* File Management (Right) */}
+                                                        <div className="lg:col-span-8">
+                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-5">
+                                                                {status === 'non_applicable' ? 'Justification de non-applicabilité' : 'Preuve documentaire'}
+                                                            </p>
+
+                                                            {status === 'non_applicable' ? (
+                                                                <div className="h-full">
+                                                                    <textarea
+                                                                        placeholder="Pourquoi cet indicateur ne s'applique pas à votre organisme ?"
+                                                                        className="w-full h-[154px] px-5 py-4 rounded-2xl border-2 border-gray-50 text-sm text-gray-600 outline-none focus:border-blue-100 focus:bg-white transition-all resize-none bg-gray-50/50"
+                                                                    />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="h-full">
+                                                                    {fileData ? (
+                                                                        <div className="h-[154px] flex flex-col justify-center bg-gray-50/50 border-2 border-dashed border-gray-100 rounded-2xl px-8 relative">
+                                                                            <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-5 shadow-sm">
+                                                                                <div className="h-12 w-12 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center text-red-500">
+                                                                                    <FileText className="h-7 w-7" />
+                                                                                </div>
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <p className="text-sm font-black text-gray-900 truncate mb-1">{fileData.file_name}</p>
+                                                                                    <p className="text-[11px] text-emerald-600 font-bold flex items-center gap-1.5 uppercase tracking-wider">
+                                                                                        <Check className="h-3 w-3 stroke-[3px]" /> Prêt pour l'audit
+                                                                                    </p>
+                                                                                </div>
+                                                                                <button
+                                                                                    onClick={() => handleDeleteFile(ind.id + '_ind')}
+                                                                                    className="p-2 text-gray-300 hover:text-red-500 transition-colors"
+                                                                                >
+                                                                                    <Trash2 className="h-5 w-5" />
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <button
+                                                                            onClick={() => { setPendingCriterionId(ind.id + '_ind'); fileInputRef.current?.click() }}
+                                                                            disabled={uploadingFor === ind.id + '_ind'}
+                                                                            className="w-full h-[154px] flex flex-col items-center justify-center gap-3 rounded-[24px] border-2 border-dashed border-gray-100 text-gray-500 hover:border-[#7c3aed]/30 hover:bg-[#fbf9ff] transition-all group"
+                                                                        >
+                                                                            <div className="h-12 w-12 bg-white rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-gray-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                                                <Upload className="h-6 w-6 text-[#7c3aed]" />
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <p className="text-sm font-black text-gray-800">Cliquez pour uploader un document</p>
+                                                                                <p className="text-[11px] text-gray-400 mt-1 font-medium">Simule un upload et passe en "Fait"</p>
+                                                                            </div>
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -595,13 +744,22 @@ export default function ClientDashboard() {
     // ─── MAIN DASHBOARD (Vue d'ensemble) ─────────────────────────────────────
     return (
         <div className="bg-gray-50 min-h-screen flex font-sans">
-            <ClientSidebar caseData={myCase} indicators={indicators} indicatorStates={indicatorStates} consultantName={consultantName} />
+            <ClientSidebar
+                caseData={myCase}
+                indicators={indicators}
+                indicatorStates={indicatorStates}
+                consultantName={consultantName}
+                unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                isOpen={showMobileMenu}
+                onClose={() => setShowMobileMenu(false)}
+            />
 
             <div className="flex-1 flex flex-col min-w-0">
                 <ClientTopBar
                     breadcrumbs={[{ label: 'Formation' }, { label: "Vue d'ensemble" }]}
                     consultantName={consultantName}
                     onContact={() => navigate('/client/messages')}
+                    setShowMobileMenu={setShowMobileMenu}
                 />
 
                 <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
