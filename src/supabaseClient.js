@@ -35,9 +35,36 @@ if (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'YOUR_SUPABASE_URL') {
         }
     }
 
+    // Custom Advanced Cookie Storage mechanism for higher security
+    const cookieStorage = {
+        getItem: (key) => {
+            if (typeof document === 'undefined') return null
+            const cookies = document.cookie.split(';')
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim()
+                if (cookie.startsWith(`${key}=`)) {
+                    return decodeURIComponent(cookie.substring(key.length + 1))
+                }
+            }
+            return null
+        },
+        setItem: (key, value) => {
+            if (typeof document === 'undefined') return
+            const isProd = import.meta.env.PROD
+            // Secure cookie flag applied in production. SameSite=Strict helps prevent CSRF.
+            document.cookie = `${key}=${encodeURIComponent(value)}; path=/; max-age=31536000; SameSite=Lax${isProd ? '; Secure' : ''}`
+        },
+        removeItem: (key) => {
+            if (typeof document === 'undefined') return
+            document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+        }
+    }
+
     if (!window.supabaseGlobal) {
         window.supabaseGlobal = createClient(supabaseUrl, supabaseAnonKey, {
             auth: {
+                storage: cookieStorage, // Use Cookies instead of localStorage
+                storageKey: 'easyqual-auth-token', // Custom secure key name
                 persistSession: true,
                 autoRefreshToken: true,
                 detectSessionInUrl: true

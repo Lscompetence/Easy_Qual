@@ -81,13 +81,66 @@ export default function Login() {
                 setTimeout(() => reject(new Error('Timeout')), 30000)
             )
 
-            const { user } = await Promise.race([loginPromise, timeoutPromise])
+            let authResponse;
+            try {
+                authResponse = await Promise.race([loginPromise, timeoutPromise])
+            } catch (err) {
+                // 🛠️ SELF-HEALING LOGIC for CLIENTS
+                // If login fails and we are in the client space, let's check if the account exists in tenants but not in Auth
+                if (roleParam === 'client' && (err.status === 400 || err.message?.includes('Invalid login credentials'))) {
+                    console.log('🔍 Auth failed. Checking if this client needs a repair...');
+
+                    // 1. Check if email exists in tenants table
+                    const { data: tenant, error: tErr } = await supabase
+                        .from('tenants')
+                        .select('id, name, initial_password')
+                        .eq('client_email', cleanEmail)
+                        .single();
+
+                    // 2. If found and the password matches the one in our records
+                    if (tenant && tenant.initial_password === rawPassword) {
+                        console.log('🛠️ Client found in DB. Triggering auto-repair...');
+
+                        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+                        // Call repair function
+                        const repairRes = await fetch(`${supabaseUrl}/functions/v1/invite-client`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'apikey': anonKey,
+                                'Authorization': `Bearer ${anonKey}`
+                            },
+                            body: JSON.stringify({
+                                email: cleanEmail,
+                                password: rawPassword,
+                                tenant_id: tenant.id,
+                                tenant_name: tenant.name
+                            })
+                        });
+
+                        if (repairRes.ok) {
+                            console.log('✅ Auto-repair successful. Retrying login...');
+                            // Try login again after repair
+                            authResponse = await login(cleanEmail, rawPassword);
+                        } else {
+                            throw err; // If repair fails, throw original login error
+                        }
+                    } else {
+                        throw err;
+                    }
+                } else {
+                    throw err;
+                }
+            }
+
+            const { user } = authResponse;
 
             // 1. Get User Role from metadata
             const actualRole = user?.user_metadata?.role || 'of'
 
             // 2. REDIRECT based on role
-            // 'of' (Organisme de Formation) maps to the Client Dashboard
             if (actualRole === 'admin') {
                 navigate('/admin/dashboard')
             } else if (actualRole === 'consultant') {
@@ -95,7 +148,6 @@ export default function Login() {
             } else if (actualRole === 'of') {
                 navigate('/client/dashboard')
             } else {
-                // Fallback: If no role, try to guess or go home
                 navigate('/')
             }
         } catch (err) {

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
@@ -119,8 +119,13 @@ export default function ClientDashboard() {
                     setMyCase(caseData)
 
                     // Fetch consultant name
-                    if (caseData.consultant_id) {
-                        const { data: p } = await supabase.from('profiles').select('first_name, last_name').eq('id', caseData.consultant_id).single()
+                    const consultantIdToFetch = caseData.consultant_id || tenantData.created_by;
+                    if (consultantIdToFetch) {
+                        const { data: p } = await supabase
+                            .from('profiles')
+                            .select('first_name, last_name')
+                            .eq('id', consultantIdToFetch)
+                            .single()
                         if (p) setConsultantName(`${p.first_name || ''} ${p.last_name || ''}`.trim())
                     }
 
@@ -181,6 +186,22 @@ export default function ClientDashboard() {
         } catch (err) {
             console.error('Error updating status:', err)
             // Rollback on error could be added here if needed
+        }
+    }
+
+    const handleCommentChange = async (indicatorId, comment) => {
+        if (!myCase) return
+        try {
+            const { error } = await supabase.from('case_indicator_states').upsert({
+                case_id: myCase.id,
+                indicator_id: indicatorId,
+                audit_type: myCase.audit_type?.[0] || 'initial',
+                client_comment: comment,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'case_id,indicator_id,audit_type' })
+            if (error) throw error
+        } catch (err) {
+            console.error('Error updating comment:', err)
         }
     }
 
@@ -674,6 +695,9 @@ export default function ClientDashboard() {
                                                                 <div className="h-full">
                                                                     <textarea
                                                                         placeholder="Pourquoi cet indicateur ne s'applique pas à votre organisme ?"
+                                                                        value={state.client_comment || ''}
+                                                                        onChange={(e) => setIndicatorStates(prev => ({...prev, [ind.id]: { ...(prev[ind.id] || {}), client_comment: e.target.value }}))}
+                                                                        onBlur={(e) => handleCommentChange(ind.id, e.target.value)}
                                                                         className="w-full h-[154px] px-5 py-4 rounded-2xl border-2 border-gray-50 text-sm text-gray-600 outline-none focus:border-blue-100 focus:bg-white transition-all resize-none bg-gray-50/50"
                                                                     />
                                                                 </div>

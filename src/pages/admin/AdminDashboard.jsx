@@ -578,44 +578,47 @@ export default function AdminDashboard() {
         setShowEmailConfirmModal(true)
     }
 
-    const confirmSendEmail = async () => {
+    const confirmSendEmail = () => {
         if (!selectedConsultantForEmail) return
 
         const consultant = selectedConsultantForEmail
         setShowEmailConfirmModal(false)
 
         try {
-            setSuccessMsg(`Envoi de l'invitation à ${consultant.email}...`)
-            setSuccessMsgType('success')
+            const firstName = consultant.first_name || ''
+            const lastName = consultant.last_name || ''
+            const email = consultant.email || ''
+            const password = consultant.temp_password || '(mot de passe non disponible)'
+            const loginUrl = `${window.location.origin}/login`
 
-            const { data: { session } } = await supabase.auth.getSession()
-            const token = session?.access_token
-            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+            // Compose email body with credentials
+            const subject = encodeURIComponent(`Vos accès Easy'Qual - ${firstName} ${lastName}`)
+            const body = encodeURIComponent(
+`Bonjour ${firstName} ${lastName},
 
-            const { data, error: funcError } = await supabase.functions.invoke('admin_create_consultant', {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    apikey: anonKey
-                },
-                body: {
-                    action: 'send_invitation',
-                    email: consultant.email,
-                    firstName: consultant.first_name,
-                    lastName: consultant.last_name,
-                    loginUrl: `${window.location.origin}/consultant`
-                }
-            })
+Votre compte consultant Easy'Qual a été créé. Voici vos identifiants de connexion :
 
-            if (funcError) throw new Error(funcError.message || "Erreur de connexion")
-            if (data && data.success === false) throw new Error(data.error)
+📧 Email       : ${email}
+🔑 Mot de passe : ${password}
 
-            setSuccessMsg(`Invitation envoyée avec succès à ${consultant.email} !`)
+🔗 Lien de connexion : ${loginUrl}
+
+⚠️ Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe lors de votre première connexion.
+
+Cordialement,
+L'équipe Easy'Qual`
+            )
+
+            // Open the default email client with pre-filled content
+            window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank')
+
+            setSuccessMsg(`Application de messagerie ouverte pour ${email} ✓`)
             setSuccessMsgType('success')
             setTimeout(() => setSuccessMsg(null), 6000)
 
         } catch (err) {
-            console.error('Error sending email:', err)
-            setError(err.message)
+            console.error('Error opening mail client:', err)
+            setError("Impossible d'ouvrir l'application de messagerie.")
             setShowErrorModal(true)
             setTimeout(() => setError(null), 6000)
         } finally {

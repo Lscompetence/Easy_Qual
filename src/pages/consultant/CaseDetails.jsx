@@ -189,7 +189,8 @@ export default function CaseDetails() {
 
                 filteredMap[indId] = {
                     status: s.status,
-                    consultant_verdict: s.consultant_verdict
+                    consultant_verdict: s.consultant_verdict,
+                    client_comment: s.client_comment
                 }
                 if (s.consultant_verdict === 'validated') validatedCount++
             }
@@ -314,7 +315,8 @@ export default function CaseDetails() {
 
                     initialIndicatorMap[indId] = {
                         status: s.status,
-                        consultant_verdict: s.consultant_verdict
+                        consultant_verdict: s.consultant_verdict,
+                        client_comment: s.client_comment
                     }
                     if (s.consultant_verdict === 'validated') initialValidatedCount++
                 }
@@ -1225,19 +1227,25 @@ export default function CaseDetails() {
                                                                 <div className="px-6 pb-5 pt-3 bg-indigo-50 border-t border-indigo-100 space-y-4">
 
                                                                     {/* Statut Client (ReadOnly display) */}
-                                                                    <div className="bg-white rounded-xl border border-slate-100 p-4">
+                                                                    <div className="bg-white rounded-xl border border-slate-100 p-4 mb-4">
                                                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Statut déclaré par le client</p>
-                                                                        <div className="flex gap-2">
+                                                                        <div className="flex gap-2 mb-3">
                                                                             <div className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all ${state.status === 'done' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-white text-slate-200 border-slate-50'}`}>
                                                                                 <CheckCircle className="h-3.5 w-3.5" /> Fait
                                                                             </div>
-                                                                            <div className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all bg-white text-slate-200 border-slate-50">
+                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all ${(state.status === 'to_do' || state.status === 'doing' || !state.status) ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white text-slate-200 border-slate-50'}`}>
                                                                                 <Clock className="h-3.5 w-3.5" /> En cours
                                                                             </div>
                                                                             <div className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all ${state.status === 'non_applicable' ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-white text-slate-200 border-slate-50'}`}>
                                                                                 <CircleOff className="h-3.5 w-3.5" /> Non Applicable
                                                                             </div>
                                                                         </div>
+                                                                        {state.status === 'non_applicable' && state.client_comment && (
+                                                                            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Justification du client</p>
+                                                                                <p className="text-sm text-slate-700 italic">« {state.client_comment} »</p>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
 
                                                                     {/* Consultant verdict */}

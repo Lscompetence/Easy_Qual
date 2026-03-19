@@ -52,40 +52,43 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
 
             // 📧 Création ou Synchronisation du compte client via Edge Function
             try {
-                const { data: { session } } = await supabase.auth.getSession();
-                const token = session?.access_token;
-                const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+                console.log("Calling invite-client for:", cleanedEmail);
 
-                const { data: inviteData, error: inviteError } = await supabase.functions.invoke('invite-client', {
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+                const functionUrl = `${supabaseUrl}/functions/v1/invite-client`;
+
+                // Appel manuel via fetch pour une robustesse maximale contre les erreurs 401
+                const response = await fetch(functionUrl, {
+                    method: 'POST',
                     headers: {
-                        Authorization: `Bearer ${token}`,
-                        apikey: anonKey
+                        'Content-Type': 'application/json',
+                        'apikey': anonKey,
+                        'Authorization': `Bearer ${anonKey}`
                     },
-                    body: {
+                    body: JSON.stringify({
                         email: cleanedEmail,
                         password: cleanedPassword,
                         tenant_id: rpcData.tenant_id,
                         tenant_name: cleanedTenantName
-                    }
+                    })
                 });
 
-                if (inviteError) {
-                    console.error('Invite error details:', inviteError);
-                    let details = inviteError.message;
-                    try {
-                        const response = inviteError.context || inviteError.response;
-                        if (response && typeof response.json === 'function') {
-                            const errBody = await response.json();
-                            if (errBody.error) details = errBody.error;
-                            if (errBody.tip) details += ` (${errBody.tip})`;
-                        }
-                    } catch (e) { console.warn('Failed to parse error body:', e); }
-                    throw new Error(details || "L'Edge Function a retourné une erreur");
+                const inviteData = await response.json();
+
+                if (!response.ok) {
+                    console.error('Invite error details:', inviteData);
+                    let details = inviteData.error || inviteData.message || "Erreur inconnue";
+                    if (inviteData.tip) details += ` (${inviteData.tip})`;
+                    throw new Error(details);
                 }
 
-                if (inviteData?.error) throw new Error(inviteData.error);
+                if (inviteData?.error) {
+                    throw new Error(inviteData.error + (inviteData.tip ? ` - ${inviteData.tip}` : ""));
+                }
 
                 setSuccessMsg(`Dossier créé et compte client activé pour ${cleanedEmail} !`)
+                setError(null);
 
                 // 🔁 Reset form
                 setNewCaseData({
@@ -98,22 +101,23 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                     trainingCategories: []
                 })
 
-            } catch (authErr) {
-                console.error('Auth sync error:', authErr)
-                // On prévient que le dossier est là mais que l'accès est à vérifier
-                setError(`Dossier créé mais l'accès client a échoué : ${authErr.message}.`);
-                setSuccessMsg(null);
-            }
+                // 🚀 Call onSuccess immediately to refresh credits and list
+                if (onSuccess) onSuccess()
 
-            // 🚀 Call onSuccess immediately to refresh credits and list
-            if (onSuccess) onSuccess()
-
-            // ⏱ Close modal after 2s if success
-            if (!error) {
+                // ⏱ Close modal after 2.5s if success
                 setTimeout(() => {
                     setSuccessMsg(null)
                     onClose()
-                }, 2000)
+                }, 2500)
+
+            } catch (authErr) {
+                console.error('Auth sync error:', authErr)
+                // ERREUR CRITIQUE: Le dossier est en base mais l'accès est KO
+                setError(`ALERTE : Le dossier est créé mais le COMPTE DE CONNEXION a échoué. Cause : ${authErr.message}.`);
+                setSuccessMsg(null);
+
+                // On rafraîchit quand même la liste car le dossier existe
+                if (onSuccess) onSuccess()
             }
 
         } catch (error) {
