@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../supabaseClient'
@@ -51,14 +51,14 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
     // Calc progress per criterion
     const getCriterionProgress = (criterion) => {
         const done = criterion.items.filter(ind =>
-            indicatorStates?.[ind.id]?.status === 'done' || indicatorStates?.[ind.id]?.status === 'non_applicable'
+            indicatorStates?.[ind.id]?.status === 'done' || indicatorStates?.[ind.id]?.status === 'not_applicable' || indicatorStates?.[ind.id]?.status === 'non_applicable'
         ).length
         return { done, total: criterion.items.length }
     }
 
     // Overall progress
     const totalIndicators = indicators?.length || 0
-    const doneCount = Object.values(indicatorStates || {}).filter(s => s?.status === 'done' || s?.status === 'non_applicable').length
+    const doneCount = Object.values(indicatorStates || {}).filter(s => s?.status === 'done' || s?.status === 'not_applicable' || s?.status === 'non_applicable').length
     const progressPct = totalIndicators > 0 ? Math.round((doneCount / totalIndicators) * 100) : 0
 
     const tenantName = (profile?.first_name || profile?.last_name)

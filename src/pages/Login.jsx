@@ -140,7 +140,21 @@ export default function Login() {
             // 1. Get User Role from metadata
             const actualRole = user?.user_metadata?.role || 'of'
 
-            // 2. REDIRECT based on role
+            // 2. STRICT ROLE VERIFICATION
+            if (roleParam === 'client' && actualRole !== 'of') {
+                await logout();
+                throw new Error('Accès refusé. Veuillez utiliser la page de connexion Espace Consultant.');
+            }
+            if (roleParam === 'consultant' && actualRole !== 'consultant') {
+                await logout();
+                throw new Error('Accès refusé. Veuillez utiliser la page de connexion Espace Client.');
+            }
+            if (roleParam === 'admin' && actualRole !== 'admin') {
+                await logout();
+                throw new Error('Accès refusé. Réservé aux administrateurs.');
+            }
+
+            // 3. REDIRECT based on role
             if (actualRole === 'admin') {
                 navigate('/admin/dashboard')
             } else if (actualRole === 'consultant') {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -37,7 +37,8 @@ import {
     CircleOff,
     AlertTriangle,
     Settings,
-    Shield
+    Shield,
+    Eye
 } from 'lucide-react'
 
 // Icon mapping for Criteria
@@ -62,6 +63,11 @@ const CRITERIA_STYLES = {
     7: { bg: 'bg-gradient-to-br from-rose-50 to-rose-100', text: 'text-rose-700', border: 'border-rose-200', icon: 'bg-rose-200 text-rose-700', bar: 'bg-rose-500' }
 }
 
+const isInitialAudit = (type) => {
+    const t = String(type || '').toLowerCase().trim()
+    return t === 'initial' || t.includes('initial') || t.includes('initiale')
+}
+
 export default function CaseDetails() {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -71,7 +77,6 @@ export default function CaseDetails() {
     const [caseData, setCaseData] = useState(null)
     const [criteriaData, setCriteriaData] = useState([])
     const [allIndicatorStates, setAllIndicatorStates] = useState([])
-    const [indicatorStates, setIndicatorStates] = useState({})
     const [error, setError] = useState(null)
     const [stats, setStats] = useState({ total: 32, validated: 0 })
     const [showNewCaseModal, setShowNewCaseModal] = useState(false)
@@ -85,6 +90,7 @@ export default function CaseDetails() {
     const [selectedIndicatorId, setSelectedIndicatorId] = useState(null) // which indicator is expanded
     const [criterionComments, setCriterionComments] = useState({}) // { criterion_id: string }
     const [savingComment, setSavingComment] = useState(null) // criterion_id being saved
+    const [saveConfirmation, setSaveConfirmation] = useState(null) // { id: criterion_id, type: 'success' | 'error' }
 
 
 
@@ -101,42 +107,84 @@ export default function CaseDetails() {
     const [scrolledToBottom, setScrolledToBottom] = useState(false)
     const messagesEndRef = useRef(null)
 
-    // Helpers
-    const isInitialAudit = (t) => !t || t === 'initial' || t.toLowerCase().includes('initial')
+    // Removed redundant isInitialAudit helper (using global version)
 
 
-    // Unified Weighted Progress Calculation (Bien fait)
-    const calculateWeightedProgress = (states, total) => {
+    // Grouped Results used for EVERYTHING (Progress + UI)
+    // Now with MERGING logic to handle potential duplicate rows for the same audit type
+    const getGroupedStates = useCallback((auditFilter) => {
+        const grouped = {}
+        allIndicatorStates.forEach(s => {
+            const indId = String(s.indicator_id || s.indicator_id_fix)
+            if (!grouped[indId]) grouped[indId] = []
+            grouped[indId].push(s)
+        })
+
+        const results = {}
+        Object.entries(grouped).forEach(([indId, states]) => {
+            // Filter states that match the audit title or fuzzy matches 'initial'
+            const target = auditFilter ? String(auditFilter).trim().toLowerCase() : null
+            
+            // 1. Tag all potential matches with their matching level
+            const potentialMatches = states.map(s => {
+                const sRawType = String(s.audit_type || 'initial').trim().toLowerCase()
+                
+                let level = 0
+                if (target) {
+                    const targetL = String(target).trim().toLowerCase()
+                    // Normalize both for comparison
+                    const normTarget = isInitialAudit(targetL) ? 'initial' : targetL
+                    const normType = isInitialAudit(sRawType) ? 'initial' : sRawType
+                    
+                    if (normType === normTarget) level = 3
+                    else level = 1
+                } else {
+                    level = 3 
+                }
+                return { level, state: s }
+            }).filter(m => m.level >= 2 || (!target && m.level === 3))
+
+            if (potentialMatches.length === 0) return
+
+            // 2. STRIKT logic: Within the best level, take ONLY the newest record.
+            // NO merging pieces, it cause confusion with old stale data.
+            potentialMatches.sort((a, b) => {
+                if (b.level !== a.level) return b.level - a.level
+                const aDate = new Date(a.state.updated_at || 0).getTime()
+                const bDate = new Date(b.state.updated_at || 0).getTime()
+                return bDate - aDate
+            })
+
+            // The absolute winner for this indicator + audit combo
+            results[indId] = potentialMatches[0].state
+        })
+        return results
+    }, [allIndicatorStates])
+
+    const indicatorStatesMap = useMemo(() => getGroupedStates(selectedAudit), [getGroupedStates, selectedAudit])
+    const globalResults = useMemo(() => getGroupedStates(null), [getGroupedStates])
+    
+    // For local usage in current view
+    const currentAuditStates = Object.values(indicatorStatesMap)
+    
+    // Improved progress scoring (0-100 per indicator)
+    const calculateScore = (stateList, total) => {
         if (!total || total === 0) return 0
         let score = 0
-        states.forEach(s => {
-            if (s.consultant_verdict === 'validated' || s.consultant_verdict === 'non_applicable') {
-                score += 100
-            } else if (s.status === 'doing') {
-                score += 50
-            } else if (s.status === 'done' && !s.consultant_verdict) {
-                score += 75
-            }
+        stateList.forEach(s => {
+            if (s.consultant_verdict === 'validated' || s.consultant_verdict === 'non_applicable') score += 100
+            else if (s.status === 'done') score += 50 // In wait for validation
+            else if (s.status === 'doing') score += 25
         })
-        return Math.min(100, Math.round(score / total))
+        return Math.min(100, Math.ceil(score / total))
     }
 
-    const currentAuditStates = allIndicatorStates.filter(s => {
-        const sType = s.audit_type || 'initial'
-        const currentSelected = selectedAudit || 'initial'
-        return isInitialAudit(currentSelected) ? isInitialAudit(sType) : sType === currentSelected
-    })
-
     const totalPossibleIndicators = criteriaData.reduce((acc, crit) => acc + (crit.indicators?.length || 0), 0)
+    const calculatedProgress = calculateScore(currentAuditStates, totalPossibleIndicators)
 
-    // Global Progress across ALL audits in the case (Average completion of all declared audits)
-    const activeAuditTypes = caseData?.audit_type || ['initial']
-    const totalPossibleGlobal = totalPossibleIndicators * activeAuditTypes.length
-    const globalProgress = calculateWeightedProgress(allIndicatorStates, totalPossibleGlobal)
+    // Global Progress across all audits combined
+    const globalProgress = calculateScore(Object.values(globalResults), totalPossibleIndicators)
 
-    const calculatedProgress = calculateWeightedProgress(currentAuditStates, totalPossibleIndicators)
-
-    // Use globalProgress for the overall dashboard value and DB sync
     const progressPercent = (allIndicatorStates.length > 0) ? globalProgress : (caseData?.progress || 0)
 
     // Auto-sync progress to DB if it differs from stored value
@@ -170,37 +218,13 @@ export default function CaseDetails() {
 
     useEffect(() => {
         if (!caseData || criteriaData.length === 0) return
-
-        const filteredMap = {}
+        
         let validatedCount = 0
-        const totalCount = criteriaData.reduce((acc, crit) => acc + (crit.indicators?.length || 0), 0)
-
-        const isMatch = (sType) => {
-            const currentSelected = selectedAudit || 'initial'
-            if (isInitialAudit(currentSelected)) return isInitialAudit(sType)
-            return sType === currentSelected
-        }
-
-        allIndicatorStates.forEach(s => {
-            if (isMatch(s.audit_type)) {
-                const indId = String(s.indicator_id)
-                const existing = filteredMap[indId]
-                if (existing?.consultant_verdict && !s.consultant_verdict) return
-
-                filteredMap[indId] = {
-                    status: s.status,
-                    consultant_verdict: s.consultant_verdict,
-                    client_comment: s.client_comment
-                }
-                if (s.consultant_verdict === 'validated') validatedCount++
-            }
+        Object.values(indicatorStatesMap).forEach(s => {
+            if (s.consultant_verdict === 'validated' || s.consultant_verdict === 'non_applicable') validatedCount++
         })
-
-        setIndicatorStates(filteredMap)
-        if (totalCount > 0) {
-            setStats({ total: totalCount, validated: validatedCount })
-        }
-    }, [allIndicatorStates, criteriaData, caseData, selectedAudit])
+        setStats({ total: totalPossibleIndicators, validated: validatedCount })
+    }, [indicatorStatesMap, criteriaData, caseData])
 
     useEffect(() => {
         if (id && user) {
@@ -208,6 +232,65 @@ export default function CaseDetails() {
         } else if (!id) {
             setError("ID manquant dans l'URL")
             setLoading(false)
+        }
+
+        // Realtime subscription for ALL relevant case data
+        if (id) {
+            const channel = supabase
+                .channel(`case_realtime:${id}`)
+                // Indicator States Subscription
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'case_indicator_states',
+                    filter: `case_id=eq.${id}`
+                }, (payload) => {
+                    console.log('Realtime indicator sync:', payload.eventType)
+                    if (payload.eventType === 'DELETE') {
+                        setAllIndicatorStates(prev => prev.filter(s => s.id !== (payload.old.id || payload.old.id_indicateur_perdu))) // Fallback to id
+                    } else {
+                        // For INSERT and UPDATE: Replace or add into the local array by ID
+                        setAllIndicatorStates(prev => {
+                            const filtered = prev.filter(s => s.id !== payload.new.id)
+                            return [...filtered, payload.new]
+                        })
+                    }
+                })
+                // Quiz Uploads Subscription
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'criterion_quiz_uploads',
+                    filter: `case_id=eq.${id}`
+                }, (payload) => {
+                    if (payload.eventType === 'DELETE') {
+                        setQuizUploads(prev => {
+                            const next = { ...prev }
+                            const critId = payload.old.criterion_id
+                            if (next[critId]) {
+                                const aType = payload.old.audit_type || 'initial'
+                                delete next[critId][aType]
+                            }
+                            return next
+                        })
+                    } else {
+                        const q = payload.new
+                        const aType = (q.audit_type || 'initial').trim().toLowerCase()
+                        const storageKey = String(q.criterion_id) // 'crit_X' or 'ind_X'
+                        setQuizUploads(prev => ({
+                            ...prev,
+                            [storageKey]: {
+                                ...(prev[storageKey] || {}),
+                                [aType]: q
+                            }
+                        }))
+                    }
+                })
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channel)
+            }
         }
     }, [id, user])
 
@@ -231,10 +314,10 @@ export default function CaseDetails() {
 
             setCaseData(cData)
 
-            // Fix initialization: default to first available audit type
+            // Fix initialization: default to first available audit type (trimmed)
             let defaultAudit = 'initial'
             if (cData.audit_type && cData.audit_type.length > 0) {
-                defaultAudit = cData.audit_type[0]
+                defaultAudit = String(cData.audit_type[0]).trim()
                 setSelectedAudit(defaultAudit)
             }
 
@@ -260,6 +343,7 @@ export default function CaseDetails() {
                 .from('case_indicator_states')
                 .select('*')
                 .eq('case_id', id)
+                .order('updated_at', { ascending: true })
 
             if (sError) throw sError
             console.log('Fetched indicator states:', sData?.length || 0)
@@ -274,13 +358,14 @@ export default function CaseDetails() {
             const quizMap = {}
             const commentsMap = {}
             quizData?.forEach(q => {
-                const aType = q.audit_type || 'initial'
-                if (!quizMap[q.criterion_id]) quizMap[q.criterion_id] = {}
-                quizMap[q.criterion_id][aType] = q
+                const aType = (q.audit_type || 'initial').trim().toLowerCase()
+                const storageKey = String(q.criterion_id) // 'crit_X' or 'ind_X'
+                if (!quizMap[storageKey]) quizMap[storageKey] = {}
+                quizMap[storageKey][aType] = q
 
                 if (q.consultant_comment) {
-                    if (!commentsMap[q.criterion_id]) commentsMap[q.criterion_id] = {}
-                    commentsMap[q.criterion_id][aType] = q.consultant_comment
+                    if (!commentsMap[storageKey]) commentsMap[storageKey] = {}
+                    commentsMap[storageKey][aType] = q.consultant_comment
                 }
             })
             setQuizUploads(quizMap)
@@ -294,37 +379,8 @@ export default function CaseDetails() {
 
             setEvents(eventData || [])
 
-            // ATOMIC INITIALIZATION of indicatorStates to avoid flickers on refresh
-            const initialIndicatorMap = {}
-            let initialValidatedCount = 0
-            const finalTotalCount = Object.values(grouped).reduce((acc, crit) => acc + crit.indicators.length, 0)
-
-            const isMatchInitial = (sType) => {
-                const currentDefault = defaultAudit || 'initial'
-                if (isInitialAudit(currentDefault)) return isInitialAudit(sType)
-                return sType === currentDefault
-            }
-
-            const statesArray = sData || []
-            console.log('Initializing indicatorStates with', statesArray.length, 'total states. Target audit:', defaultAudit)
-            statesArray.forEach(s => {
-                if (isMatchInitial(s.audit_type)) {
-                    const indId = String(s.indicator_id)
-                    const existing = initialIndicatorMap[indId]
-                    if (existing?.consultant_verdict && !s.consultant_verdict) return
-
-                    initialIndicatorMap[indId] = {
-                        status: s.status,
-                        consultant_verdict: s.consultant_verdict,
-                        client_comment: s.client_comment
-                    }
-                    if (s.consultant_verdict === 'validated') initialValidatedCount++
-                }
-            })
-
-            console.log('Resulting individual states mapped:', Object.keys(initialIndicatorMap).length)
-            setIndicatorStates(initialIndicatorMap)
-            setStats({ total: finalTotalCount, validated: initialValidatedCount })
+            // Delegate all indicator state processing to the centralized useEffect
+            setAllIndicatorStates(sData || [])
 
             // Populate criterionComments from loaded quiz data for the selected/default audit
             const restoredComments = {}
@@ -368,7 +424,10 @@ export default function CaseDetails() {
                     table: 'case_messages',
                     filter: `case_id=eq.${id}`
                 }, (payload) => {
-                    setMessages(prev => [...prev, payload.new])
+                    setMessages(prev => {
+                        if (prev.some(m => m.id === payload.new.id)) return prev
+                        return [...prev, payload.new]
+                    })
                     setTimeout(scrollToBottom, 100)
                 })
                 .subscribe()
@@ -458,23 +517,23 @@ export default function CaseDetails() {
 
     // Save consultant verdict for an indicator
     const handleVerdict = async (indicatorId, verdict) => {
-        const type = selectedAudit || 'initial'
-
-        // Optimistic update - consistently use string keys
-        setIndicatorStates(prev => ({
-            ...prev,
-            [String(indicatorId)]: { ...(prev[String(indicatorId)] || {}), consultant_verdict: verdict }
-        }))
+        const type = (selectedAudit || 'initial').trim().toLowerCase()
 
         try {
-            // 1. Update/Insert current state
-            const currentIndState = indicatorStates[String(indicatorId)] || {}
+            // 1. Update/Insert current state - PRESERVE client status if it exists
+            const currentIndState = indicatorStatesMap[String(indicatorId)] || {}
+            
+            // Critical: Don't default to 'to_do' if it would overwrite 'not_applicable' from client
+            const clientStatus = currentIndState.status === 'non_applicable' ? 'not_applicable' : currentIndState.status
+            const statusToSave = clientStatus || (verdict === 'non_applicable' ? 'not_applicable' : 'to_do')
+
             const { data: updatedState, error: upsertError } = await supabase.from('case_indicator_states').upsert({
                 case_id: id,
                 indicator_id: indicatorId,
                 audit_type: type,
-                status: currentIndState.status || 'to_do',
-                consultant_verdict: verdict
+                status: statusToSave,
+                consultant_verdict: verdict,
+                updated_at: new Date().toISOString()
             }, { onConflict: 'case_id,indicator_id,audit_type' }).select().single()
 
             if (upsertError) throw upsertError
@@ -524,36 +583,65 @@ export default function CaseDetails() {
 
 
 
-    // Save consultant comment for a criterion
-    const handleSaveCriterionComment = async (criterionId) => {
-        setSavingComment(criterionId)
-        try {
-            const currentQuiz = quizUploads[criterionId]?.[selectedAudit || 'initial']
-            const existingComment = currentQuiz?.consultant_comment || ''
-            const commentToSave = criterionComments[criterionId] !== undefined ? criterionComments[criterionId] : existingComment
+    const handleSendCommentToChat = async (criterionId) => {
+        const commentToSend = criterionComments[criterionId] || ''
+        if (!commentToSend.trim()) {
+            alert('Veuillez écrire une remarque avant d\'envoyer.')
+            return
+        }
 
-            await supabase.from('criterion_quiz_uploads').upsert({
+        try {
+            setSavingComment(criterionId)
+            
+            // 1. SAVE TO DATABASE (Same as handleSaveCriterionComment)
+            const idStr = String(criterionId)
+            const currentAuditKey = (selectedAudit || 'initial').trim().toLowerCase()
+            const currentQuiz = quizUploads[idStr.startsWith('crit_') ? idStr : 'crit_' + idStr]?.[currentAuditKey]
+            
+            const { error: saveError } = await supabase.from('criterion_quiz_uploads').upsert({
                 case_id: id,
-                criterion_id: criterionId,
-                audit_type: selectedAudit || 'initial',
+                criterion_id: idStr.startsWith('crit_') ? idStr : 'crit_' + idStr,
+                audit_type: currentAuditKey,
                 file_url: currentQuiz?.file_url || '',
                 file_name: currentQuiz?.file_name || '',
-                consultant_comment: commentToSave
+                consultant_comment: commentToSend.trim()
             }, { onConflict: 'case_id,criterion_id,audit_type' })
 
-            // Update local state to reflect saved comment
+            if (saveError) throw saveError
+
+            // 2. SEND TO CHAT
+            const labelId = idStr.replace('crit_', '')
+            const { error: msgError } = await supabase.from('case_messages').insert({
+                case_id: id,
+                sender_id: user.id,
+                content: `[Remarque - Critère ${labelId}] : ${commentToSend.trim()}`
+            })
+
+            if (msgError) throw msgError
+            
+            // Success feedback
+            setSaveConfirmation({ id: criterionId, type: 'sent' })
+            setTimeout(() => setSaveConfirmation(null), 3000)
+            
+            // CLEAR THE FIELD after sending
+            setCriterionComments(prev => ({ ...prev, [criterionId]: '' }))
+            
+            // UPDATE LOCAL QUIZ DATA to keep track of the last comment if needed
             setQuizUploads(prev => ({
                 ...prev,
-                [criterionId]: {
-                    ...(prev[criterionId] || {}),
-                    [selectedAudit || 'initial']: {
-                        ...(prev[criterionId]?.[selectedAudit || 'initial'] || {}),
-                        consultant_comment: criterionComments[criterionId]
+                [idStr]: {
+                    ...prev[idStr],
+                    [currentAuditKey]: {
+                        ...(prev[idStr]?.[currentAuditKey] || {}),
+                        consultant_comment: commentToSend.trim()
                     }
                 }
             }))
+            
+            fetchMessages()
         } catch (err) {
-            console.error('Error saving comment:', err)
+            console.error('Error sending remark:', err)
+            alert('Erreur : ' + err.message)
         } finally {
             setSavingComment(null)
         }
@@ -1081,26 +1169,57 @@ export default function CaseDetails() {
                             {/* AUDIT TYPE TABS */}
                             {caseData.audit_type && caseData.audit_type.length > 0 && (
                                 <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
-                                    {caseData.audit_type.map(type => (
-                                        <button
-                                            key={type}
-                                            onClick={() => setSelectedAudit(type)}
-                                            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${selectedAudit === type
-                                                ? 'bg-gray-900 text-white shadow-md'
-                                                : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
-                                                }`}
-                                        >
-                                            {type}
-                                        </button>
-                                    ))}
+                                    {caseData.audit_type.map(type => {
+                                        const trimmedType = String(type).trim()
+                                        return (
+                                            <button
+                                                key={type}
+                                                onClick={() => setSelectedAudit(trimmedType)}
+                                                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${selectedAudit === trimmedType
+                                                    ? 'bg-gray-900 text-white shadow-md'
+                                                    : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
+                                                    }`}
+                                            >
+                                                {trimmedType}
+                                            </button>
+                                        )
+                                    })}
                                 </div>
                             )}
 
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-lg font-bold text-gray-900">
-                                    Détail de l'Audit : <span className="text-indigo-600 capitalize">{selectedAudit}</span> <span className="text-indigo-400 text-sm font-medium ml-2">({calculatedProgress}%)</span>
-                                </h2>
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="flex flex-col">
+                                    <h2 className="flex items-center gap-3 text-lg font-bold text-gray-900 group">
+                                        Détail de l'Audit : <span className="text-indigo-600 capitalize">{selectedAudit}</span> 
+                                        <span className="text-indigo-400 text-sm font-medium ml-1">({calculatedProgress}%)</span>
+                                    </h2>
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <div className="px-3 py-1 bg-slate-900 text-white rounded-lg flex items-center gap-2 shadow-lg">
+                                            <span className="text-[10px] font-black uppercase text-slate-400">Vérif ID:</span>
+                                            <span className="text-[10px] font-mono font-bold tracking-widest">{id}</span>
+                                        </div>
+                                        <span className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-500 border border-amber-100 uppercase">Phase: {selectedAudit}</span>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                     <button
+                                        onClick={() => fetchCaseDetails()}
+                                        className="p-3 bg-white border border-slate-200 text-slate-400 rounded-xl hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm group"
+                                        title="Rafraîchir"
+                                    >
+                                        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''} group-hover:rotate-180 transition-transform duration-500`} />
+                                    </button>
+                                </div>
                             </div>
+
+                            {/* Alerte si vide */}
+                            {!loading && allIndicatorStates.length === 0 && (
+                                <div className="mb-6 p-6 bg-red-50 border-2 border-dashed border-red-200 rounded-3xl text-center">
+                                    <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-3" />
+                                    <h3 className="text-sm font-black text-red-900 uppercase">Aucune donnée client trouvée !</h3>
+                                    <p className="text-xs text-red-600 mt-1">Vérifiez que le client utilise bien l'ID : <strong>{id}</strong></p>
+                                </div>
+                            )}
 
                             {criteriaData.length === 0 ? (
                                 <div className="p-8 text-center bg-white rounded-2xl border border-gray-100">
@@ -1109,14 +1228,14 @@ export default function CaseDetails() {
                             ) : (
                                 criteriaData.map((crit) => {
                                     const critIndicators = crit.indicators || []
-                                    const verdictCount = critIndicators.filter(i => indicatorStates[String(i.id)]?.consultant_verdict).length
-                                    const nonConformeCount = critIndicators.filter(i => indicatorStates[String(i.id)]?.consultant_verdict === 'non_conforme').length
-                                    const validatedCount = critIndicators.filter(i => indicatorStates[String(i.id)]?.consultant_verdict === 'validated').length
+                                    const verdictCount = critIndicators.filter(i => indicatorStatesMap[String(i.id)]?.consultant_verdict).length
+                                    const nonConformeCount = critIndicators.filter(i => indicatorStatesMap[String(i.id)]?.consultant_verdict === 'non_conforme').length
+                                    const validatedCount = critIndicators.filter(i => indicatorStatesMap[String(i.id)]?.consultant_verdict === 'validated').length
 
                                     // Weighted progress for this criterion
                                     let critWeightedScore = 0
                                     critIndicators.forEach(i => {
-                                        const state = indicatorStates[String(i.id)] || {}
+                                        const state = indicatorStatesMap[String(i.id)] || {}
                                         if (state.consultant_verdict === 'validated') {
                                             critWeightedScore += 100
                                         } else if (state.status === 'doing') {
@@ -1127,7 +1246,8 @@ export default function CaseDetails() {
                                     })
                                     const percent = Math.round(critWeightedScore / (critIndicators.length || 1))
 
-                                    const quiz = quizUploads[crit.id]?.[selectedAudit || 'initial']
+                                    const currentAuditKey = (selectedAudit || 'initial').trim().toLowerCase()
+                                    const quiz = quizUploads['crit_' + crit.id]?.[currentAuditKey]
                                     const savedComment = quiz?.consultant_comment || ''
 
                                     return (
@@ -1164,8 +1284,8 @@ export default function CaseDetails() {
                                                         </span>
                                                     )}
                                                     {quiz && (
-                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold">
-                                                            <FileText className="h-3 w-3" /> Quiz
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold animate-pulse">
+                                                            <FileText className="h-3 w-3" /> Fichier Reçu
                                                         </span>
                                                     )}
                                                 </div>
@@ -1174,7 +1294,7 @@ export default function CaseDetails() {
                                             {/* ── Indicator List ── */}
                                             <div className="divide-y divide-gray-50">
                                                 {critIndicators.map((ind, idx) => {
-                                                    const state = indicatorStates[String(ind.id)] || {}
+                                                    const state = indicatorStatesMap[String(ind.id)] || {}
                                                     const verdict = state.consultant_verdict
                                                     const isOpen = selectedIndicatorId === ind.id
 
@@ -1222,35 +1342,66 @@ export default function CaseDetails() {
                                                             </button>
 
                                                             {/* Expanded verdict panel */}
-                                                            {/* Expanded verdict panel */}
                                                             {isOpen && (
                                                                 <div className="px-6 pb-5 pt-3 bg-indigo-50 border-t border-indigo-100 space-y-4">
+                                                                    
+                                                                    {/* Document Proof from Client */}
+                                                                    {(() => {
+                                                                        const aKey = (selectedAudit || 'initial').trim().toLowerCase()
+                                                                        const indFile = quizUploads['ind_' + ind.id]?.[aKey]
+                                                                        if (!indFile) return null
+                                                                        return (
+                                                                            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 mb-3">
+                                                                                <div className="flex items-center justify-between mb-3">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <div className="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600">
+                                                                                            <FileText className="h-4 w-4" />
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <p className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">Preuve documentaire</p>
+                                                                                            <p className="text-xs font-bold text-emerald-900 truncate max-w-[200px]">{indFile.file_name}</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <a 
+                                                                                        href={indFile.file_url} 
+                                                                                        target="_blank" 
+                                                                                        rel="noreferrer"
+                                                                                        className="px-3 py-1.5 bg-white border border-emerald-200 text-emerald-600 rounded-lg text-[10px] font-black hover:bg-emerald-50 transition-all flex items-center gap-1.5 shadow-sm"
+                                                                                    >
+                                                                                        <Eye className="h-3 w-3" /> VOIR LE FICHIER
+                                                                                    </a>
+                                                                                </div>
+                                                                            </div>
+                                                                        )
+                                                                    })()}
 
                                                                     {/* Statut Client (ReadOnly display) */}
                                                                     <div className="bg-white rounded-xl border border-slate-100 p-4 mb-4">
                                                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Statut déclaré par le client</p>
                                                                         <div className="flex gap-2 mb-3">
-                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all ${state.status === 'done' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-white text-slate-200 border-slate-50'}`}>
-                                                                                <CheckCircle className="h-3.5 w-3.5" /> Fait
-                                                                            </div>
-                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all ${(state.status === 'to_do' || state.status === 'doing' || !state.status) ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white text-slate-200 border-slate-50'}`}>
+                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-xs font-bold transition-all ${(state.status === 'to_do' || state.status === 'doing' || state.status === 'à déclarer') ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-sm' : 'bg-gray-50 text-gray-300 border-gray-100'}`}>
                                                                                 <Clock className="h-3.5 w-3.5" /> En cours
                                                                             </div>
-                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-xs font-bold transition-all ${state.status === 'non_applicable' ? 'bg-slate-50 border-slate-200 text-slate-600' : 'bg-white text-slate-200 border-slate-50'}`}>
+                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-xs font-bold transition-all ${(state.status === 'done' || state.status === 'fait') ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm' : 'bg-gray-50 text-gray-300 border-gray-100'}`}>
+                                                                                <CheckCircle className="h-3.5 w-3.5" /> Fait
+                                                                            </div>
+                                                                            <div className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-xs font-bold transition-all ${(state.status === 'not_applicable' || state.status === 'non_applicable' || state.status === 'na') ? 'bg-orange-50 border-orange-200 text-orange-600 shadow-sm' : 'bg-gray-50 text-gray-300 border-gray-100'}`}>
                                                                                 <CircleOff className="h-3.5 w-3.5" /> Non Applicable
                                                                             </div>
                                                                         </div>
-                                                                        {state.status === 'non_applicable' && state.client_comment && (
-                                                                            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Justification du client</p>
-                                                                                <p className="text-sm text-slate-700 italic">« {state.client_comment} »</p>
+                                                                        {(state.status === 'not_applicable' || state.status === 'non_applicable' || state.status === 'na') && state.client_comment && (
+                                                                            <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                                                                                <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider mb-1">Justification du client</p>
+                                                                                <p className="text-sm text-orange-700 italic">« {state.client_comment} »</p>
                                                                             </div>
                                                                         )}
                                                                     </div>
 
+                                                                    {/* Simplified view: Removed suggestions and auto-validation buttons */}
+
                                                                     {/* Consultant verdict */}
                                                                     <div>
-                                                                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-2">Votre décision</p>
+                                                                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-2">Votre décision finale</p>
                                                                         <div className="flex gap-3">
                                                                             <button
                                                                                 onClick={() => handleVerdict(ind.id, 'validated')}
@@ -1273,8 +1424,8 @@ export default function CaseDetails() {
                                                                             <button
                                                                                 onClick={() => handleVerdict(ind.id, 'non_applicable')}
                                                                                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all border-2 ${verdict === 'non_applicable'
-                                                                                    ? 'bg-slate-500 border-slate-500 text-white shadow-lg shadow-slate-200'
-                                                                                    : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50'
+                                                                                    ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-200'
+                                                                                    : 'border-orange-200 text-orange-600 bg-white hover:bg-orange-50'
                                                                                     }`}
                                                                             >
                                                                                 <CircleOff className="h-4 w-4" /> Non Applicable
@@ -1306,14 +1457,14 @@ export default function CaseDetails() {
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <p className="text-sm font-bold text-indigo-900 truncate">{quiz.file_name || 'Quiz.pdf'}</p>
-                                                                <p className="text-xs text-indigo-400">Soumis le {new Date(quiz.uploaded_at).toLocaleDateString('fr-FR')}</p>
+                                                                <p className="text-xs text-indigo-400">Soumis le {new Date(quiz.uploaded_at || Date.now()).toLocaleDateString('fr-FR')}</p>
                                                             </div>
                                                             <MessageSquare className="h-4 w-4 text-indigo-400 group-hover:text-indigo-600 ml-auto" />
                                                         </a>
                                                     ) : (
                                                         <div className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-gray-200 rounded-xl text-gray-400">
                                                             <FileText className="h-4 w-4" />
-                                                            <span className="text-xs">Aucun quiz soumis pour ce critère ({selectedAudit})</span>
+                                                            <span className="text-xs">Aucun quiz soumis pour ce critère ({(selectedAudit||'initial').toLowerCase()})</span>
                                                         </div>
                                                     )}
                                                 </div>
@@ -1328,20 +1479,25 @@ export default function CaseDetails() {
                                                             placeholder="Notez les erreurs, points à corriger ou observations pour ce critère..."
                                                             className="w-full min-h-[100px] p-4 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-y"
                                                         />
-                                                        <div className="absolute bottom-3 right-3">
-                                                            <button
-                                                                onClick={() => handleSaveCriterionComment(crit.id)}
-                                                                disabled={savingComment === crit.id}
-                                                                className={`px-4 py-2 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-2 ${savingComment === crit.id
-                                                                    ? 'bg-indigo-400 cursor-wait'
-                                                                    : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-md'
-                                                                    }`}
-                                                            >
-                                                                {savingComment === crit.id ? (
-                                                                    <>Saving...</>
-                                                                ) : 'Enregistrer'}
-                                                            </button>
-                                                        </div>
+                                                                <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                                                                    {saveConfirmation?.id === crit.id && (
+                                                                        <span className="text-[10px] font-bold text-emerald-500 animate-fade-in flex items-center gap-1">
+                                                                            <CheckCircle className="h-3 w-3" /> Envoyé
+                                                                        </span>
+                                                                    )}
+                                                                    
+                                                                    <button
+                                                                        onClick={() => handleSendCommentToChat(crit.id)}
+                                                                        disabled={savingComment === crit.id || !criterionComments[crit.id]?.trim()}
+                                                                        className={`px-6 py-2 text-white text-xs font-bold rounded-lg shadow-lg transition-all flex items-center gap-2 ${savingComment === crit.id
+                                                                            ? 'bg-indigo-400 cursor-wait'
+                                                                            : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-md hover:scale-105 active:scale-95'
+                                                                            }`}
+                                                                    >
+                                                                        <Send className="h-3 w-3" />
+                                                                        {savingComment === crit.id ? 'Envoi...' : 'Envoyer'}
+                                                                    </button>
+                                                                </div>
                                                     </div>
                                                 </div>
                                             </div>

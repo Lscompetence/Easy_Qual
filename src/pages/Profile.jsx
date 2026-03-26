@@ -152,6 +152,20 @@ export default function Profile() {
             })
 
             if (error) throw error
+            
+            // 📝 Update profile with new password for admin visibility
+            await supabase
+                .from('profiles')
+                .update({ temp_password: passwordData.newPassword })
+                .eq('id', user.id)
+
+            // 🏢 Update tenant if it's a client (owner_id link)
+            if (role === 'of' || (user.user_metadata?.role === 'of')) {
+                await supabase
+                    .from('tenants')
+                    .update({ initial_password: passwordData.newPassword })
+                    .eq('owner_id', user.id)
+            }
 
             setShowSuccessModal(true)
             setPasswordData({ newPassword: '', confirmPassword: '' })

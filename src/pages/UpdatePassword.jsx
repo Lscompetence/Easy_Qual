@@ -16,27 +16,39 @@ export default function UpdatePassword() {
         switch (roleParam) {
             case 'admin':
                 return {
+                    title: 'Espace Administrateur',
+                    welcome: 'Réinitialisation',
                     color: 'blue',
                     buttonClass: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 shadow-blue-600/20',
                     inputClass: 'focus:border-blue-500 focus:ring-blue-500/20',
+                    badgeClass: 'bg-blue-50 text-blue-600 border-blue-100'
                 }
             case 'consultant':
                 return {
+                    title: 'Espace Consultant',
+                    welcome: 'Réinitialisation',
                     color: 'purple',
-                    buttonClass: 'bg-[#cc6d3e] hover:bg-[#b35d32] focus:ring-purple-500 shadow-purple-600/20',
+                    buttonClass: 'bg-purple-600 hover:bg-purple-700 focus:ring-purple-500 shadow-purple-600/20',
                     inputClass: 'focus:border-purple-500 focus:ring-purple-500/20',
+                    badgeClass: 'bg-purple-50 text-purple-600 border-purple-100'
                 }
             case 'client':
                 return {
+                    title: 'Espace Client',
+                    welcome: 'Réinitialisation',
                     color: 'client',
-                    buttonClass: 'bg-[#cc6d3e] hover:bg-[#b35d32] focus:ring-purple-500 shadow-purple-600/20',
-                    inputClass: 'focus:border-purple-500 focus:ring-purple-500/20',
+                    buttonClass: 'bg-[#cc6d3e] hover:bg-[#b35d32] focus:ring-[#cc6d3e] shadow-[#cc6d3e]/20',
+                    inputClass: 'focus:border-[#cc6d3e] focus:ring-[#cc6d3e]/20',
+                    badgeClass: 'bg-[#cc6d3e]/10 text-[#cc6d3e] border-[#cc6d3e]/20'
                 }
             default:
                 return {
+                    title: 'Espace Global',
+                    welcome: 'Réinitialisation',
                     color: 'blue',
                     buttonClass: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 shadow-blue-600/20',
                     inputClass: 'focus:border-blue-500 focus:ring-blue-500/20',
+                    badgeClass: 'bg-blue-50 text-blue-600 border-blue-100'
                 }
         }
     }, [roleParam])
@@ -116,6 +128,23 @@ export default function UpdatePassword() {
             })
 
             if (error) throw error
+            // 📝 Update profile with new password for admin visibility
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                // Update profile (consultants and others)
+                await supabase
+                    .from('profiles')
+                    .update({ temp_password: password })
+                    .eq('id', user.id)
+                
+                // Update tenant (clients specifically)
+                if (roleParam === 'client' || user.user_metadata?.role === 'of') {
+                    await supabase
+                        .from('tenants')
+                        .update({ initial_password: password })
+                        .eq('owner_id', user.id)
+                }
+            }
 
             setMessage({ type: 'success', text: 'Votre mot de passe a été mis à jour avec succès !' })
 
@@ -149,8 +178,15 @@ export default function UpdatePassword() {
                     <Logo size="large" color={config.color} />
                 </div>
                 <div className="text-center mb-8">
-                    <h2 className="text-xl font-bold text-gray-900">Nouveau mot de passe</h2>
-                    <p className="text-sm text-gray-500 mt-2">
+                    <p className="text-lg font-bold text-gray-900 mb-1">
+                        {config.title}
+                    </p>
+                    <div className="flex justify-center mt-2 mb-4">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${config.badgeClass}`}>
+                            {config.welcome}
+                        </span>
+                    </div>
+                    <p className="text-sm text-gray-500">
                         Veuillez définir votre nouveau mot de passe sécurisé.
                     </p>
                 </div>

@@ -76,6 +76,31 @@ export default function ConsultantCases() {
         if (user) {
             fetchCases()
             fetchWallet()
+
+            // Realtime subscription for cases list
+            const channel = supabase
+                .channel(`consultant_cases_${user.id}`)
+                .on('postgres_changes', {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'cases'
+                }, (payload) => {
+                    console.log('Case list realtime sync:', payload.new.id)
+                    setCases(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c))
+                })
+                .on('postgres_changes', {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'cases'
+                }, () => {
+                    // Refetch if a new case is added (to get relations correctly)
+                    fetchCases()
+                })
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channel)
+            }
         }
     }, [user])
 

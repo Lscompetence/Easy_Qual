@@ -589,7 +589,7 @@ export default function AdminDashboard() {
             const lastName = consultant.last_name || ''
             const email = consultant.email || ''
             const password = consultant.temp_password || '(mot de passe non disponible)'
-            const loginUrl = `${window.location.origin}/login`
+            const loginUrl = `${window.location.origin}/login?role=consultant`
 
             // Compose email body with credentials
             const subject = encodeURIComponent(`Vos accès Easy'Qual - ${firstName} ${lastName}`)

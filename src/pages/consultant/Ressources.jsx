@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
+import ResourceManager from '../../components/consultant/ResourceManager'
 
 // ─── Data ─────────────────────────────────────────────────────────
 
@@ -93,6 +94,11 @@ export default function Ressources() {
                     </div>
 
                     <div className="max-w-6xl mx-auto px-8 py-10 space-y-12">
+
+                        {/* ── Marque Blanche ── */}
+                        <section>
+                            <ResourceManager />
+                        </section>
 
                         {/* ── Processus ── */}
                         <section>

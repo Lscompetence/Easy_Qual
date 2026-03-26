@@ -9,6 +9,12 @@ import {
 } from 'lucide-react'
 import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
+import UniversalPlayer from '../../components/shared/UniversalPlayer'
+
+const isInitialAudit = (type) => {
+    const t = String(type || '').toLowerCase().trim()
+    return t === 'initial' || t.includes('initial') || t.includes('initiale')
+}
 
 export default function ClientDashboard() {
     const { user, profile } = useAuth()
@@ -42,6 +48,16 @@ export default function ClientDashboard() {
     const [showMobileMenu, setShowMobileMenu] = useState(false)
     const messagesEndRef = useRef(null)
 
+    // Manual Save States
+    const [dirtyIndicators, setDirtyIndicators] = useState(new Set())
+    const [pendingFiles, setPendingFiles] = useState({})
+    const [savingIndicator, setSavingIndicator] = useState(null)
+    const [saveSuccess, setSaveSuccess] = useState({})
+    const [globalMessage, setGlobalMessage] = useState(null)
+    const [selectedAudit, setSelectedAudit] = useState(null)
+    const [allStatesData, setAllStatesData] = useState([])
+    const [allQuizData, setAllQuizData] = useState([])
+
     // Determine current page from URL
     const isMessages = location.pathname === '/client/messages'
     const isSessions = location.pathname === '/client/sessions'
@@ -49,12 +65,17 @@ export default function ClientDashboard() {
     const criterionId = isCriterion ? location.pathname.split('/').pop() : null
 
     useEffect(() => {
-        if (user) fetchClientData()
+        const init = async () => {
+            if (user) {
+                await fetchClientData()
+            }
+        }
+        init()
     }, [user])
 
     useEffect(() => {
         if (isMessages && myCase) fetchMessages()
-    }, [isMessages, myCase])
+    }, [isMessages, myCase?.id])
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -98,8 +119,11 @@ export default function ClientDashboard() {
             }
 
             // 2. Fetch Tenants & Cases
+            // Match by either owner_id (consultant) OR client_email (client)
             const { data: tenantsData } = await supabase
-                .from('tenants').select('*').eq('owner_id', user.id)
+                .from('tenants')
+                .select('*')
+                .or(`owner_id.eq.${user.id},client_email.eq.${user.email}`)
 
             if (tenantsData && tenantsData.length > 0) {
                 const tenantIds = tenantsData.map(t => t.id)
@@ -117,6 +141,14 @@ export default function ClientDashboard() {
                     const tenantData = tenantsData.find(t => t.id === caseData.tenant_id)
                     setTenant(tenantData)
                     setMyCase(caseData)
+                    
+                    // Default selected audit to the last one in the list if not set
+                    if (!selectedAudit) {
+                        const types = Array.isArray(caseData.audit_type) ? caseData.audit_type : ['initial']
+                        setSelectedAudit(types[types.length - 1] || 'initial')
+                    }
+                    
+                    console.log("CLIENT CASE ID:", caseData.id)
 
                     // Fetch consultant name
                     const consultantIdToFetch = caseData.consultant_id || tenantData.created_by;
@@ -128,32 +160,24 @@ export default function ClientDashboard() {
                             .single()
                         if (p) setConsultantName(`${p.first_name || ''} ${p.last_name || ''}`.trim())
                     }
-
-                    // Fetch indicator states
+                    // 1. Fetch indicator states 
                     const { data: statesData } = await supabase
                         .from('case_indicator_states')
-                        .select('indicator_id, status, consultant_comment, consultant_verdict')
+                        .select('*')
                         .eq('case_id', caseData.id)
+                    setAllStatesData(statesData || [])
 
-                    const statesMap = {}
-                    statesData?.forEach(s => {
-                        statesMap[s.indicator_id] = {
-                            status: s.status,
-                            consultant_comment: s.consultant_comment,
-                            consultant_verdict: s.consultant_verdict
-                        }
-                    })
-                    setIndicatorStates(statesMap)
-
-                    // Fetch quiz uploads
+                    // 2. Fetch quiz uploads
                     const { data: quizData } = await supabase
                         .from('criterion_quiz_uploads')
-                        .select('criterion_id, file_url, file_name, uploaded_at')
+                        .select('*')
                         .eq('case_id', caseData.id)
+                    setAllQuizData(quizData || [])
 
-                    const quizMap = {}
-                    quizData?.forEach(q => { quizMap[q.criterion_id] = q })
-                    setQuizUploads(quizMap)
+                    // Process initial mapping
+                    const currentAudit = selectedAudit || (caseData.audit_type?.[caseData.audit_type.length - 1] || 'initial')
+                    mapIndicatorStates(statesData || [], currentAudit)
+                    mapQuizUploads(quizData || [])
                 }
             }
         } catch (err) {
@@ -164,66 +188,215 @@ export default function ClientDashboard() {
         }
     }
 
-    const handleStatusChange = async (indicatorId, newStatus) => {
+    const mapIndicatorStates = (data, auditType) => {
+        const statesMap = {}
+        const normalizedAudit = (auditType || 'initial').trim().toLowerCase()
+        const sortedStates = [...data]?.sort((a,b) => (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime())) || []
+        
+        sortedStates.forEach(s => {
+            const sAudit = (s.audit_type || 'initial').trim().toLowerCase()
+            const isMatch = (sAudit === normalizedAudit) || (isInitialAudit(sAudit) && isInitialAudit(normalizedAudit))
+
+            if (isMatch) {
+                const obj = {
+                    status: s.status,
+                    consultant_comment: s.consultant_comment,
+                    consultant_verdict: s.consultant_verdict,
+                    client_comment: s.client_comment,
+                    audit_type: sAudit,
+                    updated_at: s.updated_at
+                }
+                statesMap[s.indicator_id] = obj
+                statesMap[String(s.indicator_id)] = obj
+            }
+        })
+        setIndicatorStates(statesMap)
+    }
+
+    const mapQuizUploads = (data) => {
+        const quizMap = {}
+        data?.forEach(q => { 
+            const aType = (q.audit_type || 'initial').trim().toLowerCase()
+            let storageKey = String(q.criterion_id)
+            if (!storageKey.startsWith('crit_') && !storageKey.startsWith('ind_') && !isNaN(storageKey)) {
+                storageKey = 'crit_' + storageKey
+            }
+            if (!quizMap[storageKey]) quizMap[storageKey] = {}
+            quizMap[storageKey][aType] = q
+        })
+        setQuizUploads(quizMap)
+    }
+
+    // Effect to re-map states when selectedAudit changes
+    useEffect(() => {
+        if (allStatesData.length > 0 && selectedAudit) {
+            mapIndicatorStates(allStatesData, selectedAudit)
+        }
+    }, [selectedAudit, allStatesData.length])
+
+    const handleStatusChange = (indicatorId, newStatus) => {
         if (!myCase) return
 
-        // Optimistic update
+        // Local UI update
         setIndicatorStates(prev => ({
             ...prev,
             [indicatorId]: { ...(prev[indicatorId] || {}), status: newStatus }
         }))
-
-        try {
-            const { error } = await supabase.from('case_indicator_states').upsert({
-                case_id: myCase.id,
-                indicator_id: indicatorId,
-                audit_type: myCase.audit_type?.[0] || 'initial',
-                status: newStatus,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'case_id,indicator_id,audit_type' })
-
-            if (error) throw error
-        } catch (err) {
-            console.error('Error updating status:', err)
-            // Rollback on error could be added here if needed
-        }
+        
+        // Mark as dirty
+        setDirtyIndicators(prev => new Set(prev).add(indicatorId))
     }
 
-    const handleCommentChange = async (indicatorId, comment) => {
+    const handleCommentChange = (indicatorId, comment) => {
         if (!myCase) return
+        setIndicatorStates(prev => ({
+            ...prev,
+            [indicatorId]: { ...(prev[indicatorId] || {}), client_comment: comment }
+        }))
+        setDirtyIndicators(prev => new Set(prev).add(indicatorId))
+    }
+
+    const handleFileSelect = (file, indicatorId) => {
+        if (!file) return
+        setPendingFiles(prev => ({ ...prev, [indicatorId]: file }))
+        setDirtyIndicators(prev => new Set(prev).add(indicatorId))
+    }
+
+    const handleSaveIndicator = async (indicatorId) => {
+        if (!myCase || !user) return
+        setSavingIndicator(indicatorId)
+
         try {
-            const { error } = await supabase.from('case_indicator_states').upsert({
+            const normalizedAudit = (selectedAudit || 'initial').trim().toLowerCase()
+            const state = indicatorStates[indicatorId] || {}
+
+            // 1. Upload file if pending
+            const pendingFile = pendingFiles[indicatorId]
+            if (pendingFile) {
+                const ext = pendingFile.name.split('.').pop()
+                const path = `${myCase.id}/ind_${indicatorId}_${Date.now()}.${ext}`
+                const { error: uploadError } = await supabase.storage
+                    .from('quiz-uploads').upload(path, pendingFile, { upsert: true })
+                
+                if (uploadError) throw uploadError
+                
+                const { data: urlData } = supabase.storage.from('quiz-uploads').getPublicUrl(path)
+                
+                // Save file metadata
+                const { error: quizError } = await supabase.from('criterion_quiz_uploads').upsert({
+                    case_id: myCase.id,
+                    criterion_id: 'ind_' + indicatorId,
+                    audit_type: normalizedAudit,
+                    file_url: urlData.publicUrl,
+                    file_name: pendingFile.name,
+                    uploaded_at: new Date().toISOString()
+                }, { onConflict: 'case_id,criterion_id,audit_type' })
+
+                if (quizError) throw quizError
+                
+                // Update local quiz states
+                setQuizUploads(prev => ({
+                    ...prev,
+                    ['ind_' + indicatorId]: {
+                        ...(prev['ind_' + indicatorId] || {}),
+                        [normalizedAudit]: { 
+                            file_url: urlData.publicUrl, 
+                            file_name: pendingFile.name, 
+                            uploaded_at: new Date().toISOString() 
+                        }
+                    }
+                }))
+            }
+
+            // 2. Save indicator state (status, comment)
+            const { error: stateError } = await supabase.from('case_indicator_states').upsert({
                 case_id: myCase.id,
                 indicator_id: indicatorId,
-                audit_type: myCase.audit_type?.[0] || 'initial',
-                client_comment: comment,
+                audit_type: normalizedAudit,
+                status: state.status || 'to_do',
+                consultant_verdict: state.consultant_verdict,
+                consultant_comment: state.consultant_comment,
                 updated_at: new Date().toISOString()
             }, { onConflict: 'case_id,indicator_id,audit_type' })
-            if (error) throw error
+
+            if (stateError) throw stateError
+
+            // IMMEDIATE LOCAL SYNC
+            setIndicatorStates(prev => ({
+                ...prev,
+                [indicatorId]: {
+                    ...state,
+                    status: state.status || 'to_do',
+                    audit_type: normalizedAudit,
+                    updated_at: new Date().toISOString()
+                }
+            }))
+
+            // Clear dirty state
+            setDirtyIndicators(prev => {
+                const next = new Set(prev)
+                next.delete(indicatorId)
+                next.delete(String(indicatorId))
+                return next
+            })
+            setPendingFiles(prev => {
+                const { [indicatorId]: _, ...rest } = prev
+                const { [String(indicatorId)]: __, ...rest2 } = rest
+                return rest2
+            })
+
+            // Show success confirmation
+            setSaveSuccess(prev => ({ ...prev, [indicatorId]: true }))
+            setGlobalMessage('c bon bien enrgister')
+            setTimeout(() => {
+                setSaveSuccess(prev => ({ ...prev, [indicatorId]: false }))
+                setGlobalMessage(null)
+            }, 5000)
+
         } catch (err) {
-            console.error('Error updating comment:', err)
+            console.error('CRITICAL SAVE ERROR:', err)
+            setGlobalMessage('ERREUR: ' + (err.message || 'Problème de connexion.'))
+            setTimeout(() => setGlobalMessage(null), 5000)
+        } finally {
+            setSavingIndicator(null)
         }
     }
 
-    const handleFileUpload = async (file, criterionId) => {
+    // Standard immediate uploader for Criterion-level or Quiz
+    const handleFileUpload = async (file, targetKey) => {
         if (!file || !myCase) return
-        setUploadingFor(criterionId)
+        setUploadingFor(targetKey)
         try {
             const ext = file.name.split('.').pop()
-            const path = `${myCase.id}/${criterionId}_${Date.now()}.${ext}`
+            const path = `${myCase.id}/${targetKey}_${Date.now()}.${ext}`
             const { error: uploadError } = await supabase.storage
                 .from('quiz-uploads').upload(path, file, { upsert: true })
             if (uploadError) throw uploadError
             const { data: urlData } = supabase.storage.from('quiz-uploads').getPublicUrl(path)
+            
+            const normAudit = (selectedAudit || 'initial').trim().toLowerCase()
+            
             await supabase.from('criterion_quiz_uploads').upsert({
-                case_id: myCase.id, criterion_id: criterionId,
-                audit_type: myCase.audit_type?.[0] || 'initial',
-                file_url: urlData.publicUrl, file_name: file.name, uploaded_by: user.id
+                case_id: myCase.id, 
+                criterion_id: targetKey,
+                audit_type: normAudit,
+                file_url: urlData.publicUrl,
+                file_name: file.name,
+                uploaded_at: new Date().toISOString()
             }, { onConflict: 'case_id,criterion_id,audit_type' })
+
             setQuizUploads(prev => ({
                 ...prev,
-                [criterionId]: { file_url: urlData.publicUrl, file_name: file.name, uploaded_at: new Date().toISOString() }
+                [targetKey]: {
+                    ...(prev[targetKey] || {}),
+                    [normAudit]: { 
+                        file_url: urlData.publicUrl, 
+                        file_name: file.name, 
+                        uploaded_at: new Date().toISOString() 
+                    }
+                }
             }))
+            alert('c bon bien enrgister')
         } catch (err) {
             alert('Erreur upload : ' + err.message)
         } finally {
@@ -231,23 +404,60 @@ export default function ClientDashboard() {
         }
     }
 
-    const handleDeleteFile = async (criterionId) => {
-        if (!myCase) return
-        if (!confirm('Voulez-vous supprimer ce document ?')) return
+    const handleDeleteFile = async (targetKey) => {
+        if (!myCase) {
+            setGlobalMessage("Erreur: Dossier non chargé.");
+            return;
+        }
+
+        // Using window.confirm as requested for security
+        const res = window.confirm('EST CE QUE VOUS VOULEZ SUPPRIMER CE FICHIER ?')
+        if (!res) return
+
         try {
-            const { error } = await supabase.from('criterion_quiz_uploads')
+            const normAudit = (selectedAudit || 'initial').trim().toLowerCase()
+            const caseId = myCase.id
+
+            // Identify the file path first to delete from storage if possible
+            const { data: record } = await supabase.from('criterion_quiz_uploads')
+                .select('file_url')
+                .eq('case_id', caseId)
+                .eq('criterion_id', targetKey)
+                .eq('audit_type', normAudit)
+                .single()
+
+            if (record?.file_url) {
+                const pathParts = record.file_url.split('/')
+                const fileName = pathParts[pathParts.length - 1]
+                const fullPath = `${caseId}/${fileName}`
+                await supabase.storage.from('quiz-uploads').remove([fullPath])
+            }
+
+            // Delete from DB
+            const { error: error1 } = await supabase.from('criterion_quiz_uploads')
                 .delete()
-                .eq('case_id', myCase.id)
-                .eq('criterion_id', criterionId)
-                .eq('audit_type', myCase.audit_type?.[0] || 'initial')
-            if (error) throw error
+                .eq('case_id', caseId)
+                .eq('criterion_id', targetKey)
+                .eq('audit_type', normAudit)
+            
+            if (error1) throw error1
+
+            // Update UI
             setQuizUploads(prev => {
-                const next = { ...prev }
-                delete next[criterionId]
-                return next
+                const updated = { ...prev }
+                if (updated[targetKey]) {
+                    delete updated[targetKey][normAudit]
+                    if (Object.keys(updated[targetKey]).length === 0) delete updated[targetKey]
+                }
+                return updated
             })
+            
+            setGlobalMessage('suppression bien fait')
+            setTimeout(() => setGlobalMessage(null), 5000)
         } catch (err) {
-            alert('Erreur suppression : ' + err.message)
+            console.error('Delete error:', err)
+            setGlobalMessage('Erreur suppression : ' + (err.message || 'Erreur inconnue'))
+            setTimeout(() => setGlobalMessage(null), 5000)
         }
     }
 
@@ -259,7 +469,6 @@ export default function ClientDashboard() {
             const { error } = await supabase.from('case_messages').insert({
                 case_id: myCase.id,
                 sender_id: user.id,
-                sender_role: 'of',
                 content: newMessage.trim()
             })
             if (error) throw error
@@ -274,8 +483,8 @@ export default function ClientDashboard() {
 
     // Stats
     const totalIndicators = indicators.length
-    const validatedCount = Object.values(indicatorStates).filter(s => s?.status === 'done').length
-    const toTreatCount = Object.values(indicatorStates).filter(s => s?.status === 'to_do' || !s?.status).length
+    const validatedCount = Object.values(indicatorStates).filter(s => s?.status === 'done' || s?.status === 'not_applicable' || s?.status === 'non_applicable').length
+    const toTreatCount = Object.values(indicatorStates).filter(s => !s?.status || (s?.status !== 'done' && s?.status !== 'not_applicable' && s?.status !== 'non_applicable')).length
     const rejectedCount = Object.values(indicatorStates).filter(s => s?.consultant_verdict === 'non_conforme').length
     const progressPercent = totalIndicators > 0 ? Math.round((validatedCount / totalIndicators) * 100) : 0
 
@@ -351,6 +560,15 @@ export default function ClientDashboard() {
                         onContact={() => navigate('/client/messages')}
                         setShowMobileMenu={setShowMobileMenu}
                     />
+                    
+                    {globalMessage && (
+                        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] animate-in slide-in-from-top duration-300">
+                             <div className={`px-6 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 ${globalMessage.includes('ERREUR') || globalMessage.includes('Erreur') ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                                <CheckCircle className="h-5 w-5" />
+                                <span className="text-sm font-black uppercase tracking-wider">{globalMessage}</span>
+                             </div>
+                        </div>
+                    )}
                     <main className="flex-1 flex items-center justify-center p-8">
                         <div className="w-full max-w-xl bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                             {/* Header */}
@@ -442,6 +660,15 @@ export default function ClientDashboard() {
                         onContact={() => navigate('/client/messages')}
                         setShowMobileMenu={setShowMobileMenu}
                     />
+
+                    {globalMessage && (
+                        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] animate-in slide-in-from-top duration-300">
+                             <div className={`px-6 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 ${globalMessage.includes('ERREUR') || globalMessage.includes('Erreur') ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                                <CheckCircle className="h-5 w-5" />
+                                <span className="text-sm font-black uppercase tracking-wider">{globalMessage}</span>
+                             </div>
+                        </div>
+                    )}
                     <main className="flex-1 flex items-center justify-center p-8">
                         <div className="w-full max-w-xl bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all">
                             <div className="p-10 text-center">
@@ -511,12 +738,44 @@ export default function ClientDashboard() {
                         onContact={() => navigate('/client/messages')}
                         setShowMobileMenu={setShowMobileMenu}
                     />
+
+                    {globalMessage && (
+                        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] animate-in slide-in-from-top duration-300">
+                             <div className={`px-6 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 ${globalMessage.includes('ERREUR') || globalMessage.includes('Erreur') ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                                <CheckCircle className="h-5 w-5" />
+                                <span className="text-sm font-black uppercase tracking-wider">{globalMessage}</span>
+                             </div>
+                        </div>
+                    )}
                     <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
+                        {/* Phase Selector in Detail View */}
+                        <div className="mb-8 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                            {(Array.isArray(myCase?.audit_type) ? myCase.audit_type : []).map((type, i) => {
+                                const isActive = selectedAudit === type
+                                return (
+                                    <button 
+                                        key={i} 
+                                        onClick={() => setSelectedAudit(type)}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black tracking-tight transition-all border-2 whitespace-nowrap ${
+                                            isActive 
+                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-500 shadow-sm' 
+                                                : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <div className={`h-2 w-2 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-200'}`} />
+                                        {type.toUpperCase()}
+                                    </button>
+                                )
+                            })}
+                        </div>
                         {/* Criterion Header */}
                         <div className="mb-6">
-                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">
-                                CRITÈRE {criterionIndex + 1}
-                            </p>
+                            <div className="flex items-center gap-3 mb-1">
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                                    CRITÈRE {criterionIndex + 1}
+                                </p>
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-gray-100 text-gray-400">ID: {myCase?.id?.substring(0,8)}</span>
+                            </div>
                             <h1 className="text-2xl font-black text-gray-900">{currentCriterion.label}</h1>
                             <p className="text-sm text-gray-500 mt-1">
                                 Découvrez comment communiquer de manière transparente et exhaustive sur votre offre de formation vers vos publics cibles.
@@ -525,20 +784,12 @@ export default function ClientDashboard() {
 
                         {/* Content grid */}
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                            {/* Video placeholder */}
+                            {/* Universal Player (Marque Blanche) */}
                             <div className="lg:col-span-2">
-                                <div className="bg-gray-900 rounded-2xl overflow-hidden aspect-video flex items-center justify-center relative">
-                                    <div className="absolute inset-0 bg-gradient-to-br from-[#cc6d3e]/20 to-gray-900"></div>
-                                    <div className="relative z-10 text-center">
-                                        <div className="h-14 w-14 rounded-full bg-white/10 backdrop-blur flex items-center justify-center mx-auto mb-3 border border-white/20">
-                                            <div className="w-0 h-0 border-l-[20px] border-l-white border-y-[12px] border-y-transparent ml-1" />
-                                        </div>
-                                        <p className="text-white/60 text-sm font-medium">Vidéo du cours</p>
-                                    </div>
-                                    <div className="absolute top-3 left-3 bg-black/50 text-white text-xs px-2 py-1 rounded font-mono">
-                                        Vidéo Cours · {currentCriterion.label?.split(' ').slice(0, 2).join(' ')}
-                                    </div>
-                                </div>
+                                <UniversalPlayer 
+                                    indicatorId={currentCriterion?.items?.[0]?.id} 
+                                    consultantId={myCase?.consultant_id || tenant?.created_by} 
+                                />
                             </div>
 
                             {/* Resources + Quiz */}
@@ -557,38 +808,59 @@ export default function ClientDashboard() {
                                     </div>
                                 </div>
 
-                                {/* Quiz */}
+                                {/* Quiz / Ressource */}
                                 <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
                                     <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Validation</h3>
                                     <p className="text-xs text-gray-500 mb-3">Remplissez le fichier ressource et téléversez-le ici</p>
-                                    {quizUploads[currentCriterion.id] ? (
-                                        <div className="space-y-2">
-                                            <div className="flex items-center gap-2 p-2 bg-emerald-50 rounded-xl border border-emerald-100">
-                                                <CheckCircle className="h-4 w-4 text-emerald-500" />
-                                                <span className="text-xs font-bold text-emerald-700 truncate">
-                                                    {quizUploads[currentCriterion.id].file_name}
-                                                </span>
-                                                <Download className="h-3.5 w-3.5 text-emerald-500 ml-auto cursor-pointer" onClick={() => window.open(quizUploads[currentCriterion.id].file_url, '_blank')} />
-                                            </div>
+                                    
+                                    {(() => {
+                                        const normAudit = (myCase.audit_type?.[myCase.audit_type.length - 1] || 'initial').trim().toLowerCase()
+                                        const quiz = quizUploads['crit_' + currentCriterion.id]?.[normAudit]
+                                        
+                                        if (quiz) {
+                                            return (
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center gap-2 p-2 bg-emerald-50 rounded-xl border border-emerald-100">
+                                                        <CheckCircle className="h-4 w-4 text-emerald-500" />
+                                                        <span className="text-xs font-bold text-emerald-700 truncate">
+                                                            {quiz.file_name}
+                                                        </span>
+                                                        <Download 
+                                                            className="h-3.5 w-3.5 text-emerald-500 ml-auto cursor-pointer" 
+                                                            onClick={() => window.open(quiz.file_url, '_blank')} 
+                                                        />
+                                                    </div>
+                                                    <div className="flex justify-between items-center px-1">
+                                                        <button
+                                                            onClick={() => { setPendingCriterionId('crit_' + currentCriterion.id); fileInputRef.current?.click() }}
+                                                            className="text-[10px] font-bold text-[#cc6d3e] hover:underline"
+                                                        >
+                                                            Remplacer
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteFile('crit_' + currentCriterion.id)}
+                                                            className="text-[10px] font-bold text-red-400 hover:text-red-600 transition-colors"
+                                                        >
+                                                            Supprimer
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )
+                                        }
+
+                                        return (
                                             <button
-                                                onClick={() => { setPendingCriterionId(currentCriterion.id); fileInputRef.current?.click() }}
-                                                className="w-full py-1.5 text-[10px] font-bold text-[#cc6d3e] hover:underline"
+                                                onClick={() => { setPendingCriterionId('crit_' + currentCriterion.id); fileInputRef.current?.click() }}
+                                                disabled={uploadingFor === 'crit_' + currentCriterion.id}
+                                                className="w-full py-2 bg-[#cc6d3e] text-white rounded-xl text-xs font-bold hover:bg-[#b35d32] transition-all shadow-md shadow-[#cc6d3e]/20 disabled:opacity-50 flex items-center justify-center gap-2"
                                             >
-                                                Remplacer le fichier
+                                                {uploadingFor === 'crit_' + currentCriterion.id ? (
+                                                    <div className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                ) : <Upload className="h-3.5 w-3.5" />}
+                                                {uploadingFor === 'crit_' + currentCriterion.id ? 'Téléchargement...' : 'Lancer le Quiz'}
                                             </button>
-                                        </div>
-                                    ) : (
-                                        <button
-                                            onClick={() => { setPendingCriterionId(currentCriterion.id); fileInputRef.current?.click() }}
-                                            disabled={uploadingFor === currentCriterion.id}
-                                            className="w-full py-2 bg-[#cc6d3e] text-white rounded-xl text-xs font-bold hover:bg-[#b35d32] transition-all shadow-md shadow-[#cc6d3e]/20 disabled:opacity-50 flex items-center justify-center gap-2"
-                                        >
-                                            {uploadingFor === currentCriterion.id ? (
-                                                <div className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            ) : <Upload className="h-3.5 w-3.5" />}
-                                            {uploadingFor === currentCriterion.id ? 'Téléchargement...' : 'Lancer le Quiz'}
-                                        </button>
-                                    )}
+                                        )
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -605,13 +877,15 @@ export default function ClientDashboard() {
                                 <div className="absolute left-[13px] top-8 bottom-8 w-0.5 bg-gray-100 -z-0" />
 
                                 {currentCriterion.items.map((ind, idx) => {
-                                    const state = indicatorStates[ind.id] || {}
-                                    const status = state.status || 'to_do'
+                                    // Robust state lookup: try both number and string keys
+                                     const state = indicatorStates[ind.id] || indicatorStates[String(ind.id)] || {}
+                                     const status = state.status || null
                                     const verdict = state.consultant_verdict
-                                    const fileData = quizUploads[ind.id + '_ind']
+                                    const currentAuditKey = (selectedAudit || 'initial').trim().toLowerCase()
+                                    const fileData = quizUploads['ind_' + ind.id]?.[currentAuditKey]
 
                                     const isDone = status === 'done'
-                                    const isNonApplicable = status === 'non_applicable'
+                                    const isNonApplicable = status === 'not_applicable' || status === 'non_applicable'
 
                                     return (
                                         <div key={ind.id} className="relative z-10 group">
@@ -626,12 +900,13 @@ export default function ClientDashboard() {
                                                 <div className="flex-1 min-w-0 bg-slate-50/50 rounded-[20px] px-6 py-4 border border-slate-100/50 group-hover:bg-slate-50 transition-colors">
                                                     <div className="flex items-center gap-3">
                                                         <h3 className="text-base font-black text-slate-900">Indicateur {idx + 1}</h3>
-                                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${status === 'done' ? 'text-emerald-600 bg-emerald-50' :
-                                                            status === 'non_applicable' ? 'text-slate-500 bg-slate-50' :
-                                                                'text-blue-600 bg-blue-50'
-                                                            }`}>
-                                                            {status === 'done' ? 'FAIT' : (status === 'non_applicable' ? 'NA' : 'EN COURS')}
-                                                        </span>
+                                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${status === 'not_applicable' || status === 'non_applicable' ? 'text-slate-500 bg-slate-50' :
+                                                                 status === 'to_do' || status === 'doing' ? 'text-blue-600 bg-blue-50' :
+                                                                 status === 'done' ? 'text-emerald-600 bg-emerald-50' :
+                                                                     'text-blue-600 bg-blue-50'
+                                                                 }`}>
+                                                                {status === 'done' ? 'FAIT' : (status === 'not_applicable' || status === 'non_applicable' ? 'NA' : (status === 'to_do' || status === 'doing' ? 'EN COURS' : 'À DÉCLARER'))}
+                                                            </span>
                                                     </div>
                                                     <p className="text-sm text-slate-500 mt-1.5 font-medium leading-relaxed">{ind.label}</p>
                                                 </div>
@@ -651,11 +926,13 @@ export default function ClientDashboard() {
                                             <div className="ml-[14px] pl-8">
                                                 <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_4px_24px_rgba(0,0,0,0.04)] p-8 relative transition-all">
                                                     {/* Top Right Model Button */}
-                                                    <div className="absolute top-6 right-8">
-                                                        <button className="flex items-center gap-2 px-4 py-2 bg-[#f5f0ff] text-[#7c3aed] rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-[#ede5ff] transition-all">
-                                                            <Download className="h-3.5 w-3.5" /> Télécharger le modèle type
-                                                        </button>
-                                                    </div>
+                                                    {status !== 'non_applicable' && (
+                                                        <div className="absolute top-6 right-8">
+                                                            <button className="flex items-center gap-2 px-4 py-2 bg-[#f5f0ff] text-[#7c3aed] rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-[#ede5ff] transition-all">
+                                                                <Download className="h-3.5 w-3.5" /> Télécharger le modèle type
+                                                            </button>
+                                                        </div>
+                                                    )}
 
                                                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
                                                         {/* Status Selection (Left) */}
@@ -665,15 +942,16 @@ export default function ClientDashboard() {
                                                                 {[
                                                                     { val: 'to_do', label: 'En cours', icon: Sun, color: 'text-blue-600', active: 'border-blue-200 bg-blue-50 text-blue-700' },
                                                                     { val: 'done', label: 'Fait', icon: Flag, color: 'text-emerald-500', active: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
-                                                                    { val: 'non_applicable', label: 'Non applicable', icon: Ban, color: 'text-slate-500', active: 'border-slate-300 bg-slate-50 text-slate-700' },
+                                                                    { val: 'not_applicable', label: 'Non applicable', icon: Ban, color: 'text-orange-500', active: 'border-orange-500 bg-orange-50 text-orange-700' },
                                                                 ].map(opt => (
                                                                     <button
                                                                         key={opt.val}
                                                                         onClick={() => handleStatusChange(ind.id, opt.val)}
+                                                                        disabled={!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null}
                                                                         className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 text-[13px] font-bold transition-all ${status === opt.val
                                                                             ? opt.active
                                                                             : 'border-transparent bg-gray-50/50 text-gray-400 hover:bg-gray-50'
-                                                                            }`}
+                                                                            } ${(!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null) ? 'opacity-50 cursor-not-allowed' : 'opacity-100 cursor-pointer'}`}
                                                                     >
                                                                         <div className="flex items-center gap-3">
                                                                             <opt.icon className={`h-4 w-4 ${status === opt.val ? '' : 'text-gray-300'}`} />
@@ -688,58 +966,103 @@ export default function ClientDashboard() {
                                                         {/* File Management (Right) */}
                                                         <div className="lg:col-span-8">
                                                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-5">
-                                                                {status === 'non_applicable' ? 'Justification de non-applicabilité' : 'Preuve documentaire'}
+                                                                Preuve documentaire
                                                             </p>
 
-                                                            {status === 'non_applicable' ? (
-                                                                <div className="h-full">
-                                                                    <textarea
-                                                                        placeholder="Pourquoi cet indicateur ne s'applique pas à votre organisme ?"
-                                                                        value={state.client_comment || ''}
-                                                                        onChange={(e) => setIndicatorStates(prev => ({...prev, [ind.id]: { ...(prev[ind.id] || {}), client_comment: e.target.value }}))}
-                                                                        onBlur={(e) => handleCommentChange(ind.id, e.target.value)}
-                                                                        className="w-full h-[154px] px-5 py-4 rounded-2xl border-2 border-gray-50 text-sm text-gray-600 outline-none focus:border-blue-100 focus:bg-white transition-all resize-none bg-gray-50/50"
-                                                                    />
-                                                                </div>
-                                                            ) : (
-                                                                <div className="h-full">
-                                                                    {fileData ? (
-                                                                        <div className="h-[154px] flex flex-col justify-center bg-gray-50/50 border-2 border-dashed border-gray-100 rounded-2xl px-8 relative">
-                                                                            <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-5 shadow-sm">
-                                                                                <div className="h-12 w-12 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center text-red-500">
-                                                                                    <FileText className="h-7 w-7" />
-                                                                                </div>
-                                                                                <div className="flex-1 min-w-0">
-                                                                                    <p className="text-sm font-black text-gray-900 truncate mb-1">{fileData.file_name}</p>
-                                                                                    <p className="text-[11px] text-emerald-600 font-bold flex items-center gap-1.5 uppercase tracking-wider">
-                                                                                        <Check className="h-3 w-3 stroke-[3px]" /> Prêt pour l'audit
-                                                                                    </p>
-                                                                                </div>
-                                                                                <button
-                                                                                    onClick={() => handleDeleteFile(ind.id + '_ind')}
-                                                                                    className="p-2 text-gray-300 hover:text-red-500 transition-colors"
-                                                                                >
-                                                                                    <Trash2 className="h-5 w-5" />
-                                                                                </button>
+                                                            <div className="flex-1">
+                                                                { (fileData || pendingFiles[ind.id]) ? (
+                                                                    <div className="h-[154px] flex flex-col justify-center bg-gray-50/50 border-2 border-dashed border-gray-100 rounded-2xl px-8 relative">
+                                                                        <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-5 shadow-sm">
+                                                                            <div className="h-12 w-12 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center text-red-500">
+                                                                                <FileText className="h-7 w-7" />
                                                                             </div>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <p className="text-sm font-black text-gray-900 truncate mb-1">
+                                                                                    {pendingFiles[ind.id]?.name || (fileData ? fileData.file_name : '')}
+                                                                                </p>
+                                                                                <p className={`text-[11px] ${pendingFiles[ind.id] ? 'text-blue-500' : 'text-emerald-600'} font-bold flex items-center gap-1.5 uppercase tracking-wider`}>
+                                                                                    {pendingFiles[ind.id] ? (
+                                                                                        <>Non enregistré</>
+                                                                                    ) : (
+                                                                                        <><Check className="h-3 w-3 stroke-[3px]" /> Prêt pour l'audit</>
+                                                                                    )}
+                                                                                </p>
+                                                                            </div>
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.preventDefault();
+                                                                                    e.stopPropagation();
+                                                                                    if (pendingFiles[ind.id] || pendingFiles[String(ind.id)]) {
+                                                                                        setPendingFiles(prev => {
+                                                                                            const { [ind.id]: _, [String(ind.id)]: __, ...rest } = prev
+                                                                                            return rest
+                                                                                        })
+                                                                                    } else {
+                                                                                        handleDeleteFile('ind_' + ind.id)
+                                                                                    }
+                                                                                }}
+                                                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer z-20"
+                                                                                title="Supprimer le fichier"
+                                                                            >
+                                                                                <Trash2 className="h-5 w-5" />
+                                                                            </button>
                                                                         </div>
-                                                                    ) : (
-                                                                        <button
-                                                                            onClick={() => { setPendingCriterionId(ind.id + '_ind'); fileInputRef.current?.click() }}
-                                                                            disabled={uploadingFor === ind.id + '_ind'}
-                                                                            className="w-full h-[154px] flex flex-col items-center justify-center gap-3 rounded-[24px] border-2 border-dashed border-gray-100 text-gray-500 hover:border-[#7c3aed]/30 hover:bg-[#fbf9ff] transition-all group"
-                                                                        >
-                                                                            <div className="h-12 w-12 bg-white rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-gray-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                                                <Upload className="h-6 w-6 text-[#7c3aed]" />
-                                                                            </div>
-                                                                            <div className="text-center">
-                                                                                <p className="text-sm font-black text-gray-800">Cliquez pour uploader un document</p>
-                                                                                <p className="text-[11px] text-gray-400 mt-1 font-medium">Simule un upload et passe en "Fait"</p>
-                                                                            </div>
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <button
+                                                                        onClick={() => { setPendingCriterionId(ind.id); fileInputRef.current?.click() }}
+                                                                        disabled={uploadingFor === 'ind_' + ind.id || savingIndicator === ind.id}
+                                                                        className="w-full h-[154px] flex flex-col items-center justify-center gap-3 rounded-[24px] border-2 border-dashed border-gray-100 text-gray-500 hover:border-[#7c3aed]/30 hover:bg-[#fbf9ff] transition-all group"
+                                                                    >
+                                                                        <div className="h-12 w-12 bg-white rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-gray-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                                            <Upload className="h-6 w-6 text-[#7c3aed]" />
+                                                                        </div>
+                                                                        <div className="text-center">
+                                                                            <p className="text-sm font-black text-gray-800">Cliquez pour ajouter un document</p>
+                                                                            <p className="text-[11px] text-gray-400 mt-1 font-medium">Sera enregistré avec l'indicateur</p>
+                                                                        </div>
+                                                                    </button>
+                                                                )}
+                                                            </div>
+
+                                                            {/* SAVE BUTTON AT BOTTOM OF CARD */}
+                                                            <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-end gap-4">
+                                                                {saveSuccess[ind.id] && (
+                                                                    <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100 animate-in fade-in zoom-in duration-300">
+                                                                        <CheckCircle className="h-4 w-4 text-emerald-500" />
+                                                                        <span className="text-emerald-600 text-[11px] font-black uppercase tracking-widest leading-none">
+                                                                            Enregistrement réussi !
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                                
+                                                                 <button
+                                                                     onClick={() => {
+                                                                         if (!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null) {
+                                                                             // "Modifier" mode triggered by making it dirty (using current status as starting point)
+                                                                             setDirtyIndicators(prev => new Set(prev).add(ind.id))
+                                                                         } else {
+                                                                             handleSaveIndicator(ind.id)
+                                                                         }
+                                                                     }}
+                                                                     disabled={savingIndicator === ind.id}
+                                                                     className={`min-w-[140px] h-11 px-8 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                                                                         savingIndicator === ind.id 
+                                                                             ? 'bg-gray-100 text-gray-400 cursor-progress'
+                                                                             : (dirtyIndicators.has(ind.id) || pendingFiles[ind.id] || status === null)
+                                                                                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700 hover:scale-[1.02] active:scale-95'
+                                                                                 : 'bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100'
+                                                                     }`}
+                                                                 >
+                                                                     {savingIndicator === ind.id ? (
+                                                                         'Enregistrement...'
+                                                                     ) : (dirtyIndicators.has(ind.id) || pendingFiles[ind.id] || status === null) ? (
+                                                                         'Enregistrer'
+                                                                     ) : (
+                                                                         'Modifier mon choix'
+                                                                     )}
+                                                                 </button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -757,7 +1080,14 @@ export default function ClientDashboard() {
                     accept=".pdf,.doc,.docx,.jpg,.png" className="hidden"
                     onChange={e => {
                         const file = e.target.files?.[0]
-                        if (file && pendingCriterionId) handleFileUpload(file, pendingCriterionId)
+                        if (file && pendingCriterionId) {
+                            if (typeof pendingCriterionId === 'number') {
+                                handleFileSelect(file, pendingCriterionId)
+                            } else {
+                                // Legacy path for criterion-level uploads
+                                handleFileUpload(file, pendingCriterionId)
+                            }
+                        }
                         e.target.value = ''
                     }}
                 />
@@ -785,6 +1115,15 @@ export default function ClientDashboard() {
                     onContact={() => navigate('/client/messages')}
                     setShowMobileMenu={setShowMobileMenu}
                 />
+
+                {globalMessage && (
+                    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] animate-in slide-in-from-top duration-300">
+                            <div className={`px-6 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 ${globalMessage.includes('ERREUR') || globalMessage.includes('Erreur') ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                            <CheckCircle className="h-5 w-5" />
+                            <span className="text-sm font-black uppercase tracking-wider">{globalMessage}</span>
+                            </div>
+                    </div>
+                )}
 
                 <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
 
