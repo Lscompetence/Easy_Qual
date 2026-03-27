@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -9,6 +9,7 @@ import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
+import StatusModal from '../../components/shared/StatusModal'
 import {
     ChevronLeft,
     FileText,
@@ -71,6 +72,7 @@ const isInitialAudit = (type) => {
 export default function CaseDetails() {
     const { id } = useParams()
     const navigate = useNavigate()
+    const location = useLocation()
     const { user } = useAuth()
 
     const [loading, setLoading] = useState(true)
@@ -106,6 +108,31 @@ export default function CaseDetails() {
     const [loadingMessages, setLoadingMessages] = useState(false)
     const [scrolledToBottom, setScrolledToBottom] = useState(false)
     const messagesEndRef = useRef(null)
+
+    // Status Modal State
+    const [statusModal, setStatusModal] = useState({
+        isOpen: false,
+        type: 'info',
+        title: '',
+        message: '',
+        onConfirm: null,
+        confirmText: 'OK',
+        cancelText: 'Annuler',
+        isLoading: false
+    })
+
+    const showStatus = (type, title, message, onConfirm = null, confirmText = 'OK', cancelText = 'Annuler') => {
+        setStatusModal({
+            isOpen: true,
+            type,
+            title,
+            message,
+            onConfirm,
+            confirmText,
+            cancelText,
+            isLoading: false
+        })
+    }
 
     // Removed redundant isInitialAudit helper (using global version)
 
@@ -216,6 +243,15 @@ export default function CaseDetails() {
         }
     }, [progressPercent, caseData?.progress, caseData?.status, id])
 
+    // Handle tab initialization from URL
+    useEffect(() => {
+        const params = new URLSearchParams(location.search)
+        const tab = params.get('tab')
+        if (tab === 'planification' || tab === 'messagerie' || tab === 'suivi_rno') {
+            setActiveTab(tab)
+        }
+    }, [location.search])
+
     useEffect(() => {
         if (!caseData || criteriaData.length === 0) return
         
@@ -302,7 +338,7 @@ export default function CaseDetails() {
 
             const { data: cData, error: cError } = await supabase
                 .from('cases')
-                .select(`*, tenants (name, siret, logo_url)`)
+                .select(`*, tenants (name, siret, logo_url, owner_id, client_email)`)
                 .eq('id', id)
                 .single()
 
@@ -487,7 +523,7 @@ export default function CaseDetails() {
             setTimeout(scrollToBottom, 100)
         } catch (err) {
             console.error('Error sending message:', err)
-            alert("Erreur lors de l'envoi du message : " + err.message)
+            showStatus('error', 'Erreur d\'envoi', err.message)
         }
     }
 
@@ -586,7 +622,7 @@ export default function CaseDetails() {
     const handleSendCommentToChat = async (criterionId) => {
         const commentToSend = criterionComments[criterionId] || ''
         if (!commentToSend.trim()) {
-            alert('Veuillez écrire une remarque avant d\'envoyer.')
+            showStatus('warning', 'Champ vide', 'Veuillez écrire une remarque avant d\'envoyer.')
             return
         }
 
@@ -641,7 +677,7 @@ export default function CaseDetails() {
             fetchMessages()
         } catch (err) {
             console.error('Error sending remark:', err)
-            alert('Erreur : ' + err.message)
+            showStatus('error', 'Erreur', err.message)
         } finally {
             setSavingComment(null)
         }
@@ -752,13 +788,27 @@ export default function CaseDetails() {
     }
 
     const handleDeleteEvent = async (eventId) => {
-        if (!window.confirm("Supprimer cette étape ?")) return
-        try {
-            await supabase.from('case_events').delete().eq('id', eventId)
-            setEvents(prev => prev.filter(e => e.id !== eventId))
-        } catch (err) {
-            console.error('Error deleting event:', err)
-        }
+        showStatus(
+            'delete',
+            'Supprimer cette étape ?',
+            'Êtes-vous sûr de vouloir retirer cette étape du parcours ? Cette action est irréversible.',
+            async () => {
+                setStatusModal(prev => ({ ...prev, isLoading: true }))
+                try {
+                    const { error } = await supabase.from('case_events').delete().eq('id', eventId)
+                    if (error) throw error
+                    setEvents(prev => prev.filter(e => e.id !== eventId))
+                    setStatusModal(prev => ({ ...prev, isOpen: false, isLoading: false }))
+                    showStatus('success', 'Étape supprimée', 'L\'étape a été retirée du parcours avec succès.')
+                } catch (err) {
+                    console.error('Error deleting event:', err)
+                    setStatusModal(prev => ({ ...prev, isLoading: false }))
+                    showStatus('error', 'Erreur', 'Impossible de supprimer cette étape : ' + err.message)
+                }
+            },
+            'Confirmer',
+            'Annuler'
+        )
     }
 
     const handleUpdateEventStatus = async (eventId, newStatus) => {
@@ -1202,22 +1252,19 @@ export default function CaseDetails() {
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
-                                     <button
-                                        onClick={() => fetchCaseDetails()}
-                                        className="p-3 bg-white border border-slate-200 text-slate-400 rounded-xl hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm group"
-                                        title="Rafraîchir"
-                                    >
-                                        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''} group-hover:rotate-180 transition-transform duration-500`} />
-                                    </button>
                                 </div>
                             </div>
 
                             {/* Alerte si vide */}
-                            {!loading && allIndicatorStates.length === 0 && (
-                                <div className="mb-6 p-6 bg-red-50 border-2 border-dashed border-red-200 rounded-3xl text-center">
-                                    <AlertTriangle className="h-8 w-8 text-red-500 mx-auto mb-3" />
-                                    <h3 className="text-sm font-black text-red-900 uppercase">Aucune donnée client trouvée !</h3>
-                                    <p className="text-xs text-red-600 mt-1">Vérifiez que le client utilise bien l'ID : <strong>{id}</strong></p>
+                            {/* Alerte si Compte Non Lié uniquement */}
+                            {!loading && allIndicatorStates.length === 0 && !caseData?.tenants?.owner_id && (
+                                <div className="mb-6 p-6 border-2 border-dashed rounded-3xl text-center bg-amber-50 border-amber-200">
+                                    <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto mb-3" />
+                                    <h3 className="text-sm font-black text-amber-900 uppercase">Compte client non activé</h3>
+                                    <p className="text-xs text-amber-600 mt-1">
+                                        Le compte de connexion pour <strong>{caseData?.tenants?.client_email}</strong> n'a pas été créé correctement lors de l'invitation.
+                                        <br />Veuillez utiliser l'option "Modifier" pour ré-enregistrer l'email ou contacter le support.
+                                    </p>
                                 </div>
                             )}
 
@@ -1661,6 +1708,18 @@ export default function CaseDetails() {
                 onClose={() => setShowNewCaseModal(false)}
                 user={user}
                 onSuccess={() => { setShowNewCaseModal(false); navigate('/consultant/cases') }}
+            />
+
+            <StatusModal
+                isOpen={statusModal.isOpen}
+                onClose={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={statusModal.onConfirm}
+                type={statusModal.type}
+                title={statusModal.title}
+                message={statusModal.message}
+                confirmText={statusModal.confirmText}
+                cancelText={statusModal.cancelText}
+                isLoading={statusModal.isLoading}
             />
         </div>
     )

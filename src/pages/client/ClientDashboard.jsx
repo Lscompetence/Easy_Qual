@@ -10,6 +10,7 @@ import {
 import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
 import UniversalPlayer from '../../components/shared/UniversalPlayer'
+import StatusModal from '../../components/shared/StatusModal'
 
 const isInitialAudit = (type) => {
     const t = String(type || '').toLowerCase().trim()
@@ -58,6 +59,31 @@ export default function ClientDashboard() {
     const [allStatesData, setAllStatesData] = useState([])
     const [allQuizData, setAllQuizData] = useState([])
     const [caseEvents, setCaseEvents] = useState([])
+
+    // Status Modal State
+    const [statusModal, setStatusModal] = useState({
+        isOpen: false,
+        type: 'info',
+        title: '',
+        message: '',
+        onConfirm: null,
+        confirmText: 'OK',
+        cancelText: 'Annuler',
+        isLoading: false
+    })
+
+    const showStatus = (type, title, message, onConfirm = null, confirmText = 'OK', cancelText = 'Annuler') => {
+        setStatusModal({
+            isOpen: true,
+            type,
+            title,
+            message,
+            onConfirm,
+            confirmText,
+            cancelText,
+            isLoading: false
+        })
+    }
 
     // Determine current page from URL
     const isMessages = location.pathname === '/client/messages'
@@ -393,16 +419,14 @@ export default function ClientDashboard() {
 
             // Show success confirmation
             setSaveSuccess(prev => ({ ...prev, [indicatorId]: true }))
-            setGlobalMessage('c bon bien enrgister')
+            showStatus('success', 'Enregistré !', 'Les informations de cet indicateur ont été sauvegardées avec succès.')
             setTimeout(() => {
                 setSaveSuccess(prev => ({ ...prev, [indicatorId]: false }))
-                setGlobalMessage(null)
             }, 5000)
 
         } catch (err) {
             console.error('CRITICAL SAVE ERROR:', err)
-            setGlobalMessage('ERREUR: ' + (err.message || 'Problème de connexion.'))
-            setTimeout(() => setGlobalMessage(null), 5000)
+            showStatus('error', 'Erreur', 'Impossible de sauvegarder : ' + (err.message || 'Problème de connexion.'))
         } finally {
             setSavingIndicator(null)
         }
@@ -442,69 +466,72 @@ export default function ClientDashboard() {
                     }
                 }
             }))
-            alert('c bon bien enrgister')
+            showStatus('success', 'Fichier envoyé !', 'Votre document a été correctement téléchargé et associé.')
         } catch (err) {
-            alert('Erreur upload : ' + err.message)
+            showStatus('error', 'Échec de l\'envoi', 'Une erreur est survenue lors du téléchargement : ' + err.message)
         } finally {
             setUploadingFor(null)
         }
     }
 
     const handleDeleteFile = async (targetKey) => {
-        if (!myCase) {
-            setGlobalMessage("Erreur: Dossier non chargé.");
-            return;
-        }
+        if (!myCase) return;
 
-        // Using window.confirm as requested for security
-        const res = window.confirm('EST CE QUE VOUS VOULEZ SUPPRIMER CE FICHIER ?')
-        if (!res) return
+        showStatus(
+            'delete',
+            'Supprimer ce fichier ?',
+            'Cette action est irréversible. Êtes-vous sûr de vouloir retirer ce document ?',
+            async () => {
+                setStatusModal(prev => ({ ...prev, isLoading: true }))
+                try {
+                    const normAudit = (selectedAudit || 'initial').trim().toLowerCase()
+                    const caseId = myCase.id
 
-        try {
-            const normAudit = (selectedAudit || 'initial').trim().toLowerCase()
-            const caseId = myCase.id
+                    // Identify the file path first to delete from storage if possible
+                    const { data: record } = await supabase.from('criterion_quiz_uploads')
+                        .select('file_url')
+                        .eq('case_id', caseId)
+                        .eq('criterion_id', targetKey)
+                        .eq('audit_type', normAudit)
+                        .single()
 
-            // Identify the file path first to delete from storage if possible
-            const { data: record } = await supabase.from('criterion_quiz_uploads')
-                .select('file_url')
-                .eq('case_id', caseId)
-                .eq('criterion_id', targetKey)
-                .eq('audit_type', normAudit)
-                .single()
+                    if (record?.file_url) {
+                        const pathParts = record.file_url.split('/')
+                        const fileName = pathParts[pathParts.length - 1]
+                        const fullPath = `${caseId}/${fileName}`
+                        await supabase.storage.from('quiz-uploads').remove([fullPath])
+                    }
 
-            if (record?.file_url) {
-                const pathParts = record.file_url.split('/')
-                const fileName = pathParts[pathParts.length - 1]
-                const fullPath = `${caseId}/${fileName}`
-                await supabase.storage.from('quiz-uploads').remove([fullPath])
-            }
+                    // Delete from DB
+                    const { error: error1 } = await supabase.from('criterion_quiz_uploads')
+                        .delete()
+                        .eq('case_id', caseId)
+                        .eq('criterion_id', targetKey)
+                        .eq('audit_type', normAudit)
 
-            // Delete from DB
-            const { error: error1 } = await supabase.from('criterion_quiz_uploads')
-                .delete()
-                .eq('case_id', caseId)
-                .eq('criterion_id', targetKey)
-                .eq('audit_type', normAudit)
-            
-            if (error1) throw error1
+                    if (error1) throw error1
 
-            // Update UI
-            setQuizUploads(prev => {
-                const updated = { ...prev }
-                if (updated[targetKey]) {
-                    delete updated[targetKey][normAudit]
-                    if (Object.keys(updated[targetKey]).length === 0) delete updated[targetKey]
+                    // Update UI
+                    setQuizUploads(prev => {
+                        const updated = { ...prev }
+                        if (updated[targetKey]) {
+                            delete updated[targetKey][normAudit]
+                            if (Object.keys(updated[targetKey]).length === 0) delete updated[targetKey]
+                        }
+                        return updated
+                    })
+
+                    setStatusModal(prev => ({ ...prev, isOpen: false, isLoading: false }))
+                    showStatus('success', 'Fichier supprimé', 'Le document a été retiré avec succès.')
+                } catch (err) {
+                    console.error('Delete error:', err)
+                    setStatusModal(prev => ({ ...prev, isLoading: false }))
+                    showStatus('error', 'Erreur', 'Impossible de supprimer le fichier : ' + err.message)
                 }
-                return updated
-            })
-            
-            setGlobalMessage('suppression bien fait')
-            setTimeout(() => setGlobalMessage(null), 5000)
-        } catch (err) {
-            console.error('Delete error:', err)
-            setGlobalMessage('Erreur suppression : ' + (err.message || 'Erreur inconnue'))
-            setTimeout(() => setGlobalMessage(null), 5000)
-        }
+            },
+            'Confirmer',
+            'Annuler'
+        )
     }
 
     const handleSendMessage = async (e) => {
@@ -1170,6 +1197,18 @@ export default function ClientDashboard() {
                         }
                         e.target.value = ''
                     }}
+                />
+
+                <StatusModal
+                    isOpen={statusModal.isOpen}
+                    onClose={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
+                    onConfirm={statusModal.onConfirm}
+                    type={statusModal.type}
+                    title={statusModal.title}
+                    message={statusModal.message}
+                    confirmText={statusModal.confirmText}
+                    cancelText={statusModal.cancelText}
+                    isLoading={statusModal.isLoading}
                 />
             </div>
         )

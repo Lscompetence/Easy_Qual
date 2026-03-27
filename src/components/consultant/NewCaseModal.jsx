@@ -36,6 +36,26 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
             const cleanedPassword = newCaseData.password.trim()
             const cleanedTenantName = newCaseData.tenantName.trim()
 
+            // 🔍 PRE-CHECK 1: SIRET and Email in database (Prevent spending credits for nothing)
+            const { data: existingTenant, error: checkError } = await supabase
+                .from('tenants')
+                .select('id, siret, client_email')
+                .or(`siret.eq.${newCaseData.siret.trim()},client_email.eq.${cleanedEmail}`)
+                .maybeSingle()
+
+            if (checkError) console.warn("Pre-check failed:", checkError)
+            if (existingTenant) {
+                if (existingTenant.siret === newCaseData.siret.trim()) throw new Error("Ce numéro SIRET est déjà utilisé par un autre dossier.")
+                if (existingTenant.client_email === cleanedEmail) throw new Error("Cet email est déjà associé à un autre dossier client.")
+            }
+
+            // 🔍 PRE-CHECK 2: Check if email exists in Auth (Prevent Auth conflict later)
+            const { data: existingAuthId } = await supabase.rpc('get_auth_user_id', { p_email: cleanedEmail })
+            if (existingAuthId) {
+                throw new Error("Cet email est déjà enregistré sur la plateforme. Veuillez utiliser un autre email ou contacter le support.")
+            }
+
+            // 💳 PHASE 1: Create Dossier and Debit Credits
             const { data: rpcData, error: rpcError } = await supabase
                 .rpc('create_case_and_debit', {
                     p_consultant_id: user.id,
@@ -50,15 +70,13 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
 
             if (rpcError) throw rpcError
 
-            // 📧 Création ou Synchronisation du compte client via Edge Function
+            // 📧 PHASE 2: Auth account creation (Edge Function)
             try {
                 console.log("Calling invite-client for:", cleanedEmail);
-
                 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
                 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
                 const functionUrl = `${supabaseUrl}/functions/v1/invite-client`;
 
-                // Appel manuel via fetch pour une robustesse maximale contre les erreurs 401
                 const response = await fetch(functionUrl, {
                     method: 'POST',
                     headers: {
@@ -77,14 +95,7 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 const inviteData = await response.json();
 
                 if (!response.ok) {
-                    console.error('Invite error details:', inviteData);
-                    let details = inviteData.error || inviteData.message || "Erreur inconnue";
-                    if (inviteData.tip) details += ` (${inviteData.tip})`;
-                    throw new Error(details);
-                }
-
-                if (inviteData?.error) {
-                    throw new Error(inviteData.error + (inviteData.tip ? ` - ${inviteData.tip}` : ""));
+                    throw new Error(inviteData.error || inviteData.message || "Erreur lors de la création du compte.");
                 }
 
                 setSuccessMsg(`Dossier créé et compte client activé pour ${cleanedEmail} !`)
@@ -101,23 +112,26 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                     trainingCategories: []
                 })
 
-                // 🚀 Call onSuccess immediately to refresh credits and list
                 if (onSuccess) onSuccess()
-
-                // ⏱ Close modal after 2.5s if success
-                setTimeout(() => {
-                    setSuccessMsg(null)
-                    onClose()
-                }, 2500)
+                setTimeout(() => { setSuccessMsg(null); onClose(); }, 2500)
 
             } catch (authErr) {
-                console.error('Auth sync error:', authErr)
-                // ERREUR CRITIQUE: Le dossier est en base mais l'accès est KO
-                setError(`ALERTE : Le dossier est créé mais le COMPTE DE CONNEXION a échoué. Cause : ${authErr.message}.`);
-                setSuccessMsg(null);
+                console.error('CRITICAL: Auth creation failed after DB creation. Rolling back...', authErr)
+                
+                // 🛑 ROLLBACK: Delete the tenant/case and show error
+                // We use another RPC to safely delete and refund
+                try {
+                    await supabase.rpc('rollback_case_creation', {
+                        p_tenant_id: rpcData.tenant_id,
+                        p_consultant_id: user.id,
+                        p_cost: cost
+                    })
+                    console.log("Rollback completed successfully.")
+                } catch (rollbackErr) {
+                    console.error("Rollback failed!", rollbackErr)
+                }
 
-                // On rafraîchit quand même la liste car le dossier existe
-                if (onSuccess) onSuccess()
+                throw new Error(`La création du compte a échoué (${authErr.message}). Le dossier n'a pas été créé pour éviter les doublons.`);
             }
 
         } catch (error) {
@@ -127,6 +141,9 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 errMsg = "Ce numéro SIRET est déjà utilisé par un autre client."
             } else if (errMsg?.includes('Solde insuffisant')) {
                 errMsg = "Votre solde de crédits est insuffisant."
+            }
+            if (errMsg.includes('already been registered')) {
+                errMsg = "Cet email est déjà enregistré. Veuillez utiliser un email différent."
             }
             setError(errMsg)
         } finally {

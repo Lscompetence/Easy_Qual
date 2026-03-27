@@ -6,6 +6,7 @@ import { Search, Filter, Plus, FileText, CheckCircle, AlertTriangle, MoreVertica
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
 import NewCaseModal from '../../components/consultant/NewCaseModal'
+import UpdateCaseModal from '../../components/consultant/UpdateCaseModal'
 import DeleteModal from '../../components/DeleteModal'
 
 export default function ConsultantCases() {
@@ -28,6 +29,16 @@ export default function ConsultantCases() {
     const [caseToDelete, setCaseToDelete] = useState(null)
     const [isDeleting, setIsDeleting] = useState(false)
     const [isDeleted, setIsDeleted] = useState(false)
+
+    // Update Modal State
+    const [updateModalOpen, setUpdateModalOpen] = useState(false)
+    const [caseToUpdate, setCaseToUpdate] = useState(null)
+
+    const handleUpdateClick = (c) => {
+        setCaseToUpdate(c)
+        setUpdateModalOpen(true)
+        setOpenMenuId(null) // Close dropdown
+    }
 
     const handleDeleteClick = (c) => {
         setCaseToDelete(c)
@@ -339,6 +350,16 @@ export default function ConsultantCases() {
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation()
+                                                                        handleUpdateClick(c)
+                                                                    }}
+                                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-medium flex items-center gap-2 border-b border-gray-50"
+                                                                >
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                                                    Modifier
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation()
                                                                         handleDeleteClick(c)
                                                                     }}
                                                                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium flex items-center gap-2"
@@ -392,6 +413,15 @@ export default function ConsultantCases() {
                 itemType={caseToDelete?.tenants?.name}
                 isDeleting={isDeleting}
                 isDeleted={isDeleted}
+            />
+            
+            {/* Modal: Update Case */}
+            <UpdateCaseModal
+                isOpen={updateModalOpen}
+                onClose={() => setUpdateModalOpen(false)}
+                user={user}
+                caseData={caseToUpdate}
+                onSuccess={() => fetchCases()}
             />
         </div>
     )

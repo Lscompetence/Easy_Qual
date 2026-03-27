@@ -7,6 +7,10 @@ import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
 import NewCaseModal from '../../components/consultant/NewCaseModal'
+import UpdateCaseModal from '../../components/consultant/UpdateCaseModal'
+import { MoreVertical, Edit, Trash2 } from 'lucide-react'
+import DeleteModal from '../../components/DeleteModal'
+import StatusModal from '../../components/shared/StatusModal'
 
 export default function ConsultantDashboard() {
     const { user, logout } = useAuth() // specific logout not needed here if Sidebar handles it, but kept for logic
@@ -28,6 +32,74 @@ export default function ConsultantDashboard() {
     // Create Case Form State
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [refreshKey, setRefreshKey] = useState(0)
+
+    const [openMenuId, setOpenMenuId] = useState(null)
+    const [updateModalOpen, setUpdateModalOpen] = useState(false)
+    const [caseToUpdate, setCaseToUpdate] = useState(null)
+
+    // Status Modal State
+    const [statusModal, setStatusModal] = useState({
+        isOpen: false,
+        type: 'info',
+        title: '',
+        message: '',
+        onConfirm: null,
+        confirmText: 'OK',
+        cancelText: 'Annuler',
+        isLoading: false
+    })
+
+    const showStatus = (type, title, message, onConfirm = null, confirmText = 'OK', cancelText = 'Annuler') => {
+        setStatusModal({
+            isOpen: true,
+            type,
+            title,
+            message,
+            onConfirm,
+            confirmText,
+            cancelText,
+            isLoading: false
+        })
+    }
+
+    // Delete Modal State
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+    const [caseToDelete, setCaseToDelete] = useState(null)
+    const [isDeleting, setIsDeleting] = useState(false)
+    const [isDeleted, setIsDeleted] = useState(false)
+
+    const handleUpdateClick = (c) => {
+        setCaseToUpdate(c)
+        setUpdateModalOpen(true)
+        setOpenMenuId(null)
+    }
+
+    const handleDeleteClick = (c) => {
+        setCaseToDelete(c)
+        setDeleteModalOpen(true)
+        setOpenMenuId(null)
+    }
+
+    const confirmDelete = async () => {
+        if (!caseToDelete) return
+        setIsDeleting(true)
+        try {
+            const caseId = caseToDelete.id
+            await supabase.from('case_messages').delete().eq('case_id', caseId)
+            await supabase.from('case_events').delete().eq('case_id', caseId)
+            await supabase.from('case_indicator_states').delete().eq('case_id', caseId)
+            await supabase.from('criterion_quiz_uploads').delete().eq('case_id', caseId)
+            const { error } = await supabase.from('cases').delete().eq('id', caseId)
+            if (error) throw error
+            setIsDeleted(true)
+            setCases(prev => prev.filter(c => c.id !== caseId))
+        } catch (error) {
+            console.error('Error deleting case:', error)
+            showStatus('error', 'Erreur', "Échec de la suppression : " + error.message)
+        } finally {
+            setIsDeleting(false)
+        }
+    }
 
 
     const [stats, setStats] = useState({
@@ -316,6 +388,7 @@ export default function ConsultantDashboard() {
                                             <th className="pb-3 text-center">Accès Plateforme</th>
                                             <th className="pb-3 pr-4">Progression</th>
                                             <th className="pb-3 text-right pr-2">Statut</th>
+                                            <th className="pb-3"></th>
                                         </tr>
                                     </thead>
                                     <tbody className="space-y-4">
@@ -332,10 +405,9 @@ export default function ConsultantDashboard() {
                                                 .slice(0, 8).map((c) => (
                                                     <tr
                                                         key={c.id}
-                                                        onClick={() => navigate(`/consultant/case/${c.id}`)}
-                                                        className="group hover:bg-gray-50 transition-colors rounded-lg cursor-pointer"
+                                                        className="group hover:bg-gray-50 transition-colors rounded-lg cursor-pointer relative"
                                                     >
-                                                        <td className="py-6 pl-4">
+                                                        <td className="py-6 pl-4" onClick={() => navigate(`/consultant/case/${c.id}`)}>
                                                             <div className="flex items-center">
                                                                 <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold mr-4 uppercase shadow-sm">
                                                                     {c.tenants?.name?.substring(0, 2) || 'UK'}
@@ -354,7 +426,7 @@ export default function ConsultantDashboard() {
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="py-6">
+                                                        <td className="py-6" onClick={() => navigate(`/consultant/case/${c.id}`)}>
                                                             <div className="flex flex-wrap gap-1">
                                                                 {Array.isArray(c.training_categories) && c.training_categories.length > 0 ? (
                                                                     c.training_categories.slice(0, 2).map((cat, idx) => (
@@ -413,7 +485,7 @@ export default function ConsultantDashboard() {
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="py-6 w-1/4">
+                                                        <td className="py-6 w-1/4" onClick={() => navigate(`/consultant/case/${c.id}`)}>
                                                             <div className="flex flex-col gap-1.5 pr-8">
                                                                 <div className="flex justify-between items-center mb-0.5">
                                                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Progression</span>
@@ -429,7 +501,7 @@ export default function ConsultantDashboard() {
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="py-4 text-right pr-2">
+                                                        <td className="py-4 text-right pr-2" onClick={() => navigate(`/consultant/case/${c.id}`)}>
                                                             {c.status === 'validated' ? (
                                                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-100">
                                                                     <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block"></span> Validé
@@ -441,6 +513,44 @@ export default function ConsultantDashboard() {
                                                             ) : (
                                                                 <span className="text-gray-300 font-bold px-4">—</span>
                                                             )}
+                                                        </td>
+                                                        <td className="py-4 text-right pr-4 relative">
+                                                            <div className="relative">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        setOpenMenuId(openMenuId === c.id ? null : c.id)
+                                                                    }}
+                                                                    className="text-gray-400 hover:text-purple-600 transition-colors p-2 hover:bg-purple-50 rounded-full"
+                                                                >
+                                                                    <MoreVertical className="h-4 w-4" />
+                                                                </button>
+
+                                                                {openMenuId === c.id && (
+                                                                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-100 z-10 py-1 origin-top-right">
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                handleUpdateClick(c)
+                                                                            }}
+                                                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-medium flex items-center gap-2 border-b border-gray-50"
+                                                                        >
+                                                                            <Edit className="h-4 w-4 text-gray-400" />
+                                                                            Modifier
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation()
+                                                                                handleDeleteClick(c)
+                                                                            }}
+                                                                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 font-medium flex items-center gap-2"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4 text-red-400" />
+                                                                            Supprimer
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </td>
                                                     </tr>
                                                 ))
@@ -567,6 +677,39 @@ export default function ConsultantDashboard() {
                     setRefreshKey(k => k + 1)
                     setHasNotifications(true)
                 }}
+            />
+
+            {/* Modal: Update Case */}
+            <UpdateCaseModal
+                isOpen={updateModalOpen}
+                onClose={() => setUpdateModalOpen(false)}
+                user={user}
+                caseData={caseToUpdate}
+                onSuccess={() => fetchConsultantData()}
+            />
+
+            {/* Modal: Delete Confirmation */}
+            <DeleteModal
+                isOpen={deleteModalOpen}
+                onClose={() => setDeleteModalOpen(false)}
+                onConfirm={confirmDelete}
+                title="Supprimer ce dossier ?"
+                message={`Vous êtes sur le point de retirer le dossier "${caseToDelete?.tenants?.name || ''}".`}
+                itemType={caseToDelete?.tenants?.name}
+                isDeleting={isDeleting}
+                isDeleted={isDeleted}
+            />
+
+            <StatusModal
+                isOpen={statusModal.isOpen}
+                onClose={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={statusModal.onConfirm}
+                type={statusModal.type}
+                title={statusModal.title}
+                message={statusModal.message}
+                confirmText={statusModal.confirmText}
+                cancelText={statusModal.cancelText}
+                isLoading={statusModal.isLoading}
             />
         </div>
     )

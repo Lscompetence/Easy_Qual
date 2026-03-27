@@ -38,7 +38,7 @@ export default function AgendaVisios() {
                     .from('case_events')
                     .select('*')
                     .in('case_id', caseIds)
-                    .ilike('title', '%audit blanc%')
+                    .or('event_type.eq.audit,title.ilike.%audit blanc%')
                     .order('event_date', { ascending: true })
 
                 if (eventsError) throw eventsError
@@ -246,13 +246,25 @@ export default function AgendaVisios() {
                                                                 <Video className="h-3 w-3" /> Lancer Visio
                                                             </a>
                                                         ) : hasEvent ? (
-                                                            <span className="text-xs font-bold text-blue-600 flex items-center justify-end gap-1">
-                                                                Ajouter lien <ArrowRight className="h-3 w-3" />
-                                                            </span>
+                                                            <div 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    navigate(`/consultant/case/${row.caseId}?tab=planification`)
+                                                                }}
+                                                                className="text-xs font-bold text-blue-600 flex items-center justify-end gap-1 hover:underline underline-offset-4"
+                                                            >
+                                                                Modifier planification <ArrowRight className="h-3 w-3" />
+                                                            </div>
                                                         ) : (
-                                                            <span className="text-xs font-bold text-amber-600 flex items-center justify-end gap-1">
+                                                            <div 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    navigate(`/consultant/case/${row.caseId}?tab=planification`)
+                                                                }}
+                                                                className="text-xs font-bold text-amber-600 flex items-center justify-end gap-1 hover:underline underline-offset-4"
+                                                            >
                                                                 <Plus className="h-3 w-3" /> Planifier
-                                                            </span>
+                                                            </div>
                                                         )}
                                                     </td>
                                                 </tr>
