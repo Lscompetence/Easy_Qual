@@ -57,6 +57,7 @@ export default function ClientDashboard() {
     const [selectedAudit, setSelectedAudit] = useState(null)
     const [allStatesData, setAllStatesData] = useState([])
     const [allQuizData, setAllQuizData] = useState([])
+    const [caseEvents, setCaseEvents] = useState([])
 
     // Determine current page from URL
     const isMessages = location.pathname === '/client/messages'
@@ -74,12 +75,49 @@ export default function ClientDashboard() {
     }, [user])
 
     useEffect(() => {
-        if (isMessages && myCase) fetchMessages()
-    }, [isMessages, myCase?.id])
+        if (myCase?.id) fetchMessages()
+    }, [myCase?.id])
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [messages])
+
+    useEffect(() => {
+        if (!myCase?.id) return
+
+        const channel = supabase
+            .channel(`client_realtime:${myCase.id}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'case_events',
+                filter: `case_id=eq.${myCase.id}`
+            }, (payload) => {
+                if (payload.eventType === 'DELETE') {
+                    setCaseEvents(prev => prev.filter(e => e.id !== payload.old.id))
+                } else if (payload.eventType === 'INSERT') {
+                    setCaseEvents(prev => [...prev, payload.new].sort((a, b) => new Date(a.event_date) - new Date(b.event_date)))
+                } else if (payload.eventType === 'UPDATE') {
+                    setCaseEvents(prev => prev.map(e => e.id === payload.new.id ? payload.new : e).sort((a, b) => new Date(a.event_date) - new Date(b.event_date)))
+                }
+            })
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'case_messages',
+                filter: `case_id=eq.${myCase.id}`
+            }, (payload) => {
+                setMessages(prev => {
+                    if (prev.some(m => m.id === payload.new.id)) return prev
+                    return [...prev, payload.new]
+                })
+            })
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [myCase?.id])
 
     const fetchMessages = async () => {
         if (!myCase) return
@@ -173,6 +211,14 @@ export default function ClientDashboard() {
                         .select('*')
                         .eq('case_id', caseData.id)
                     setAllQuizData(quizData || [])
+
+                    // 3. Fetch case events (sessions/visios)
+                    const { data: eventsData } = await supabase
+                        .from('case_events')
+                        .select('*')
+                        .eq('case_id', caseData.id)
+                        .order('event_date', { ascending: true })
+                    setCaseEvents(eventsData || [])
 
                     // Process initial mapping
                     const currentAudit = selectedAudit || (caseData.audit_type?.[caseData.audit_type.length - 1] || 'initial')
@@ -525,10 +571,11 @@ export default function ClientDashboard() {
                 <ClientSidebar
                     caseData={myCase}
                     indicators={[]}
-                    indicatorStates={{}}
+                    indicatorStates={indicatorStates}
                     consultantName={consultantName}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
+                    upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                 />
                 <div className="flex-1 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#cc6d3e]" />
@@ -547,6 +594,7 @@ export default function ClientDashboard() {
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
                     unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                    upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
                 />
@@ -647,6 +695,7 @@ export default function ClientDashboard() {
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
                     unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                    upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
                 />
@@ -681,23 +730,53 @@ export default function ClientDashboard() {
                                 </p>
                             </div>
 
-                            <div className="px-10 pb-6">
-                                <div className="bg-[#faf1ec]/30 rounded-2xl p-6 border border-[#f5e2d6] flex items-center justify-between group hover:bg-white hover:shadow-lg transition-all duration-300">
-                                    <div className="space-y-1">
-                                        <p className="text-[10px] font-black text-[#cc6d3e] uppercase tracking-widest bg-white/80 px-2 py-0.5 rounded-full inline-block mb-1 border border-[#f5e2d6]/40">Prochain RDV</p>
-                                        <h3 className="text-lg font-black text-gray-900">Suivi Mi-Parcours</h3>
-                                        <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
-                                            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                                            <span>Demain, 14:00 (Google Meet)</span>
-                                        </div>
+                            <div className="px-10 pb-10 space-y-4">
+                                {caseEvents.length === 0 ? (
+                                    <div className="bg-gray-50 rounded-2xl p-8 border border-dashed border-gray-200 text-center">
+                                        <p className="text-sm text-gray-400 italic">Aucun rendez-vous planifié pour le moment.</p>
                                     </div>
-                                    <button
-                                        onClick={() => window.open('https://meet.google.com', '_blank')}
-                                        className="h-12 px-8 bg-[#cc6d3e] text-white rounded-xl text-sm font-bold shadow-lg shadow-[#cc6d3e]/20 hover:bg-[#b55d32] hover:scale-105 active:scale-95 transition-all"
-                                    >
-                                        Rejoindre
-                                    </button>
-                                </div>
+                                ) : (
+                                    caseEvents.map((event) => (
+                                        <div key={event.id} className="bg-[#faf1ec]/30 rounded-2xl p-6 border border-[#f5e2d6] flex flex-col sm:flex-row items-start sm:items-center justify-between group hover:bg-white hover:shadow-lg transition-all duration-300 gap-4">
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <p className="text-[10px] font-black text-[#cc6d3e] uppercase tracking-widest bg-white/80 px-2 py-0.5 rounded-full border border-[#f5e2d6]/40">
+                                                        {new Date(event.event_date) > new Date() ? 'Prochain RDV' : 'Passé'}
+                                                    </p>
+                                                    {event.event_type && (
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{event.event_type}</span>
+                                                    )}
+                                                </div>
+                                                <h3 className="text-lg font-black text-gray-900">{event.title || 'Session de suivi'}</h3>
+                                                <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+                                                    <div className={`h-2 w-2 rounded-full ${new Date(event.event_date) > new Date() ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
+                                                    <span>
+                                                        {new Date(event.event_date).toLocaleString('fr-FR', {
+                                                            weekday: 'long',
+                                                            day: 'numeric',
+                                                            month: 'long',
+                                                            year: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            
+                                            {event.visio_link ? (
+                                                <button
+                                                    onClick={() => window.open(event.visio_link, '_blank')}
+                                                    className="h-12 px-8 bg-[#cc6d3e] text-white rounded-xl text-sm font-bold shadow-lg shadow-[#cc6d3e]/20 hover:bg-[#b55d32] hover:scale-105 active:scale-95 transition-all w-full sm:w-auto flex items-center justify-center gap-2"
+                                                >
+                                                    <Video className="h-4 w-4" />
+                                                    Rejoindre
+                                                </button>
+                                            ) : (
+                                                <span className="text-xs font-bold text-gray-400 italic">Lien non disponible</span>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
                             </div>
 
                             <div className="p-6 text-center border-t border-gray-50">
@@ -725,6 +804,7 @@ export default function ClientDashboard() {
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
                     unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                    upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
                 />
@@ -1104,6 +1184,7 @@ export default function ClientDashboard() {
                 indicatorStates={indicatorStates}
                 consultantName={consultantName}
                 unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                 isOpen={showMobileMenu}
                 onClose={() => setShowMobileMenu(false)}
             />

@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../supabaseClient'
 import { LogOut, ChevronDown, ChevronRight, CheckCircle, Circle, Video, MessageSquare, LayoutDashboard, GraduationCap, X } from 'lucide-react'
 
-export default function ClientSidebar({ caseData, indicators, indicatorStates, consultantName = '', unreadCount = 0, isOpen, onClose }) {
+export default function ClientSidebar({ caseData, indicators, indicatorStates, consultantName = '', unreadCount = 0, upcomingCount = 0, isOpen, onClose }) {
     const { user, profile, logout } = useAuth()
     const location = useLocation()
     const navigate = useNavigate()
@@ -167,11 +167,16 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
                         <div className="space-y-1">
                             <Link
                                 to="/client/sessions"
-                                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-bold transition-all ${location.pathname === '/client/sessions' ? 'bg-[#faf1ec] text-[#cc6d3e] border border-[#f5e2d6]' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-bold transition-all relative ${location.pathname === '/client/sessions' ? 'bg-[#faf1ec] text-[#cc6d3e] border border-[#f5e2d6]' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
                                 <Video className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/sessions' ? 'text-[#cc6d3e]' : 'text-gray-400'}`} />
-                                Sessions & Visios
+                                <span className="flex-1 text-xs">Sessions & Visios</span>
+                                {upcomingCount > 0 && (
+                                    <span className="h-5 w-5 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-red-500/20">
+                                        {upcomingCount}
+                                    </span>
+                                )}
                             </Link>
                             <Link
                                 to="/client/messages"
