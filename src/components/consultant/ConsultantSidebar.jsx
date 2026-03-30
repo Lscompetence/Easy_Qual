@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, FolderOpen, Calendar, BookOpen, Settings, LogOut, MoreVertical, X } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, Calendar, BookOpen, Settings, LogOut, MoreVertical, X, MessageSquare, BellRing } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext' // Adjust path if needed
@@ -9,10 +9,24 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
     const { user, profile, logout } = useAuth()
     const location = useLocation()
     const [caseCount, setCaseCount] = useState(0)
+    const [unreadMessages, setUnreadMessages] = useState(0)
+    const [unreadNotifications, setUnreadNotifications] = useState(0)
 
     useEffect(() => {
         if (user) {
             fetchCaseCount()
+            fetchUnreadCounts()
+
+            // Setup Realtime subscription for both tables
+            const channel = supabase
+                .channel('consultant_global_counts')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'case_messages' }, () => fetchUnreadCounts())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'case_notifications' }, () => fetchUnreadCounts())
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channel)
+            }
         }
     }, [user])
 
@@ -21,6 +35,22 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
             .from('cases')
             .select('*', { count: 'exact', head: true })
         if (!error) setCaseCount(count || 0)
+    }
+
+    const fetchUnreadCounts = async () => {
+        try {
+            // Count unread system notifications (prefixed with [SYSTEM])
+            const { data: notifData } = await supabase
+                .from('case_messages')
+                .select('id')
+                .is('read_at', null)
+                .neq('sender_id', user.id)
+                .ilike('content', '%[SYSTEM]%')
+            
+            setUnreadNotifications(notifData?.length || 0)
+        } catch (err) {
+            console.error('Error fetching unread counts:', err)
+        }
     }
 
     const isActive = (path) => location.pathname === path
@@ -102,9 +132,9 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                         </nav>
                     </div>
 
-                    <div className="pt-4 border-t border-gray-100">
+                    <div>
                         <h3 className="px-3 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                            Outils
+                             Outils
                         </h3>
                         <nav className="space-y-1">
                             <Link
@@ -114,11 +144,16 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
-                                <BookOpen className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/resources') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'}`} />
+                                <BookOpen className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/resources') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
+                                    }`} />
                                 Audit Qualiopi Manager
+                                {isActive('/consultant/resources') && (
+                                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
+                                )}
                             </Link>
                         </nav>
                     </div>
+
                 </div>
 
                 {/* User Profile Section */}

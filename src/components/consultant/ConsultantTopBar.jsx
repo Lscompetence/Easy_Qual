@@ -6,41 +6,52 @@ import { useNavigate } from 'react-router-dom'
 import CreditsModal from './CreditsModal'
 
 export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, showCredits = true, showSearch = true, refreshKey = 0, onCreditsUpdate = () => { }, showMobileMenu, setShowMobileMenu, hasUnreadNotifications, onNotificationClick, searchQuery = '', onSearchChange = () => { } }) {
-    // State for credits
     const [credits, setCredits] = useState(0)
+    const [unreadCount, setUnreadCount] = useState(0)
     const [showCreditsModal, setShowCreditsModal] = useState(false)
     const { user, profile, logout } = useAuth()
     const navigate = useNavigate()
 
-    const isActive = profile?.is_active !== false // Default to active if status is unknown during loading
-
-    const handleLogout = async () => {
-        await logout()
-        navigate('/consultant')
-    }
-    // Ensure useAuth is imported or user is passed. ConsultantTopBar doesn't receive user prop currently.
-    // Let's import useAuth, useState, useEffect, supabase.
+    const isActive = profile?.is_active !== false 
 
     useEffect(() => {
-        if (user) fetchCredits()
-    }, [user, refreshKey, showCreditsModal]) // Refetch if modal closes (might have bought credits)
+        if (user) {
+            fetchCredits()
+            fetchUnreadCount()
+
+            const channel = supabase
+                .channel('topbar_notifs')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'case_messages' }, () => {
+                    fetchUnreadCount()
+                })
+                .subscribe()
+            return () => supabase.removeChannel(channel)
+        }
+    }, [user, refreshKey, showCreditsModal])
 
     const fetchCredits = async () => {
-        console.log('🔄 Fetching credits for user:', user?.id);
         const { data, error } = await supabase
             .from('credits_wallet')
             .select('balance')
             .eq('consultant_id', user.id)
             .single()
 
-        if (error) {
-            console.error('❌ Error fetching credits:', error);
-            return;
-        }
+        if (!error && data) setCredits(data.balance)
+    }
 
-        if (data) {
-            console.log('💰 Credits fetched successfully:', data.balance);
-            setCredits(data.balance);
+    const fetchUnreadCount = async () => {
+        try {
+            // Count ONLY unread [SYSTEM] messages to verify their existence
+            const { data: msgData } = await supabase
+                .from('case_messages')
+                .select('id')
+                .is('read_at', null)
+                .neq('sender_id', user.id)
+                .ilike('content', '%[SYSTEM]%')
+
+            setUnreadCount(msgData?.length || 0)
+        } catch (err) {
+            console.error('Error fetching unread count:', err)
         }
     }
 
@@ -119,8 +130,6 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
                     </div>
                 )}
 
-                <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
-
                 {showNewFolder && (
                     <button
                         onClick={onNewFolder}
@@ -130,6 +139,22 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
                         Nouveau dossier
                     </button>
                 )}
+
+                <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+
+                {/* Notifications Bell */}
+                <button 
+                    onClick={() => navigate('/consultant/notifications')}
+                    className="relative p-2 text-gray-400 hover:text-purple-600 transition-colors bg-gray-50 rounded-xl border border-gray-100 group"
+                >
+                    <Bell className="h-5 w-5" />
+                    {unreadCount > 0 && (
+                        <>
+                            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 animate-ping opacity-75"></span>
+                            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 shadow-sm"></span>
+                        </>
+                    )}
+                </button>
 
             </div>
 

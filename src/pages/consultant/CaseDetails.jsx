@@ -69,6 +69,14 @@ const isInitialAudit = (type) => {
     return t === 'initial' || t.includes('initial') || t.includes('initiale')
 }
 
+const normalizeAudit = (type) => {
+    const t = String(type || '').toLowerCase().trim()
+    if (t.includes('initial')) return 'initial'
+    if (t.includes('surveillance')) return 'surveillance'
+    if (t.includes('renouvellement')) return 'renouvellement'
+    return t
+}
+
 export default function CaseDetails() {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -160,8 +168,8 @@ export default function CaseDetails() {
                 if (target) {
                     const targetL = String(target).trim().toLowerCase()
                     // Normalize both for comparison
-                    const normTarget = isInitialAudit(targetL) ? 'initial' : targetL
-                    const normType = isInitialAudit(sRawType) ? 'initial' : sRawType
+                    const normTarget = normalizeAudit(targetL)
+                    const normType = normalizeAudit(sRawType)
                     
                     if (normType === normTarget) level = 3
                     else level = 1
@@ -488,7 +496,18 @@ export default function CaseDetails() {
                 .order('created_at', { ascending: true })
 
             if (error) throw error
-            setMessages(data || [])
+            // Filter out system messages for the chat tab
+            const userMessages = (data || []).filter(m => !m.content.startsWith('[SYSTEM]'))
+            setMessages(userMessages)
+
+            // Mark messages from client as read
+            const unreadIds = data?.filter(m => m.sender_id !== user.id && !m.read_at).map(m => m.id)
+            if (unreadIds && unreadIds.length > 0) {
+                await supabase
+                    .from('case_messages')
+                    .update({ read_at: new Date().toISOString() })
+                    .in('id', unreadIds)
+            }
         } catch (err) {
             console.error('Error loading messages:', err)
         } finally {
@@ -1165,11 +1184,11 @@ export default function CaseDetails() {
                                             const isMe = msg.sender_id === user?.id
                                             return (
                                                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                                    <div className={`max-w-[70%] rounded-2xl px-4 py-3 shadow-sm text-sm ${isMe
+                                                    <div className={`max-w-[78%] px-4 py-2.5 rounded-2xl text-sm font-medium leading-relaxed whitespace-pre-line ${isMe
                                                         ? 'bg-purple-600 text-white rounded-br-none'
                                                         : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none'
                                                         }`}>
-                                                        <p>{msg.content}</p>
+                                                        <p className="whitespace-pre-line">{msg.content}</p>
                                                         <span className={`text-[10px] block mt-1 text-right ${isMe ? 'text-purple-200' : 'text-gray-400'}`}>
                                                             {new Date(msg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                                                         </span>
@@ -1218,19 +1237,24 @@ export default function CaseDetails() {
                         <div className="space-y-5">
                             {/* AUDIT TYPE TABS */}
                             {caseData.audit_type && caseData.audit_type.length > 0 && (
-                                <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2">
-                                    {caseData.audit_type.map(type => {
+                                <div className="flex items-center gap-3 mb-8 overflow-x-auto pb-4 scrollbar-hide">
+                                    {caseData.audit_type.map((type, i) => {
                                         const trimmedType = String(type).trim()
+                                        const isActive = normalizeAudit(selectedAudit) === normalizeAudit(trimmedType)
                                         return (
                                             <button
-                                                key={type}
+                                                key={i}
                                                 onClick={() => setSelectedAudit(trimmedType)}
-                                                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${selectedAudit === trimmedType
-                                                    ? 'bg-gray-900 text-white shadow-md'
-                                                    : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
-                                                    }`}
+                                                className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap shadow-sm border-2 ${
+                                                    isActive
+                                                        ? 'bg-indigo-600 text-white border-indigo-600 scale-105 shadow-indigo-100'
+                                                        : 'bg-white text-gray-400 border-gray-100 hover:border-gray-300'
+                                                }`}
                                             >
-                                                {trimmedType}
+                                                <div className="flex items-center gap-2">
+                                                    <div className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white animate-pulse' : 'bg-gray-200'}`} />
+                                                    {trimmedType}
+                                                </div>
                                             </button>
                                         )
                                     })}
@@ -1293,8 +1317,9 @@ export default function CaseDetails() {
                                     })
                                     const percent = Math.round(critWeightedScore / (critIndicators.length || 1))
 
-                                    const currentAuditKey = (selectedAudit || 'initial').trim().toLowerCase()
-                                    const quiz = quizUploads['crit_' + crit.id]?.[currentAuditKey]
+                                    const currentAuditKey = normalizeAudit(selectedAudit || 'initial')
+                                    const quizEntries = quizUploads['crit_' + crit.id] || {}
+                                    const quiz = quizEntries[currentAuditKey] || Object.values(quizEntries).find(q => normalizeAudit(q.audit_type) === currentAuditKey)
                                     const savedComment = quiz?.consultant_comment || ''
 
                                     return (
@@ -1394,8 +1419,9 @@ export default function CaseDetails() {
                                                                     
                                                                     {/* Document Proof from Client */}
                                                                     {(() => {
-                                                                        const aKey = (selectedAudit || 'initial').trim().toLowerCase()
-                                                                        const indFile = quizUploads['ind_' + ind.id]?.[aKey]
+                                                                        const aKey = normalizeAudit(selectedAudit || 'initial')
+                                                                        const uploadsForInd = quizUploads['ind_' + ind.id] || {}
+                                                                        const indFile = uploadsForInd[aKey] || Object.values(uploadsForInd).find(u => normalizeAudit(u.audit_type) === aKey)
                                                                         if (!indFile) return null
                                                                         return (
                                                                             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 mb-3">
@@ -1511,7 +1537,7 @@ export default function CaseDetails() {
                                                     ) : (
                                                         <div className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-gray-200 rounded-xl text-gray-400">
                                                             <FileText className="h-4 w-4" />
-                                                            <span className="text-xs">Aucun quiz soumis pour ce critère ({(selectedAudit||'initial').toLowerCase()})</span>
+                                                            <span className="text-xs">Aucun quiz soumis pour ce critère ({normalizeAudit(selectedAudit||'initial')})</span>
                                                         </div>
                                                     )}
                                                 </div>

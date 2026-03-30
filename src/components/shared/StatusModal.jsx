@@ -49,56 +49,74 @@ export default function StatusModal({
         delete: {
             icon: <Trash2 className="h-10 w-10 text-red-500" />,
             bgColor: 'bg-red-50',
-            ringColor: 'ring-red-50/50',
+            ringColor: 'ring-red-100/40',
             buttonColor: 'bg-red-600 hover:bg-red-700 shadow-red-200',
-            titleColor: 'text-red-900',
-            descriptionColor: 'text-red-600'
+            titleColor: 'text-[#691111]', // Dark brown-red title
+            descriptionColor: 'text-gray-500'
         }
     }
 
     const { icon, bgColor, ringColor, buttonColor, titleColor, descriptionColor } = config[type] || config.info
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden relative animate-in zoom-in-95 duration-200 border border-white/20">
-                {/* Header Icon */}
-                <div className="pt-10 pb-4 flex justify-center">
-                    <div className={`${bgColor} p-5 rounded-full shadow-inner ring-[12px] ${ringColor} transform transition-transform hover:scale-110 duration-300`}>
-                        {icon}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] w-full max-w-[440px] overflow-hidden relative animate-in zoom-in-95 duration-400">
+                
+                {/* Close Button X (Optional, for easy exit) */}
+                <button 
+                  onClick={onClose}
+                  className="absolute top-8 right-8 p-3 text-slate-300 hover:text-slate-600 transition-colors z-10 hover:bg-slate-50 rounded-2xl"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+
+                {/* Header iconography following Screenshot 4 */}
+                <div className="pt-12 pb-6 flex justify-center">
+                    <div className="relative h-28 w-28 flex items-center justify-center">
+                        {/* Outer Glow / Pulse layer */}
+                        <div className={`absolute inset-0 ${bgColor} opacity-40 rounded-full scale-110 blur-sm`}></div>
+                        {/* Static layered rings */}
+                        <div className={`absolute inset-0 ${bgColor} rounded-full ring-8 ${ringColor}`}></div>
+                        {/* Center Icon Container - White in Screen 4 */}
+                        <div className="relative z-10 bg-white p-6 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.05)] border border-slate-50">
+                            {icon}
+                        </div>
                     </div>
                 </div>
 
-                {/* Content */}
-                <div className="px-10 pb-10 text-center">
-                    <h3 className={`text-2xl font-black ${titleColor || 'text-gray-900'} mb-3 tracking-tight`}>
+                {/* Content Section */}
+                <div className="px-12 pb-12 text-center">
+                    <h3 className={`text-2xl font-black ${titleColor || 'text-slate-900'} mb-3 tracking-tighter`}>
                         {title}
                     </h3>
 
-                    <p className="text-gray-500 text-sm font-medium leading-relaxed mb-8 px-2">
+                    <p className="text-slate-500 text-[14px] font-bold leading-relaxed mb-8">
                         {message}
                     </p>
 
                     {type === 'delete' && (
-                        <div className="bg-red-50 border border-red-100 border-dashed rounded-2xl p-4 mb-8 text-left flex items-start gap-3">
-                            <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                        <div className="bg-[#fff1f2] border border-[#ffcfd1] rounded-[24px] p-5 mb-8 text-left flex items-start gap-4 animate-in slide-in-from-bottom-2 duration-400">
+                            <div className="bg-white p-2 rounded-xl shadow-sm border border-red-50">
+                              <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
+                            </div>
                             <div>
-                                <h4 className="text-[10px] font-black text-red-700 uppercase tracking-widest mb-1">
+                                <h4 className="text-[11px] font-black text-red-700 uppercase tracking-[1px] mb-1">
                                     Attention Irréversible
                                 </h4>
-                                <p className="text-[11px] text-red-600/80 font-medium">
+                                <p className="text-[12px] text-red-600 font-bold leading-snug">
                                     Cette action supprimera définitivement le fichier.
                                 </p>
                             </div>
                         </div>
                     )}
 
-                    {/* Actions */}
+                    {/* Action Buttons following Screen 4 styling */}
                     <div className="flex gap-4">
                         {(type === 'confirm' || type === 'delete') && (
                             <button
                                 onClick={onClose}
                                 disabled={isLoading}
-                                className="flex-1 py-4 px-6 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-2xl transition-all disabled:opacity-50 active:scale-95"
+                                className="flex-1 py-4 px-6 bg-slate-50 hover:bg-white text-slate-900 font-black text-sm rounded-2xl border border-slate-100 transition-all disabled:opacity-50 active:scale-95 shadow-sm hover:shadow-md"
                             >
                                 {cancelText}
                             </button>
@@ -106,12 +124,12 @@ export default function StatusModal({
                         <button
                             onClick={onConfirm || onClose}
                             disabled={isLoading}
-                            className={`flex-1 py-4 px-6 ${buttonColor} text-white font-bold rounded-2xl shadow-lg transition-all transform active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2`}
+                            className={`flex-1 py-4 px-6 ${buttonColor} text-white font-black text-sm rounded-2xl shadow-xl transition-all transform active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2`}
                         >
                             {isLoading ? (
                                 <>
-                                    <span className="w-5 h-5 border-3 border-white/30 border-t-white rounded-full animate-spin"></span>
-                                    En cours...
+                                    <div className="w-5 h-5 border-3 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    <span className="animate-pulse">En cours...</span>
                                 </>
                             ) : (
                                 confirmText

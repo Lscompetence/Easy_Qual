@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import {
     CheckCircle, Clock, XCircle, CircleOff, AlertTriangle,
     Upload, Download, FileText, ChevronDown, ChevronUp, Send, MessageSquare,
-    ArrowRight, CheckSquare, Check, Trash2, Video, Sun, Flag, Ban
+    ArrowRight, CheckSquare, Check, Trash2, Video, Sun, Flag, Ban, PlayCircle
 } from 'lucide-react'
 import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
@@ -47,6 +47,7 @@ export default function ClientDashboard() {
     const fileInputRef = useRef(null)
     const [pendingCriterionId, setPendingCriterionId] = useState(null)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
+    const [selectedVideoIndicator, setSelectedVideoIndicator] = useState(null)
     const messagesEndRef = useRef(null)
 
     // Manual Save States
@@ -55,7 +56,7 @@ export default function ClientDashboard() {
     const [savingIndicator, setSavingIndicator] = useState(null)
     const [saveSuccess, setSaveSuccess] = useState({})
     const [globalMessage, setGlobalMessage] = useState(null)
-    const [selectedAudit, setSelectedAudit] = useState(null)
+    const [selectedAudit, setSelectedAudit] = useState('initial')
     const [allStatesData, setAllStatesData] = useState([])
     const [allQuizData, setAllQuizData] = useState([])
     const [caseEvents, setCaseEvents] = useState([])
@@ -133,6 +134,7 @@ export default function ClientDashboard() {
                 table: 'case_messages',
                 filter: `case_id=eq.${myCase.id}`
             }, (payload) => {
+                if (payload.new.content.startsWith('[SYSTEM]')) return
                 setMessages(prev => {
                     if (prev.some(m => m.id === payload.new.id)) return prev
                     return [...prev, payload.new]
@@ -152,7 +154,10 @@ export default function ClientDashboard() {
             .select('*')
             .eq('case_id', myCase.id)
             .order('created_at', { ascending: true })
-        setMessages(data || [])
+        
+        // Filter out system messages for the chat
+        const userMessages = (data || []).filter(m => !m.content.startsWith('[SYSTEM]'))
+        setMessages(userMessages)
     }
 
     const fetchClientData = async () => {
@@ -209,7 +214,7 @@ export default function ClientDashboard() {
                     // Default selected audit to the last one in the list if not set
                     if (!selectedAudit) {
                         const types = Array.isArray(caseData.audit_type) ? caseData.audit_type : ['initial']
-                        setSelectedAudit(types[types.length - 1] || 'initial')
+                        setSelectedAudit(types[0] || 'initial')
                     }
                     
                     console.log("CLIENT CASE ID:", caseData.id)
@@ -335,24 +340,30 @@ export default function ClientDashboard() {
     }
 
     const handleSaveIndicator = async (indicatorId) => {
-        if (!myCase || !user) return
-        setSavingIndicator(indicatorId)
+        if (!myCase || !user) return;
+        setSavingIndicator(indicatorId);
 
         try {
-            const normalizedAudit = (selectedAudit || 'initial').trim().toLowerCase()
-            const state = indicatorStates[indicatorId] || {}
+            const normalizedAudit = (selectedAudit || 'initial').trim().toLowerCase();
+            const state = indicatorStates[indicatorId] || {};
+            
+            // Check if status changed compared to DB to avoid duplicate notifications
+            const dbState = allStatesData.find(s => s.indicator_id === indicatorId && (s.audit_type || 'initial') === normalizedAudit);
+            const statusChanged = state.status && state.status !== dbState?.status;
 
             // 1. Upload file if pending
-            const pendingFile = pendingFiles[indicatorId]
+            const pendingFile = pendingFiles[indicatorId];
+            let fileUploaded = false;
+
             if (pendingFile) {
-                const ext = pendingFile.name.split('.').pop()
-                const path = `${myCase.id}/ind_${indicatorId}_${Date.now()}.${ext}`
+                const ext = pendingFile.name.split('.').pop();
+                const path = `${myCase.id}/ind_${indicatorId}_${Date.now()}.${ext}`;
                 const { error: uploadError } = await supabase.storage
-                    .from('quiz-uploads').upload(path, pendingFile, { upsert: true })
+                    .from('quiz-uploads').upload(path, pendingFile, { upsert: true });
                 
-                if (uploadError) throw uploadError
+                if (uploadError) throw uploadError;
                 
-                const { data: urlData } = supabase.storage.from('quiz-uploads').getPublicUrl(path)
+                const { data: urlData } = supabase.storage.from('quiz-uploads').getPublicUrl(path);
                 
                 // Save file metadata
                 const { error: quizError } = await supabase.from('criterion_quiz_uploads').upsert({
@@ -362,9 +373,10 @@ export default function ClientDashboard() {
                     file_url: urlData.publicUrl,
                     file_name: pendingFile.name,
                     uploaded_at: new Date().toISOString()
-                }, { onConflict: 'case_id,criterion_id,audit_type' })
+                }, { onConflict: 'case_id,criterion_id,audit_type' });
 
-                if (quizError) throw quizError
+                if (quizError) throw quizError;
+                fileUploaded = true;
                 
                 // Update local quiz states
                 setQuizUploads(prev => ({
@@ -377,7 +389,7 @@ export default function ClientDashboard() {
                             uploaded_at: new Date().toISOString() 
                         }
                     }
-                }))
+                }));
             }
 
             // 2. Save indicator state (status, comment)
@@ -388,10 +400,32 @@ export default function ClientDashboard() {
                 status: state.status || 'to_do',
                 consultant_verdict: state.consultant_verdict,
                 consultant_comment: state.consultant_comment,
+                client_comment: state.client_comment,
                 updated_at: new Date().toISOString()
-            }, { onConflict: 'case_id,indicator_id,audit_type' })
+            }, { onConflict: 'case_id,indicator_id,audit_type' });
 
-            if (stateError) throw stateError
+            if (stateError) throw stateError;
+
+            // 📩 3. AUTOMATIC NOTIFICATION MESSAGE
+            const indicatorLabel = indicators.find(i => i.id === indicatorId)?.label || `Indicateur ${indicatorId}`;
+            const statusLabels = { 'done': 'Fait', 'not_applicable': 'Non applicable', 'doing': 'En cours', 'to_do': 'À traiter' };
+            
+            if (statusChanged || fileUploaded) {
+                let msgContent = `📝 Indicateur mis à jour : ${indicatorLabel.substring(0, 50)}...\n`;
+                if (statusChanged) msgContent += `🔹 Statut : ${statusLabels[state.status] || state.status}\n`;
+                if (state.status === 'not_applicable' && state.client_comment) {
+                    msgContent += `💬 Justification : ${state.client_comment}\n`;
+                }
+                if (fileUploaded) msgContent += `📁 Document joint : ${pendingFile.name}\n`;
+                
+                try {
+                    await supabase.from('case_messages').insert({
+                        case_id: myCase.id,
+                        sender_id: user.id,
+                        content: `[SYSTEM] ${msgContent}`
+                    });
+                } catch (e) { console.warn("Could not insert notification:", e); }
+            }
 
             // IMMEDIATE LOCAL SYNC
             setIndicatorStates(prev => ({
@@ -402,49 +436,48 @@ export default function ClientDashboard() {
                     audit_type: normalizedAudit,
                     updated_at: new Date().toISOString()
                 }
-            }))
+            }));
 
             // Clear dirty state
             setDirtyIndicators(prev => {
-                const next = new Set(prev)
-                next.delete(indicatorId)
-                next.delete(String(indicatorId))
-                return next
-            })
+                const next = new Set(prev);
+                next.delete(indicatorId);
+                next.delete(String(indicatorId));
+                return next;
+            });
             setPendingFiles(prev => {
-                const { [indicatorId]: _, ...rest } = prev
-                const { [String(indicatorId)]: __, ...rest2 } = rest
-                return rest2
-            })
+                const { [indicatorId]: _, ...rest } = prev;
+                const { [String(indicatorId)]: __, ...rest2 } = rest;
+                return rest2;
+            });
 
-            // Show success confirmation
-            setSaveSuccess(prev => ({ ...prev, [indicatorId]: true }))
-            showStatus('success', 'Enregistré !', 'Les informations de cet indicateur ont été sauvegardées avec succès.')
+            setSaveSuccess(prev => ({ ...prev, [indicatorId]: true }));
+            showStatus('success', 'Enregistré !', 'Les informations ont été sauvegardées et votre consultant a été notifié.');
             setTimeout(() => {
-                setSaveSuccess(prev => ({ ...prev, [indicatorId]: false }))
-            }, 5000)
+                setSaveSuccess(prev => ({ ...prev, [indicatorId]: false }));
+            }, 5000);
 
         } catch (err) {
-            console.error('CRITICAL SAVE ERROR:', err)
-            showStatus('error', 'Erreur', 'Impossible de sauvegarder : ' + (err.message || 'Problème de connexion.'))
+            console.error('CRITICAL SAVE ERROR:', err);
+            showStatus('error', 'Erreur', 'Impossible de sauvegarder : ' + (err.message || 'Problème de connexion.'));
         } finally {
-            setSavingIndicator(null)
+            setSavingIndicator(null);
         }
-    }
+    };
 
     // Standard immediate uploader for Criterion-level or Quiz
     const handleFileUpload = async (file, targetKey) => {
-        if (!file || !myCase) return
-        setUploadingFor(targetKey)
+        if (!file || !myCase) return;
+        setUploadingFor(targetKey);
         try {
-            const ext = file.name.split('.').pop()
-            const path = `${myCase.id}/${targetKey}_${Date.now()}.${ext}`
+            const ext = file.name.split('.').pop();
+            const path = `${myCase.id}/${targetKey}_${Date.now()}.${ext}`;
             const { error: uploadError } = await supabase.storage
-                .from('quiz-uploads').upload(path, file, { upsert: true })
-            if (uploadError) throw uploadError
-            const { data: urlData } = supabase.storage.from('quiz-uploads').getPublicUrl(path)
+                .from('quiz-uploads').upload(path, file, { upsert: true });
+            if (uploadError) throw uploadError;
+            const { data: urlData } = supabase.storage.from('quiz-uploads').getPublicUrl(path);
             
-            const normAudit = (selectedAudit || 'initial').trim().toLowerCase()
+            const normAudit = (selectedAudit || 'initial').trim().toLowerCase();
             
             await supabase.from('criterion_quiz_uploads').upsert({
                 case_id: myCase.id, 
@@ -453,7 +486,19 @@ export default function ClientDashboard() {
                 file_url: urlData.publicUrl,
                 file_name: file.name,
                 uploaded_at: new Date().toISOString()
-            }, { onConflict: 'case_id,criterion_id,audit_type' })
+            }, { onConflict: 'case_id,criterion_id,audit_type' });
+
+            const targetLabel = targetKey.startsWith('ind_') 
+                ? indicators.find(i => `ind_${i.id}` === targetKey)?.label || `Indicateur ${targetKey.replace('ind_', '')}`
+                : targetKey === 'validation' ? 'Validation finale / Quiz' : `Ressource ${targetKey}`;
+
+            try {
+                await supabase.from('case_messages').insert({
+                    case_id: myCase.id,
+                    sender_id: user.id,
+                    content: `[SYSTEM] 📁 Nouveau document déposé\n🎯 Cible : ${targetLabel.substring(0, 60)}...\n📄 Fichier : ${file.name}`
+                });
+            } catch (e) { console.warn("Could not insert notification:", e); }
 
             setQuizUploads(prev => ({
                 ...prev,
@@ -465,14 +510,14 @@ export default function ClientDashboard() {
                         uploaded_at: new Date().toISOString() 
                     }
                 }
-            }))
-            showStatus('success', 'Fichier envoyé !', 'Votre document a été correctement téléchargé et associé.')
+            }));
+            showStatus('success', 'Fichier envoyé !', 'Votre document a été correctement téléchargé et votre consultant a été prévenu.');
         } catch (err) {
-            showStatus('error', 'Échec de l\'envoi', 'Une erreur est survenue lors du téléchargement : ' + err.message)
+            showStatus('error', 'Échec de l\'envoi', 'Une erreur est survenue : ' + err.message);
         } finally {
-            setUploadingFor(null)
+            setUploadingFor(null);
         }
-    }
+    };
 
     const handleDeleteFile = async (targetKey) => {
         if (!myCase) return;
@@ -592,6 +637,17 @@ export default function ClientDashboard() {
     const currentCriterion = criteriaList.find(c => String(c.id) === String(criterionId))
     const criterionIndex = criteriaList.findIndex(c => String(c.id) === String(criterionId))
 
+    useEffect(() => {
+        if (isCriterion && currentCriterion?.items?.length > 0) {
+            // Force reset selection to the first indicator of the NEW criterion whenever the criterionId changes
+            // To be precise: only reset if the currently selected indicator doesn't belong to the current criterion's items
+            const isSVIValid = currentCriterion.items.some(it => it.id === selectedVideoIndicator);
+            if (!isSVIValid) {
+                setSelectedVideoIndicator(currentCriterion.items[0].id);
+            }
+        }
+    }, [isCriterion, currentCriterion, criterionId, selectedVideoIndicator]);
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex">
@@ -666,7 +722,7 @@ export default function ClientDashboard() {
                                         const isMe = msg.sender_id === user.id
                                         return (
                                             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-[78%] px-4 py-2.5 rounded-2xl text-sm font-medium leading-relaxed ${isMe
+                                                <div className={`max-w-[78%] px-4 py-2.5 rounded-2xl text-sm font-medium leading-relaxed whitespace-pre-line ${isMe
                                                     ? 'bg-[#cc6d3e] text-white rounded-br-md'
                                                     : 'bg-white text-gray-800 border border-gray-100 shadow-sm rounded-bl-md'
                                                     }`}>
@@ -856,21 +912,28 @@ export default function ClientDashboard() {
                     )}
                     <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
                         {/* Phase Selector in Detail View */}
-                        <div className="mb-8 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                        <div className="mb-8 flex gap-2 overflow-x-auto pb-4 scrollbar-hide">
                             {(Array.isArray(myCase?.audit_type) ? myCase.audit_type : []).map((type, i) => {
-                                const isActive = selectedAudit === type
+                                const normalizeAudit = (t) => {
+                                    const str = String(t || '').toLowerCase().trim()
+                                    if (str.includes('initial')) return 'initial'
+                                    if (str.includes('surveillance')) return 'surveillance'
+                                    if (str.includes('renouvellement')) return 'renouvellement'
+                                    return str
+                                }
+                                const isActive = normalizeAudit(selectedAudit) === normalizeAudit(type)
                                 return (
                                     <button 
                                         key={i} 
                                         onClick={() => setSelectedAudit(type)}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black tracking-tight transition-all border-2 whitespace-nowrap ${
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 whitespace-nowrap shadow-sm ${
                                             isActive 
-                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-500 shadow-sm' 
-                                                : 'bg-white text-slate-400 border-slate-100 hover:border-slate-300'
+                                                ? 'bg-[#cc6d3e] text-white border-[#cc6d3e] scale-105' 
+                                                : 'bg-white text-gray-400 border-gray-100 hover:border-gray-300'
                                         }`}
                                     >
-                                        <div className={`h-2 w-2 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-200'}`} />
-                                        {type.toUpperCase()}
+                                        <div className={`h-2 w-2 rounded-full ${isActive ? 'bg-white animate-pulse' : 'bg-gray-200'}`} />
+                                        {type}
                                     </button>
                                 )
                             })}
@@ -883,7 +946,12 @@ export default function ClientDashboard() {
                                 </p>
                                 <span className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-gray-100 text-gray-400">ID: {myCase?.id?.substring(0,8)}</span>
                             </div>
-                            <h1 className="text-2xl font-black text-gray-900">{currentCriterion.label}</h1>
+                            <h1 className="text-2xl font-black text-gray-900 flex items-center gap-3">
+                                {currentCriterion.label}
+                                <span className="px-3 py-1 bg-[#cc6d3e]/10 text-[#cc6d3e] border border-[#cc6d3e]/20 rounded-full text-[10px] font-black uppercase tracking-widest translate-y-[1px]">
+                                    {selectedAudit || 'Initial'}
+                                </span>
+                            </h1>
                             <p className="text-sm text-gray-500 mt-1">
                                 Découvrez comment communiquer de manière transparente et exhaustive sur votre offre de formation vers vos publics cibles.
                             </p>
@@ -894,8 +962,9 @@ export default function ClientDashboard() {
                             {/* Universal Player (Marque Blanche) */}
                             <div className="lg:col-span-2">
                                 <UniversalPlayer 
-                                    indicatorId={currentCriterion?.items?.[0]?.id} 
+                                    indicatorId={selectedVideoIndicator || currentCriterion?.items?.[0]?.id} 
                                     consultantId={myCase?.consultant_id || tenant?.created_by} 
+                                    auditType={selectedAudit}
                                 />
                             </div>
 
@@ -921,8 +990,16 @@ export default function ClientDashboard() {
                                     <p className="text-xs text-gray-500 mb-3">Remplissez le fichier ressource et téléversez-le ici</p>
                                     
                                     {(() => {
-                                        const normAudit = (myCase.audit_type?.[myCase.audit_type.length - 1] || 'initial').trim().toLowerCase()
-                                        const quiz = quizUploads['crit_' + currentCriterion.id]?.[normAudit]
+                                        const normalizeAudit = (t) => {
+                                            const str = String(t || '').toLowerCase().trim()
+                                            if (str.includes('initial')) return 'initial'
+                                            if (str.includes('surveillance')) return 'surveillance'
+                                            if (str.includes('renouvellement')) return 'renouvellement'
+                                            return str
+                                        }
+                                        const aKey = normalizeAudit(selectedAudit || 'initial')
+                                        const quiz = (quizUploads['crit_' + currentCriterion.id] || {})[aKey] || 
+                                                     Object.values(quizUploads['crit_' + currentCriterion.id] || {}).find(q => normalizeAudit(q.audit_type) === aKey)
                                         
                                         if (quiz) {
                                             return (
@@ -1014,6 +1091,21 @@ export default function ClientDashboard() {
                                                                  }`}>
                                                                 {status === 'done' ? 'FAIT' : (status === 'not_applicable' || status === 'non_applicable' ? 'NA' : (status === 'to_do' || status === 'doing' ? 'EN COURS' : 'À DÉCLARER'))}
                                                             </span>
+                                                            <button 
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedVideoIndicator(ind.id);
+                                                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                                }}
+                                                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border ${
+                                                                    selectedVideoIndicator === ind.id 
+                                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-100' 
+                                                                        : 'bg-white text-indigo-600 border-indigo-100 hover:bg-indigo-50'
+                                                                }`}
+                                                            >
+                                                                <PlayCircle className="h-3 w-3" />
+                                                                {selectedVideoIndicator === ind.id ? 'Vidéo en cours' : 'Voir la vidéo'}
+                                                            </button>
                                                     </div>
                                                     <p className="text-sm text-slate-500 mt-1.5 font-medium leading-relaxed">{ind.label}</p>
                                                 </div>

@@ -13,6 +13,8 @@ import ClientDashboard from './pages/client/ClientDashboard'
 import ClientProfile from './pages/client/ClientProfile'
 import AgendaVisios from './pages/consultant/AgendaVisios'
 import Ressources from './pages/consultant/Ressources'
+import ConsultantNotifications from './pages/consultant/ConsultantNotifications'
+import ConsultantMessages from './pages/consultant/ConsultantMessages'
 import Profile from './pages/Profile'
 import Unauthorized from './pages/Unauthorized'
 import MaquetteDemo from './pages/MaquetteDemo'
@@ -46,6 +48,8 @@ function App() {
             <Route path="/consultant/case/:id" element={<CaseDetails />} />
             <Route path="/consultant/calendar" element={<AgendaVisios />} />
             <Route path="/consultant/resources" element={<Ressources />} />
+            <Route path="/consultant/notifications" element={<ConsultantNotifications />} />
+            <Route path="/consultant/messages" element={<ConsultantMessages />} />
           </Route>
 
           {/* Client (OF) Routes - All point to Dashboard tabs */}

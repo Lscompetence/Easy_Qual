@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -151,6 +151,18 @@ export default function ClientProfile() {
                 .eq('id', user.id)
             if (error) throw error
             await refreshProfile()
+            
+            // 📩 NOTIFICATION POUR LE CONSULTANT
+            if (myCase?.id) {
+                try {
+                    await supabase.from('case_messages').insert({
+                        case_id: myCase.id,
+                        sender_id: user.id,
+                        content: `[SYSTEM] 👤 Le client a mis à jour ses informations de profil (Nom/Prénom).`
+                    });
+                } catch (e) { console.warn("Could not insert notification:", e); }
+            }
+
             showMsg('success', 'Profil mis à jour avec succès.')
         } catch (err) {
             showMsg('error', 'Erreur lors de la mise à jour.')
@@ -191,6 +203,17 @@ export default function ClientProfile() {
                     .from('tenants')
                     .update({ initial_password: passwordData.newPassword })
                     .eq('id', tenantData.id)
+            }
+
+            // 📩 NOTIFICATION POUR LE CONSULTANT
+            if (myCase?.id) {
+                try {
+                    await supabase.from('case_messages').insert({
+                        case_id: myCase.id,
+                        sender_id: user.id,
+                        content: `[SYSTEM] 🔐 Le client a modifié son mot de passe.`
+                    });
+                } catch (e) { console.warn("Could not insert notification:", e); }
             }
 
             setShowSuccessModal(true)
