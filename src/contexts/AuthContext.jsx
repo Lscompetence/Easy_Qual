@@ -137,9 +137,34 @@ export const AuthProvider = ({ children }) => {
         if (error) throw error
     }
 
-    const resetPassword = async (email, role = 'client') => {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${window.location.origin}/update-password?role=${role}`,
+    const resetPassword = async (email, requiredRole = 'client') => {
+        const cleanEmail = email.trim().toLowerCase()
+
+        // 🛡️ SECURITY CHECK: Verify if email exists AND matches the required role
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('email', cleanEmail)
+            .maybeSingle()
+
+        // Au lieu de bloquer (à cause du RLS Supabase), on affiche un avertissement.
+        if (profileError) {
+            console.warn("Impossible de vérifier le rôle avant l'envoi (vérifiez les Policies RLS Supabase):", profileError)
+        }
+
+        // Si on a réussi à lire le profil, on vérifie strictement le rôle
+        if (profile && profile.role !== requiredRole) {
+            const roleLabels = {
+                'admin': 'Administrateur',
+                'consultant': 'Consultant',
+                'client': 'Client'
+            }
+            throw new Error(`Accès refusé. Cet e-mail est lié à un compte ${roleLabels[profile.role] || profile.role}.`)
+        }
+
+        // Si le profil n'est pas lu (RLS) ou si le rôle est bon, on procède à l'envoi
+        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+            redirectTo: `${window.location.origin}/update-password?role=${requiredRole}`,
         })
         if (error) throw error
     }

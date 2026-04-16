@@ -15,6 +15,7 @@ import AgendaVisios from './pages/consultant/AgendaVisios'
 import Ressources from './pages/consultant/Ressources'
 import ConsultantNotifications from './pages/consultant/ConsultantNotifications'
 import ConsultantMessages from './pages/consultant/ConsultantMessages'
+import ConsultantBackups from './pages/consultant/ConsultantBackups'
 import Profile from './pages/Profile'
 import Unauthorized from './pages/Unauthorized'
 import MaquetteDemo from './pages/MaquetteDemo'
@@ -50,6 +51,7 @@ function App() {
             <Route path="/consultant/resources" element={<Ressources />} />
             <Route path="/consultant/notifications" element={<ConsultantNotifications />} />
             <Route path="/consultant/messages" element={<ConsultantMessages />} />
+            <Route path="/consultant/backups" element={<ConsultantBackups />} />
           </Route>
 
           {/* Client (OF) Routes - All point to Dashboard tabs */}

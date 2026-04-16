@@ -6,7 +6,7 @@ import Logo from '../components/Logo'
 export default function Login() {
     const [searchParams] = useSearchParams()
     const location = useLocation()
-    const roleParam = searchParams.get('role')
+    const roleParam = searchParams.get('role') || 'admin'
 
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -185,6 +185,7 @@ export default function Login() {
                 <div className="text-center mb-10 flex justify-center">
                     <Logo size="large" color={config.color} />
                 </div>
+                
                 <div className="text-center mb-8">
                     <p className="text-lg font-bold text-gray-900 mb-1">
                         {config.title}

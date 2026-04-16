@@ -63,14 +63,14 @@ if (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'YOUR_SUPABASE_URL') {
     if (!window.supabaseGlobal) {
         window.supabaseGlobal = createClient(supabaseUrl, supabaseAnonKey, {
             auth: {
-                storage: cookieStorage, // Use Cookies instead of localStorage
-                storageKey: 'easyqual-auth-token', // Custom secure key name
+                storage: window.sessionStorage, // Forced re-login on browser/tab close
+                storageKey: 'easyqual-auth-token',
                 persistSession: true,
                 autoRefreshToken: true,
                 detectSessionInUrl: true
             },
             global: {
-                fetch: fetchWithRetry // Inject the retry mechanism globally
+                fetch: fetchWithRetry
             }
         })
         window.supabaseKey = supabaseAnonKey

@@ -82,7 +82,7 @@ export default function Ressources() {
                         <div className="relative max-w-6xl mx-auto px-8 py-12 flex items-center justify-between gap-8">
                             <div>
                                 <p className="text-indigo-300 text-xs font-bold uppercase tracking-widest mb-3">EasyQual · Espace consultant</p>
-                                <h1 className="text-4xl font-black text-white mb-3 leading-tight">Audit Qualiopi Manager</h1>
+                                <h1 className="text-4xl font-black text-white mb-3 leading-tight">Gestion Session Client</h1>
                                 <p className="text-indigo-200 text-sm max-w-lg leading-relaxed">
                                     Documents officiels, modèles d'audit et liens utiles pour conduire vos missions Qualiopi avec efficacité.
                                 </p>

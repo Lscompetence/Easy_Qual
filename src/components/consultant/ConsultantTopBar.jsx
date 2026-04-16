@@ -41,12 +41,13 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
 
     const fetchUnreadCount = async () => {
         try {
-            // Count ONLY unread [SYSTEM] messages to verify their existence
+            // Count ONLY unread [SYSTEM] messages for cases owned by this consultant
             const { data: msgData } = await supabase
                 .from('case_messages')
-                .select('id')
+                .select('id, cases!inner(consultant_id)')
                 .is('read_at', null)
                 .neq('sender_id', user.id)
+                .eq('cases.consultant_id', user.id)
                 .ilike('content', '%[SYSTEM]%')
 
             setUnreadCount(msgData?.length || 0)

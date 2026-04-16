@@ -4,15 +4,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 
 serve(async (req) => {
-    // Handle CORS
+    const corsHeaders = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    };
+
+    // Handle CORS Preflight
     if (req.method === 'OPTIONS') {
-        return new Response('ok', {
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST',
-                'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-            },
-        })
+        return new Response('ok', { headers: corsHeaders, status: 200 })
     }
 
     try {
@@ -22,7 +22,7 @@ serve(async (req) => {
         if (!firstName || !lastName || !email || !tempPassword || !loginUrl) {
             return new Response(
                 JSON.stringify({ error: 'Missing required fields' }),
-                { status: 400, headers: { 'Content-Type': 'application/json' } }
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             )
         }
 
@@ -34,7 +34,7 @@ serve(async (req) => {
                 'Authorization': `Bearer ${RESEND_API_KEY}`,
             },
             body: JSON.stringify({
-                from: 'Easy\'Qual <onboarding@resend.dev>', // Change this to your verified domain
+                from: Deno.env.get('RESEND_FROM_EMAIL') || 'Easy\'Qual <onboarding@resend.dev>', // Change this to your verified domain
                 to: [email],
                 subject: 'Vos identifiants de connexion Easy\'Qual',
                 html: `
@@ -61,8 +61,8 @@ serve(async (req) => {
                 {
                     status: 200,
                     headers: {
+                        ...corsHeaders,
                         'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*',
                     }
                 }
             )
@@ -72,8 +72,8 @@ serve(async (req) => {
                 {
                     status: 500,
                     headers: {
+                        ...corsHeaders,
                         'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*',
                     }
                 }
             )
@@ -84,8 +84,8 @@ serve(async (req) => {
             {
                 status: 500,
                 headers: {
+                    ...corsHeaders,
                     'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*',
                 }
             }
         )

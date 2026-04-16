@@ -18,6 +18,9 @@ const ProtectedRoute = ({ allowedRoles }) => {
     }
 
     if (allowedRoles && !allowedRoles.includes(role)) {
+        // 🔒 SAFETY: Give it one last check if role is null (fast login fix)
+        if (role === null) return <div className="flex justify-center items-center h-screen">Vérification des accès...</div>
+
         // Redirect based on their actual role to avoid authorized access loops
         if (role === 'admin') return <Navigate to="/admin/dashboard" replace />
         if (role === 'consultant') return <Navigate to="/consultant/dashboard" replace />

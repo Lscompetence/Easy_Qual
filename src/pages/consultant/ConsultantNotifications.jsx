@@ -54,11 +54,13 @@ export default function ConsultantNotifications() {
                     created_at,
                     read_at,
                     case_id,
-                    cases (
+                    cases!inner (
                         id,
-                        tenant_id
+                        tenant_id,
+                        consultant_id
                     )
                 `)
+                .eq('cases.consultant_id', user.id)
                 .ilike('content', '%[SYSTEM]%')
                 .order('created_at', { ascending: false })
                 .limit(100)
@@ -114,6 +116,13 @@ export default function ConsultantNotifications() {
         setNotifications(prev => prev.map(n => n.case_id === caseId ? { ...n, is_read: true, read_at: now } : n))
     }
 
+    const [filter, setFilter] = useState('all')
+
+    const filteredNotifications = notifications.filter(n => {
+        if (filter === 'unread') return !n.is_read
+        return true
+    })
+
     return (
         <div className="bg-gray-50 min-h-screen flex font-sans">
             <ConsultantSidebar isOpen={showMobileMenu} onClose={() => setShowMobileMenu(false)} />
@@ -139,10 +148,24 @@ export default function ConsultantNotifications() {
                         </div>
 
                         <div className="flex items-center gap-2 bg-white p-1 rounded-2xl border border-gray-100 shadow-sm">
-                            <button className="px-4 py-2 bg-purple-50 text-purple-700 text-xs font-black uppercase rounded-xl border border-purple-100">
+                            <button 
+                                onClick={() => setFilter('all')}
+                                className={`px-4 py-2 text-xs font-black uppercase rounded-xl transition-all ${
+                                    filter === 'all' 
+                                        ? 'bg-purple-50 text-purple-700 border border-purple-100' 
+                                        : 'text-gray-400 font-bold hover:bg-gray-50'
+                                }`}
+                            >
                                 Tout
                             </button>
-                            <button className="px-4 py-2 text-gray-400 text-xs font-bold uppercase hover:bg-gray-50 rounded-xl transition-all">
+                            <button 
+                                onClick={() => setFilter('unread')}
+                                className={`px-4 py-2 text-xs font-black uppercase rounded-xl transition-all ${
+                                    filter === 'unread' 
+                                        ? 'bg-purple-50 text-purple-700 border border-purple-100' 
+                                        : 'text-gray-400 font-bold hover:bg-gray-50'
+                                }`}
+                            >
                                 Non lus
                             </button>
                             <div className="w-px h-4 bg-gray-100 mx-1"></div>
@@ -158,18 +181,20 @@ export default function ConsultantNotifications() {
                             Array(5).fill(0).map((_, i) => (
                                 <div key={i} className="h-24 bg-white rounded-3xl animate-pulse border border-gray-50"></div>
                             ))
-                        ) : notifications.length === 0 ? (
+                        ) : filteredNotifications.length === 0 ? (
                             <div className="bg-white rounded-[40px] border border-gray-100 shadow-xl shadow-gray-200/40 p-20 text-center">
                                 <div className="h-24 w-24 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
                                     <MessageSquare className="h-10 w-10 text-gray-200" />
                                 </div>
                                 <h2 className="text-xl font-black text-gray-900 mb-2">Silence radio...</h2>
                                 <p className="text-gray-400 max-w-sm mx-auto">
-                                    Aucun message ou signe récent de la part de vos clients. Profitez-en pour avancer sur vos dossiers !
+                                    {filter === 'unread' 
+                                        ? "Vous avez lu tous vos messages ! Félicitations." 
+                                        : "Aucun message ou signe récent de la part de vos clients. Profitez-en pour avancer sur vos dossiers !"}
                                 </p>
                             </div>
                         ) : (
-                            notifications.map((notif) => {
+                            filteredNotifications.map((notif) => {
                             const clientName = notif.clientName || 'Client'
                             const isAction = notif.content.startsWith('📝') || notif.content.startsWith('📁') || notif.content.startsWith('🔐') || notif.content.startsWith('👤')
 

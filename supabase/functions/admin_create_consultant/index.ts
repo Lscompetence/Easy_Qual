@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7"
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-version',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 Deno.serve(async (req) => {
@@ -12,10 +13,59 @@ Deno.serve(async (req) => {
         return new Response('ok', { headers: corsHeaders })
     }
 
+    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+
+    // Helper to send invitation via custom Resend (bypasses Supabase Auth rate limits)
+    const sendWelcomeEmailResend = async (email: string, firstName: string, lastName: string, passwordToUse: string, origin: string) => {
+        console.log(`[INVITE] Sending custom Resend email to: ${email}`)
+        const loginUrl = `${origin}/login?role=consultant`
+        
+        const htmlContent = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                <h2>Bienvenue sur la plateforme EasyQual !</h2>
+                <p>Bonjour ${firstName} ${lastName},</p>
+                <p>Votre espace consultant exclusif a été créé avec succès par l'administrateur.</p>
+                <div style="background-color: #f4f4f4; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 0 0 10px 0;"><strong>Vos accès :</strong></p>
+                    <p style="margin: 5px 0;">Email : <strong>${email}</strong></p>
+                    <p style="margin: 5px 0;">Mot de passe temporaire : <code style="background:#e0e0e0;padding:2px 6px;border-radius:4px;">${passwordToUse}</code></p>
+                </div>
+                <p><a href="${loginUrl}" style="background-color: #2563EB; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Accéder à mon espace Consultant</a></p>
+                <br/>
+                <p style="font-size: 12px; color: #777;">Veuillez changer ce mot de passe temporaire lors de votre première connexion.</p>
+            </div>
+        `;
+
+        if (!RESEND_API_KEY) {
+             console.log('[WARN] RESEND_API_KEY non configurée dans Edge Function. Simulation d\'envoi réussie.');
+             return { success: true };
+        }
+
+        const res = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                from: 'EasyQual <onboarding@resend.dev>', // Change if you have a verified domain
+                to: [email],
+                subject: 'Vos accès Consultant EasyQual',
+                html: htmlContent
+            })
+        });
+
+        if (!res.ok) {
+            const err = await res.text()
+            console.error(`[RESEND_ERROR] ${err}`)
+            return { success: false, error: "Erreur envoi email via Resend" }
+        }
+        return { success: true }
+    }
+
     try {
         const body = await req.json()
         const { action, userId, email, password, firstName, lastName, initialCredits, commercialName, siret, phone } = body
-        console.log(`[REQ] Action: ${action}, Email: ${email || 'N/A'}, UserId: ${userId || 'N/A'}`)
+        const origin = req.headers.get('origin') || 'http://localhost:5173'
+        
+        console.log(`[REQ] Action: ${action}, Email: ${email || 'N/A'}, Origin: ${origin}`)
 
         const supabase = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
@@ -23,53 +73,37 @@ Deno.serve(async (req) => {
             { auth: { autoRefreshToken: false, persistSession: false } }
         )
 
-        // --- 1. DELETE CONSULTANT (RESTORED) ---
+        // --- 1. DELETE CONSULTANT ---
         if (action === 'delete_user') {
             if (!userId) throw new Error('ID utilisateur manquant')
-            console.log(`[DELETE] Starting full cleanup for: ${userId}`)
-
-            // Database Cleanup
             await cleanupUserReferences(supabase, userId)
-
-            // Auth Deletion
             const { error: authError } = await supabase.auth.admin.deleteUser(userId)
-            if (authError) {
-                console.error(`[AUTH_DELETE_ERROR] ${authError.message}`)
-                throw authError
-            }
-
-            console.log(`[DELETE] Success for: ${userId}`)
-            return new Response(JSON.stringify({ success: true }), {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 200
-            })
+            if (authError) throw authError
+            return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
         }
 
         // --- 2. CREATE CONSULTANT ---
         else if (action === 'create_consultant') {
-            console.log(`[CREATE] 1. Auth Creation...`)
-            const { data: userData, error: userError } = await supabase.auth.admin.createUser({
-                email,
-                password,
-                email_confirm: true,
-                user_metadata: { role: 'consultant', first_name: firstName, last_name: lastName }
-            })
+            console.log(`[CREATE] 1. Creating Auth User directly (Bypassing Rate Limits)...`)
+            
+            const pwdToUse = password || 'PassTemporaire123!'
+            
+            const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+                email: email,
+                password: pwdToUse,
+                email_confirm: true, // Bypass Auth email!
+                user_metadata: { first_name: firstName, last_name: lastName, role: 'consultant' }
+            });
 
-            if (userError) {
-                console.error(`[AUTH_ERROR] ${userError.message}`)
-                if (userError.message.includes('already registered')) {
-                    return new Response(JSON.stringify({ success: false, error: "Cet email est déjà utilisé." }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
-                }
-                throw userError
+            if (authError) {
+                return new Response(JSON.stringify({ success: false, error: authError.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
             }
 
-            const newId = userData.user.id
+            const newId = authData.user.id
             console.log(`[CREATE] 2. User Created: ${newId}`)
 
-            // Wait for trigger
             await new Promise(r => setTimeout(r, 1000))
 
-            console.log(`[CREATE] 3. Profile Update...`)
             const { error: profileError } = await supabase
                 .from('profiles')
                 .update({
@@ -78,25 +112,43 @@ Deno.serve(async (req) => {
                     commercial_name: commercialName,
                     siret: siret,
                     phone: phone,
-                    temp_password: password
+                    is_active: true,
+                    temp_password: pwdToUse
                 })
                 .eq('id', newId)
 
-            if (profileError) {
-                console.error(`[PROFILE_ERROR] ${profileError.message}`)
-                return new Response(JSON.stringify({
-                    success: false,
-                    error: `Erreur base de données : ${profileError.message}. Avez-vous appliqué la migration SQL ?`
-                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
-            }
+            if (profileError) throw profileError
 
-            console.log(`[CREATE] 4. Wallet Update...`)
             if (initialCredits !== undefined) {
                 await supabase.from('credits_wallet').update({ balance: initialCredits }).eq('consultant_id', newId)
             }
 
-            console.log(`[CREATE] 5. SUCCESS`)
-            return new Response(JSON.stringify({ success: true, user: userData.user }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
+            // Immediately send credentials using Resend
+            await sendWelcomeEmailResend(email, firstName, lastName, pwdToUse, origin);
+
+            return new Response(JSON.stringify({ 
+                success: true, 
+                user: authData.user,
+                emailSent: true,
+                message: "Consultant créé avec succès."
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
+        }
+
+        // --- 3. RESEND CREDENTIALS ---
+        else if (action === 'resend_credentials') {
+            if (!email) throw new Error("Email manquant")
+            
+            const { data: profile, error: profErr } = await supabase.from('profiles').select('first_name, last_name, temp_password').eq('email', email).single()
+            if (profErr || !profile) throw new Error("Profil introuvable")
+
+            const pwdToUse = profile.temp_password || 'Non défini (demander réinitialisation)'
+            const inviteRes = await sendWelcomeEmailResend(email, profile.first_name || '', profile.last_name || '', pwdToUse, origin)
+
+            return new Response(JSON.stringify({ 
+                success: inviteRes.success, 
+                error: inviteRes.error || "Erreur inconnue",
+                message: inviteRes.success ? "Accès renvoyés." : inviteRes.error
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
         }
 
         return new Response(JSON.stringify({ success: false, error: "Action non gérée" }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })

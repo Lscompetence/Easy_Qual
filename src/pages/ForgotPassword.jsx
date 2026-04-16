@@ -77,7 +77,7 @@ export default function ForgotPassword() {
             setSuccess(true)
         } catch (err) {
             console.error(err)
-            setError('Impossible d\'envoyer l\'email. Vérifiez que l\'adresse est correcte.')
+            setError(err.message || 'Impossible d\'envoyer l\'email. Vérifiez que l\'adresse est correcte.')
         } finally {
             setLoading(false)
         }

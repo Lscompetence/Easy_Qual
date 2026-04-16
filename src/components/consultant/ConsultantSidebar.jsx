@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, FolderOpen, Calendar, BookOpen, Settings, LogOut, MoreVertical, X, MessageSquare, BellRing } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, Calendar, BookOpen, Settings, LogOut, MoreVertical, X, MessageSquare, BellRing, HardDrive } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext' // Adjust path if needed
@@ -34,17 +34,19 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
         const { count, error } = await supabase
             .from('cases')
             .select('*', { count: 'exact', head: true })
+            .eq('consultant_id', user.id)
         if (!error) setCaseCount(count || 0)
     }
 
     const fetchUnreadCounts = async () => {
         try {
-            // Count unread system notifications (prefixed with [SYSTEM])
+            // Count unread system notifications for this consultant's cases
             const { data: notifData } = await supabase
                 .from('case_messages')
-                .select('id')
+                .select('id, cases!inner(consultant_id)')
                 .is('read_at', null)
                 .neq('sender_id', user.id)
+                .eq('cases.consultant_id', user.id)
                 .ilike('content', '%[SYSTEM]%')
             
             setUnreadNotifications(notifData?.length || 0)
@@ -146,7 +148,7 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                             >
                                 <BookOpen className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/resources') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
                                     }`} />
-                                Audit Qualiopi Manager
+                                Gestion Session Client
                                 {isActive('/consultant/resources') && (
                                     <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
                                 )}

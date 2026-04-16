@@ -1,0 +1,2 @@
+'C:\Users\d-nia\AppData\Local\npm-cache\_npx\aa8e5c70f9d8d161\node_modules\supabase\bin\supabase.exe' a ‚t‚ bloqu‚ par la strat‚gie Device Guard de votre organisation.
+Pour plus d'informations, contactez la personne charg‚e du support. 

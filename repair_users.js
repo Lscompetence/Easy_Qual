@@ -1,56 +1,34 @@
-const fs = require('fs');
-const { createClient } = require('@supabase/supabase-js');
-const env = fs.readFileSync('.env.local', 'utf8');
-const urlLine = env.split('\n').find(l => l.startsWith('VITE_SUPABASE_URL='));
-const keyLine = env.split('\n').find(l => l.startsWith('VITE_SUPABASE_ANON_KEY='));
+import { createClient } from '@supabase/supabase-js'
 
-const url = urlLine.split('=')[1].trim();
-const key = keyLine.split('=')[1].trim();
+const SUPABASE_URL = 'https://gxworwhpcyfuqwuxocxx.supabase.co'
+const SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4d29yd2hwY3lmdXF3dXhvY3h4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTU5MDAxOCwiZXhwIjoyMDg1MTY2MDE4fQ.-2V0Fr7H54IyJxzgAglYLolrDuF0CH8kN1G3NHjaS_k' 
 
-async function fixAll() {
-    const supabase = createClient(url, key);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    // 1. Fetch all tenants
-    const { data: tenants, error } = await supabase
-        .from('tenants')
-        .select('*')
-        .not('client_email', 'is', null)
-        .not('initial_password', 'is', null);
+async function finalAdminRepair() {
+    const TARGET_EMAIL = 'yassinealaoui095@gmail.com'
+    console.log(`[🚀] RÉPARATION FINALE POUR: ${TARGET_EMAIL}`)
 
-    if (error) {
-        console.error('Error fetching tenants:', error);
-        return;
+    const { data: { users } } = await supabase.auth.admin.listUsers()
+    const user = users.find(u => u.email === TARGET_EMAIL)
+    
+    if (!user) {
+        console.error("Utilisateur introuvable.")
+        return
     }
 
-    console.log("Found " + tenants.length + " tenants with email & password.");
+    // 🔥 CRITIQUE: On injecte le rôle dans les "user_metadata"
+    // C'est ce qui permet au site de vous laisser passer sans attendre !
+    console.log("[🛠️] Injection du rôle Admin dans les métadonnées d'identité...")
+    const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+        user_metadata: { role: 'admin' },
+        app_metadata: { role: 'admin' }
+    })
 
-    // 2. Loop and hit invite-client for each
-    for (const t of tenants) {
-        if (t.client_email === 'd-nia@hotmail.fr') continue; // Skip admin/consultant just in case
+    if (updateError) throw updateError
 
-        console.log("Processing: " + t.client_email + " / " + t.initial_password);
-
-        try {
-            const res = await fetch(url + '/functions/v1/invite-client', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + key
-                },
-                body: JSON.stringify({
-                    email: t.client_email,
-                    password: t.initial_password,
-                    tenant_id: t.id,
-                    tenant_name: t.name || 'Client'
-                })
-            });
-
-            const text = await res.text();
-            console.log("  -> Status: " + res.status + ", Body: " + text);
-        } catch (e) {
-            console.error("  -> Error: " + e.message);
-        }
-    }
+    console.log("[✅] SUCCÈS ! Votre identité est maintenant marquée comme ADMIN.")
+    console.log("Connectez-vous sur http://localhost:5173/login?role=admin")
 }
 
-fixAll();
+finalAdminRepair()

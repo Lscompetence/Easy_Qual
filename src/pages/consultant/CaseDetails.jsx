@@ -185,6 +185,18 @@ export default function CaseDetails() {
             // NO merging pieces, it cause confusion with old stale data.
             potentialMatches.sort((a, b) => {
                 if (b.level !== a.level) return b.level - a.level
+                
+                // If calculating global progress (no target), prefer more advanced states over newer ones
+                if (!target) {
+                    const scoreA = (a.state.consultant_verdict === 'validated' || a.state.consultant_verdict === 'non_applicable') ? 100 :
+                                  (a.state.status === 'done') ? 50 : 
+                                  (a.state.status === 'doing') ? 25 : 0
+                    const scoreB = (b.state.consultant_verdict === 'validated' || b.state.consultant_verdict === 'non_applicable') ? 100 :
+                                  (b.state.status === 'done') ? 50 : 
+                                  (b.state.status === 'doing') ? 25 : 0
+                    if (scoreB !== scoreA) return scoreB - scoreA
+                }
+
                 const aDate = new Date(a.state.updated_at || 0).getTime()
                 const bDate = new Date(b.state.updated_at || 0).getTime()
                 return bDate - aDate
@@ -355,6 +367,18 @@ export default function CaseDetails() {
                 throw cError
             }
             if (!cData) throw new Error("Aucune donnée trouvée pour ce dossier")
+
+            // Fetch owner avatar as fallback for logo
+            if (cData.tenants?.owner_id) {
+                const { data: prof } = await supabase
+                    .from('profiles')
+                    .select('avatar_url')
+                    .eq('id', cData.tenants.owner_id)
+                    .single()
+                if (prof?.avatar_url) {
+                    cData.tenants.avatar_url = prof.avatar_url
+                }
+            }
 
             setCaseData(cData)
 
@@ -602,7 +626,7 @@ export default function CaseDetails() {
             const activeAuditTypes = caseData?.audit_type || ['initial']
             const totalPossibleGlobal = totalIndicators * activeAuditTypes.length
 
-            const newProgress = calculateWeightedProgress(allStates || [], totalPossibleGlobal)
+            const newProgress = calculateScore(Object.values(getGroupedStates(null)), totalIndicators)
 
             // 4. Determine final status (validated only if ALL indicators of ALL audits are reviewed)
             // This is a strict check: every indicator in every audit must have a verdict.
@@ -840,126 +864,293 @@ export default function CaseDetails() {
         }
     }
 
-    const handleGenerateReport = () => {
+    const handleGenerateReport = async () => {
         const doc = new jsPDF()
+        const tenantName = caseData.tenants?.name || 'Client'
+        const auditType = selectedAudit || 'initial'
 
-        // -- HEADER --
-        doc.setFillColor(67, 56, 202) // Indigo 700
-        doc.rect(0, 0, 210, 40, 'F')
+        // -- MODERN HEADER DESIGN (Popping Style) --
+        doc.setFillColor(67, 56, 202) // Indigo 700 
+        doc.rect(0, 0, 210, 85, 'F')
+        
+        // Stylish Background Pattern 
+        doc.setFillColor(79, 70, 229) // Indigo 600
+        doc.rect(0, 0, 210, 5, 'F')
+
+        // Add Logo with structured frame
+        const logoUrl = caseData.tenants?.logo_url || caseData.tenants?.avatar_url
+        if (logoUrl) {
+            try {
+                const img = new Image()
+                img.crossOrigin = 'Anonymous'
+                img.src = logoUrl
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve
+                    img.onerror = reject
+                })
+                // White rounded frame for logo
+                doc.setFillColor(255, 255, 255)
+                doc.roundedRect(15, 12, 35, 35, 8, 8, 'F')
+                doc.addImage(img, 'PNG', 18, 15, 29, 29)
+            } catch (err) {
+                console.error("Logo load failed:", err)
+            }
+        }
+
+        // Title Section
         doc.setTextColor(255, 255, 255)
-        doc.setFontSize(22)
-        doc.text("Rapport d'Audit Qualiopi", 105, 20, { align: 'center' })
+        doc.setFontSize(26)
+        doc.setFont('helvetica', 'bold')
+        doc.text("RAPPORT D'AUDIT", 125, 30, { align: 'center' })
+        doc.setFontSize(18)
+        doc.text("QUALIOPI", 125, 40, { align: 'center' })
+        
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(199, 210, 254) // Indigo 200
+        doc.text("Généré par Easy'Qual - Votre assistant conformité intelligent", 125, 48, { align: 'center' })
 
-        doc.setFontSize(12)
-        const now = new Date()
-        doc.text(`Client : ${caseData.tenant_name || 'N/A'}`, 20, 32)
-        doc.text(`Généré le : ${now.toLocaleDateString('fr-FR')} à ${now.toLocaleTimeString('fr-FR')}`, 120, 32)
+        // Horizontal Separator inside header
+        doc.setDrawColor(99, 102, 241) // Indigo 500
+        doc.setLineWidth(0.5)
+        doc.line(70, 55, 180, 55)
 
-        let yPos = 50
+        // Metadata Grid inside Header
+        doc.setTextColor(255, 255, 255)
+        doc.setFontSize(10)
+        
+        // Left Column Meta
+        doc.setFont('helvetica', 'bold')
+        doc.text(`ORGANISME :`, 15, 68)
+        doc.setFont('helvetica', 'normal')
+        doc.text(tenantName.toUpperCase(), 45, 68)
+        
+        doc.setFont('helvetica', 'bold')
+        doc.text(`SIRET :`, 15, 76)
+        doc.setFont('helvetica', 'normal')
+        doc.text(caseData.tenants?.siret || 'N/A', 45, 76)
 
-        // -- GLOBAL STATS --
+        // Right Column Meta
+        doc.setFont('helvetica', 'bold')
+        doc.text(`TYPE D'AUDIT :`, 110, 68)
+        doc.setFont('helvetica', 'normal')
+        doc.text((auditType === 'initial' ? 'AUDIT INITIAL' : auditType.toUpperCase()), 145, 68)
+
+        doc.setFont('helvetica', 'bold')
+        doc.text(`DATE :`, 110, 76)
+        doc.setFont('helvetica', 'normal')
+        doc.text(new Date().toLocaleDateString('fr-FR'), 145, 76)
+
+        let yPos = 100
+
+        // -- PROGRESS SUMMARY --
         doc.setTextColor(0, 0, 0)
-        doc.setFontSize(14)
-        doc.text(`Score Global : ${Math.round((stats.validated / stats.total) * 100)}%`, 20, yPos)
-        yPos += 15
+        doc.setFontSize(16)
+        doc.setFont('helvetica', 'bold')
+        doc.text("Synthèse de l'avancement", 20, yPos)
+        yPos += 10
+
+        // Progress Bar
+        doc.setDrawColor(229, 231, 235)
+        doc.setFillColor(243, 244, 246)
+        doc.roundedRect(20, yPos, 170, 12, 2, 2, 'FD')
+        
+        const docProgress = progressPercent
+        const progressWidth = (docProgress / 100) * 170
+        doc.setFillColor(67, 56, 202) // Indigo 700
+        doc.roundedRect(20, yPos, progressWidth, 12, 2, 2, 'F')
+        
+        doc.setFontSize(10)
+        doc.setTextColor(docProgress > 15 ? 255 : 67, docProgress > 15 ? 255 : 56, docProgress > 15 ? 255 : 202)
+        const textX = docProgress > 15 ? 20 + (progressWidth / 2) : 25 + progressWidth
+        doc.text(`${docProgress}% terminé`, textX, yPos + 8.5, { align: docProgress > 15 ? 'center' : 'left' })
+
+        doc.setTextColor(0, 0, 0)
+        yPos += 20
+
+        // Categories Info
+        if (Array.isArray(caseData.training_categories) && caseData.training_categories.length > 0) {
+            doc.setFontSize(11)
+            doc.setFont('helvetica', 'bold')
+            doc.text("Catégories d'actions :", 20, yPos)
+            doc.setFont('helvetica', 'normal')
+            doc.text(caseData.training_categories.join(', '), 65, yPos)
+            yPos += 15
+        }
 
         // -- CRITERIA LOOP --
-        criteriaData.forEach((crit) => {
+        criteriaData.forEach((crit, index) => {
+            // Check page break
+            if (yPos > 240) {
+                doc.addPage()
+                yPos = 20
+            }
             const critIndicators = crit.indicators || []
-            const consultantProgress = Math.round((critIndicators.filter(i => indicatorStates[i.id]?.consultant_verdict).length / critIndicators.length) * 100)
+            const currentStates = critIndicators.map(ind => indicatorStatesMap[String(ind.id)] || {})
+            const critProgress = calculateScore(currentStates, critIndicators.length)
 
-            // Criterion Title
-            yPos += 10
-            doc.setFillColor(240, 240, 240)
-            doc.rect(14, yPos - 7, 182, 10, 'F')
+            // Criterion Section Header
+            doc.setFillColor(249, 250, 251)
+            doc.rect(14, yPos, 182, 12, 'F')
             doc.setFontSize(12)
-            doc.setTextColor(0, 0, 0)
             doc.setFont('helvetica', 'bold')
-            doc.text(`${crit.label} (${consultantProgress}%)`, 20, yPos)
-            yPos += 8
+            doc.setTextColor(67, 56, 202)
+            doc.text(`CRITÈRE ${crit.id} : ${crit.label}`, 20, yPos + 8)
+            doc.setFontSize(10)
+            doc.setTextColor(107, 114, 128)
+            doc.text(`${critProgress}% validé`, 175, yPos + 8, { align: 'right' })
+            
+            yPos += 18
 
-            // Quiz Section (Top)
-            const quiz = quizUploads[crit.id]?.[selectedAudit || 'initial']
+            // Quiz Section for Criterion
+            const critIdStr = 'crit_' + crit.id
+            const quiz = quizUploads[critIdStr]?.[normalizeAudit(auditType)]
             if (quiz) {
-                doc.setDrawColor(200, 200, 255)
-                doc.setFillColor(240, 248, 255) // AliceBlue
-                doc.roundedRect(14, yPos, 182, 10, 2, 2, 'FD')
-
-                doc.setFontSize(10)
+                doc.setFontSize(9)
                 doc.setTextColor(0, 0, 0)
                 doc.setFont('helvetica', 'bold')
-                doc.text("Quiz importé : ", 20, yPos + 6)
-
-                doc.setTextColor(37, 99, 235) // Blue link
-                doc.textWithLink(quiz.file_name || 'Télécharger', 50, yPos + 6, { url: quiz.file_url })
-                yPos += 15
-            } else {
-                yPos += 5
+                doc.text("Fichier Quiz : ", 20, yPos)
+                doc.setFont('helvetica', 'normal')
+                doc.setTextColor(37, 99, 235)
+                doc.text(quiz.file_name || 'Télécharger', 45, yPos)
+                if (quiz.file_url) doc.link(45, yPos - 3, 100, 5, { url: quiz.file_url })
+                yPos += 6
             }
 
-            // Table Body
+            // Indicator Table
             const tableBody = critIndicators.map(ind => {
-                const state = indicatorStates[ind.id] || {}
-                let statusText = 'À faire'
-                if (state.status === 'doing') statusText = 'En cours'
-                if (state.status === 'done') statusText = 'Terminé'
+                const state = indicatorStatesMap[String(ind.id)] || {}
+                
+                // Client Choice
+                let clientChoice = '-'
+                if (state.status === 'done') clientChoice = 'Réalisé'
+                else if (state.status === 'doing') clientChoice = 'En cours'
+                else if (state.status === 'not_applicable') clientChoice = 'N/A'
+                
+                if (state.client_comment) clientChoice += `\n(Com: ${state.client_comment})`
 
-                let verdictText = '-'
+                // Proof File
+                const indIdStr = 'ind_' + ind.id
+                const proof = quizUploads[indIdStr]?.[normalizeAudit(auditType)]
+                const proofName = proof ? (proof.file_name || 'Preuve') : 'Aucune'
+
+                // Consultant Verdict
+                let verdictText = 'À valider'
                 if (state.consultant_verdict === 'validated') verdictText = 'CONFORME'
-                if (state.consultant_verdict === 'non_applicable') verdictText = 'NON APPLICABLE'
-                if (state.consultant_verdict === 'non_conforme') verdictText = 'NON CONFORME'
+                else if (state.consultant_verdict === 'non_conforme') verdictText = 'NON CONFORME'
+                else if (state.consultant_verdict === 'non_applicable') verdictText = 'N/A'
 
                 return [
-                    `${ind.code} - ${ind.label.substring(0, 60)}...`,
-                    statusText,
-                    verdictText,
-                    state.consultant_comment || ''
+                    `${ind.code}`,
+                    `${ind.label}`,
+                    clientChoice,
+                    proofName,
+                    verdictText
                 ]
             })
 
             autoTable(doc, {
                 startY: yPos,
-                head: [['Indicateur', 'Statut Client', 'Décision', 'Commentaire']],
+                head: [['Id', 'Indicateur', 'Choix Client', 'Preuve', 'Décision']],
                 body: tableBody,
                 theme: 'grid',
-                headStyles: { fillColor: [67, 56, 202], textColor: 255, fontStyle: 'bold' },
-                styles: { fontSize: 9, cellPadding: 3 },
-                columnStyles: { 0: { cellWidth: 80 }, 3: { cellWidth: 50 } },
+                headStyles: { fillColor: [67, 56, 202], textColor: 255, fontWeight: 'bold' },
+                styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+                columnStyles: { 
+                    0: { cellWidth: 8 }, 
+                    1: { cellWidth: 60 },
+                    2: { cellWidth: 40 },
+                    3: { cellWidth: 40 },
+                    4: { cellWidth: 25, halign: 'center' }
+                },
+                didDrawCell: (data) => {
+                    // Add link to proof if present
+                    if (data.column.index === 3 && data.cell.text[0] !== 'Aucune') {
+                        const ind = critIndicators[data.row.index]
+                        const indIdStr = 'ind_' + ind.id
+                        const proof = quizUploads[indIdStr]?.[normalizeAudit(auditType)]
+                        if (proof?.file_url) {
+                            doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: proof.file_url })
+                        }
+                    }
+                },
                 margin: { left: 14, right: 14 }
             })
 
             yPos = doc.lastAutoTable.finalY + 10
 
-            // Quiz & Main Comment
-            // Use local state comment if editing, else use saved comment from quiz object
-            const comment = criterionComments[crit.id] || quizUploads[crit.id]?.[selectedAudit || 'initial']?.consultant_comment
-
-            if (quiz || comment) {
-                // Check page break
-                if (yPos > 250) {
+            // Criterion Global Comment
+            const comment = quizUploads[critIdStr]?.[normalizeAudit(auditType)]?.consultant_comment || criterionComments[crit.id]
+            if (comment) {
+                if (yPos > 260) {
                     doc.addPage()
                     yPos = 20
                 }
-
-                doc.setFontSize(10)
+                doc.setFontSize(9)
                 doc.setFont('helvetica', 'bold')
-                doc.text("Synthèse du critère :", 20, yPos)
-                yPos += 6
+                doc.text("Commentaire du consultant :", 20, yPos)
+                yPos += 5
                 doc.setFont('helvetica', 'normal')
-
-                if (quiz) {
-                    // Quiz moved to top
-                }
-
-                if (comment) {
-                    const splitComment = doc.splitTextToSize(`Commentaire: ${comment}`, 170)
-                    doc.text(splitComment, 20, yPos)
-                    yPos += (splitComment.length * 5) + 5
-                }
+                const splitComment = doc.splitTextToSize(comment, 170)
+                doc.text(splitComment, 20, yPos)
+                yPos += (splitComment.length * 5) + 10
+            } else {
+                yPos += 5
             }
         })
 
-        doc.save(`Rapport_Audit_${caseData.tenant_name}_${new Date().toISOString().split('T')[0]}.pdf`)
+        // -- EVENTS / PLANNING SECTION --
+        if (events && events.length > 0) {
+            doc.addPage()
+            yPos = 25
+            doc.setTextColor(67, 56, 202)
+            doc.setFontSize(16)
+            doc.setFont('helvetica', 'bold')
+            doc.text("Calendrier & Étapes du Parcours", 20, yPos)
+            yPos += 12
+
+            const eventBody = events.map(e => [
+                new Date(e.event_date).toLocaleDateString('fr-FR'),
+                e.title,
+                e.description || '-',
+                e.status === 'done' ? 'RÉALISÉ' : (e.status === 'in_progress' ? 'EN COURS' : 'À VENIR')
+            ])
+
+            autoTable(doc, {
+                startY: yPos,
+                head: [['Date', 'Étape', 'Description', 'Statut']],
+                body: eventBody,
+                theme: 'striped',
+                headStyles: { fillColor: [67, 56, 202], textColor: 255 },
+                styles: { fontSize: 9 },
+                columnStyles: { 
+                    0: { cellWidth: 25 }, 
+                    1: { cellWidth: 50 },
+                    2: { cellWidth: 80 }
+                },
+                margin: { left: 14, right: 14 }
+            })
+        }
+
+        // -- FOOTER ALL PAGES --
+        const pageCount = doc.internal.getNumberOfPages()
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i)
+            doc.setFontSize(8)
+            doc.setTextColor(156, 163, 175)
+            
+            // Separator Line
+            doc.setDrawColor(229, 231, 235)
+            doc.line(14, 285, 196, 285)
+            
+            // Left Text
+            doc.text(`Rapport d'Accompagnement Qualiopi - Généré par Easy'Qual`, 14, 290)
+            
+            // Right Text (Page count)
+            doc.text(`Page ${i} sur ${pageCount}`, 196, 290, { align: 'right' })
+        }
+
+        doc.save(`Rapport_Audit_${tenantName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`)
     }
 
 
@@ -1029,9 +1220,17 @@ export default function CaseDetails() {
                     {/* HEADER CARD */}
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
                         <div className="flex items-center gap-6 w-full md:w-auto">
-                            <div className="h-20 w-20 rounded-2xl bg-emerald-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-200">
-                                {getInitials(caseData.tenants?.name)}
-                            </div>
+                            {(caseData.tenants?.logo_url || caseData.tenants?.avatar_url) ? (
+                                <img 
+                                    src={caseData.tenants.logo_url || caseData.tenants.avatar_url} 
+                                    alt={caseData.tenants.name} 
+                                    className="h-20 w-20 rounded-2xl object-cover shadow-lg border-2 border-white"
+                                />
+                            ) : (
+                                <div className="h-20 w-20 rounded-2xl bg-emerald-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-200">
+                                    {getInitials(caseData.tenants?.name)}
+                                </div>
+                            )}
                             <div>
                                 <div className="flex items-center gap-3 mb-2">
                                     <h1 className="text-3xl font-bold text-gray-900">{caseData.tenants?.name}</h1>
