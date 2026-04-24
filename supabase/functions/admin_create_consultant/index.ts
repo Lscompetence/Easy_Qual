@@ -13,49 +13,107 @@ Deno.serve(async (req) => {
         return new Response('ok', { headers: corsHeaders })
     }
 
-    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+    const BREVO_API_KEY = Deno.env.get('BREVO_API_KEY')
 
-    // Helper to send invitation via custom Resend (bypasses Supabase Auth rate limits)
-    const sendWelcomeEmailResend = async (email: string, firstName: string, lastName: string, passwordToUse: string, origin: string) => {
-        console.log(`[INVITE] Sending custom Resend email to: ${email}`)
+    // Helper to send invitation via Brevo (formerly Sendinblue)
+    const sendWelcomeEmailBrevo = async (email: string, firstName: string, lastName: string, passwordToUse: string, origin: string) => {
+        console.log(`[INVITE] Sending Brevo email to: ${email}`)
         const loginUrl = `${origin}/login?role=consultant`
+        const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
         
         const htmlContent = `
-            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-                <h2>Bienvenue sur la plateforme EasyQual !</h2>
-                <p>Bonjour ${firstName} ${lastName},</p>
-                <p>Votre espace consultant exclusif a été créé avec succès par l'administrateur.</p>
-                <div style="background-color: #f4f4f4; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                    <p style="margin: 0 0 10px 0;"><strong>Vos accès :</strong></p>
-                    <p style="margin: 5px 0;">Email : <strong>${email}</strong></p>
-                    <p style="margin: 5px 0;">Mot de passe temporaire : <code style="background:#e0e0e0;padding:2px 6px;border-radius:4px;">${passwordToUse}</code></p>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <link rel="preconnect" href="https://fonts.googleapis.com">
+                <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+                <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+                <style>
+                    body { font-family: 'Poppins', 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; background-color: #f9f9fb; }
+                    .wrapper { width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #eef0f2; }
+                    .header { padding: 40px 20px; text-align: center; border-bottom: 1px solid #f0f0f0; }
+                    .logo { font-size: 28px; font-weight: 800; color: #0f172a; text-decoration: none; letter-spacing: -1px; }
+                    .logo span { color: #2563eb; }
+                    .content { padding: 40px 50px; }
+                    .welcome { font-size: 24px; font-weight: 700; margin-bottom: 10px; color: #111827; }
+                    .intro { font-size: 15px; color: #4b5563; margin-bottom: 30px; font-weight: 300; }
+                    .card { background-color: #f8fafc; border-radius: 16px; padding: 30px; margin: 30px 0; border: 1px solid #e2e8f0; }
+                    .card-title { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #64748b; font-weight: 700; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; }
+                    .field { margin-bottom: 15px; font-size: 14px; }
+                    .field strong { color: #64748b; width: 100px; display: inline-block; font-size: 12px; }
+                    .field span { color: #1e293b; font-weight: 600; }
+                    .password-box { background: #ffffff; padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 16px; color: #2563eb; }
+                    .btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; padding: 18px 35px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 15px; margin-top: 20px; text-align: center; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); }
+                    .footer { background-color: #0f172a; color: #94a3b8; padding: 50px; text-align: center; font-size: 13px; }
+                    .footer p { margin: 8px 0; font-weight: 300; }
+                    .footer a { color: #ffffff; text-decoration: none; font-weight: 600; }
+                    .meta { display: block; font-size: 10px; color: #94a3b8; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 1px; }
+                </style>
+            </head>
+            <body>
+                <div class="wrapper">
+                    <div class="header">
+                        <div class="logo">Easy<span>'</span>Qual</div>
+                    </div>
+                    <div class="content">
+                        <div class="meta">
+                            RÉF : ACC-CONSULTANT &nbsp; | &nbsp; ${dateStr}
+                        </div>
+                        <h1 class="welcome">Bienvenue, ${firstName} !</h1>
+                        <p class="intro">Votre espace professionnel EasyQual est prêt. Vous pouvez dès à présent piloter vos audits et accompagner vos clients vers la réussite Qualiopi.</p>
+                        
+                        <div class="card">
+                            <div class="card-title">Fiche d'accès sécurisée</div>
+                            <div class="field"><strong>EMAIL</strong> <span>${email}</span></div>
+                            <div class="field"><strong>PASSWORD</strong> <span class="password-box">${passwordToUse}</span></div>
+                        </div>
+
+                        <div style="text-align: center;">
+                            <a href="${loginUrl}" class="btn">Accéder à mon tableau de bord</a>
+                        </div>
+                        
+                        <p style="font-size: 12px; color: #94a3b8; margin-top: 45px; text-align: center; font-weight: 300;">
+                            Pour votre sécurité, ce mot de passe temporaire doit être modifié lors de votre première connexion dans l'onglet "Profil".
+                        </p>
+                    </div>
+                    <div class="footer">
+                        <div class="logo" style="color: #ffffff; margin-bottom: 25px; font-size: 24px;">Easy<span>'</span>Qual</div>
+                        <p>L'excellence opérationnelle pour votre certification Qualiopi.</p>
+                        <p>Une question ? <a href="mailto:yassinealaoui095@gmail.com">Contactez notre support</a></p>
+                        <p style="margin-top: 30px; border-top: 1px solid #1e293b; padding-top: 25px; font-size: 10px; opacity: 0.6;">
+                            © 2026 EasyQual. Tous droits réservés.
+                        </p>
+                    </div>
                 </div>
-                <p><a href="${loginUrl}" style="background-color: #2563EB; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Accéder à mon espace Consultant</a></p>
-                <br/>
-                <p style="font-size: 12px; color: #777;">Veuillez changer ce mot de passe temporaire lors de votre première connexion.</p>
-            </div>
+            </body>
+            </html>
         `;
 
-        if (!RESEND_API_KEY) {
-             console.log('[WARN] RESEND_API_KEY non configurée dans Edge Function. Simulation d\'envoi réussie.');
-             return { success: true };
+        if (!BREVO_API_KEY) {
+             console.log('[WARN] BREVO_API_KEY non configurée. Identifiants affichés en secours.');
+             return { success: false, error: "Clé API Brevo manquante dans la configuration." };
         }
 
-        const res = await fetch('https://api.resend.com/emails', {
+        const res = await fetch('https://api.brevo.com/v3/smtp/email', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            headers: { 
+                'api-key': BREVO_API_KEY, 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
             body: JSON.stringify({
-                from: 'EasyQual <onboarding@resend.dev>', // Change if you have a verified domain
-                to: [email],
+                sender: { name: 'EasyQual', email: 'yassinealaoui095@gmail.com' }, 
+                to: [{ email: email, name: `${firstName} ${lastName}` }],
                 subject: 'Vos accès Consultant EasyQual',
-                html: htmlContent
+                htmlContent: htmlContent
             })
         });
 
         if (!res.ok) {
             const err = await res.text()
-            console.error(`[RESEND_ERROR] ${err}`)
-            return { success: false, error: "Erreur envoi email via Resend" }
+            console.error(`[BREVO_ERROR] ${err}`)
+            return { success: false, error: "Erreur envoi email via Brevo" }
         }
         return { success: true }
     }
@@ -123,8 +181,8 @@ Deno.serve(async (req) => {
                 await supabase.from('credits_wallet').update({ balance: initialCredits }).eq('consultant_id', newId)
             }
 
-            // Immediately send credentials using Resend
-            await sendWelcomeEmailResend(email, firstName, lastName, pwdToUse, origin);
+            // Immediately send credentials using Brevo
+            await sendWelcomeEmailBrevo(email, firstName, lastName, pwdToUse, origin);
 
             return new Response(JSON.stringify({ 
                 success: true, 
@@ -134,20 +192,51 @@ Deno.serve(async (req) => {
             }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
         }
 
-        // --- 3. RESEND CREDENTIALS ---
+        // --- 3. RESEND CREDENTIALS (Email only) ---
         else if (action === 'resend_credentials') {
+            console.log(`[RESEND] Attempting to resend credentials to: ${email}`)
             if (!email) throw new Error("Email manquant")
             
-            const { data: profile, error: profErr } = await supabase.from('profiles').select('first_name, last_name, temp_password').eq('email', email).single()
-            if (profErr || !profile) throw new Error("Profil introuvable")
+            // Fetch profile data including names and temp password
+            const { data: profile, error: profErr } = await supabase
+                .from('profiles')
+                .select('first_name, last_name, temp_password')
+                .eq('email', email)
+                .maybeSingle()
 
-            const pwdToUse = profile.temp_password || 'Non défini (demander réinitialisation)'
-            const inviteRes = await sendWelcomeEmailResend(email, profile.first_name || '', profile.last_name || '', pwdToUse, origin)
+            if (profErr) {
+                console.error(`[RESEND_ERROR] Database error: ${profErr.message}`)
+                throw new Error(`Erreur base de données : ${profErr.message}`)
+            }
 
+            if (!profile) {
+                console.error(`[RESEND_ERROR] Profile not found for: ${email}`)
+                throw new Error("Profil introuvable dans la base de données.")
+            }
+
+            const pwdToUse = profile.temp_password || 'Non défini (contactez l\'administrateur)'
+            console.log(`[RESEND] Profile found. Sending email via Resend...`)
+
+            const inviteRes = await sendWelcomeEmailBrevo(
+                email, 
+                profile.first_name || 'Consultant', 
+                profile.last_name || '', 
+                pwdToUse, 
+                origin
+            )
+
+            if (!inviteRes.success) {
+                console.error(`[RESEND_ERROR] ${inviteRes.error}`)
+                return new Response(JSON.stringify({ 
+                    success: false, 
+                    error: inviteRes.error || "L'envoi de l'email a échoué." 
+                }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
+            }
+
+            console.log(`[RESEND] Success! Email sent to ${email}`)
             return new Response(JSON.stringify({ 
-                success: inviteRes.success, 
-                error: inviteRes.error || "Erreur inconnue",
-                message: inviteRes.success ? "Accès renvoyés." : inviteRes.error
+                success: true, 
+                message: "Les accès ont été renvoyés avec succès."
             }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
         }
 

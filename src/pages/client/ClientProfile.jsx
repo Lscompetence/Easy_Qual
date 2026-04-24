@@ -78,7 +78,9 @@ export default function ClientProfile() {
                 if (tenantsData && tenantsData.length > 0) {
                     const tenantIds = tenantsData.map(t => t.id)
                     const { data: casesData } = await supabase
-                        .from('cases').select('*').in('tenant_id', tenantIds)
+                        .from('cases')
+                        .select('id, tenant_id, audit_type, training_categories, consultant_id, created_at')
+                        .in('tenant_id', tenantIds)
 
                     const caseData = casesData?.sort((a, b) => {
                         const aScore = (a.training_categories?.length || 0) + (a.audit_type?.length || 0)

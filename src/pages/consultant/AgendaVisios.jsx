@@ -36,7 +36,7 @@ export default function AgendaVisios() {
             if (caseIds.length > 0) {
                 const { data: eventsData, error: eventsError } = await supabase
                     .from('case_events')
-                    .select('*')
+                    .select('id, case_id, event_date, title, visio_link, event_type, status')
                     .in('case_id', caseIds)
                     .or('event_type.eq.audit,title.ilike.%audit blanc%')
                     .order('event_date', { ascending: true })

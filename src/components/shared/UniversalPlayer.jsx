@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import ReactPlayer from 'react-player';
 import { supabase } from '../../supabaseClient';
 import { Loader2, AlertCircle } from 'lucide-react';
 
-// Helper to extract YouTube Video ID
 const getYoutubeId = (url) => {
     if (!url) return null;
-    // Matches: youtube.com/watch?v=ID, youtu.be/ID, youtube.com/embed/ID, etc.
     const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
     const match = url.match(regExp);
     return (match && match[1]) ? match[1] : null;
@@ -32,39 +29,41 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
         const fetchResource = async () => {
             setLoading(true);
             setError(null);
+            setSignedUrl(null);
             try {
                 const normAudit = normalizeAudit(auditType);
-                let query = supabase
+                console.log(`[UniversalPlayer] Target: Ind=${indicatorId}, Audit=${normAudit}, Consultant=${consultantId}`);
+                
+                const { data, error: fetchError } = await supabase
                     .from('consultant_resources')
-                    .select('*')
+                    .select('id, consultant_id, indicator_id, audit_type, resource_type, source_type, file_path, url')
                     .eq('indicator_id', indicatorId)
-                    .eq('audit_type', normAudit);
-                
-                if (consultantId) {
-                    query = query.eq('consultant_id', consultantId);
-                }
-
-                const { data, error: fetchError } = await query.maybeSingle();
-                
+                    .eq('audit_type', normAudit)
+                    .eq('resource_type', 'video')
+                    .eq('consultant_id', consultantId)
+                    .maybeSingle();
                 if (fetchError) throw fetchError;
                 
                 if (data) {
-                    console.log("[UniversalPlayer] Ressource récupérée:", data);
                     setResource(data);
-
                     if (data.source_type === 'upload' && data.file_path) {
+                        console.log(`[UniversalPlayer] Attempting to sign path: ${data.file_path}`);
                         const { data: signData, error: signError } = await supabase.storage
                             .from('consultant-assets')
                             .createSignedUrl(data.file_path, 3600);
                             
-                        if (signError) throw signError;
+                        if (signError) {
+                            console.error("[UniversalPlayer] Sign Error Details:", signError);
+                            // If sign error is "Object not found", it means path in DB is wrong
+                            throw new Error(signError.message === "Object not found" ? `Fichier introuvable dans le stockage (${data.file_path})` : signError.message);
+                        }
                         setSignedUrl(signData.signedUrl);
                     }
                 } else {
                     setResource(null);
                 }
             } catch (err) {
-                console.error("[UniversalPlayer] Erreur:", err);
+                console.error("[UniversalPlayer] Logic Error:", err);
                 setError(err.message);
             } finally {
                 setLoading(false);
@@ -82,7 +81,6 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
         );
     }
 
-    // FALLBACK: default neutral video
     if (!resource || resource.source_type === 'default' || resource.source_type === 'vimeo') {
         return (
             <div className="bg-slate-900 rounded-[2rem] overflow-hidden aspect-video relative shadow-2xl group">
@@ -100,7 +98,6 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
         );
     }
 
-    // UPLOAD branch
     if (resource.source_type === 'upload' && signedUrl) {
         return (
             <div className="bg-black rounded-[2rem] overflow-hidden aspect-video relative shadow-2xl border border-white/10">
@@ -111,30 +108,26 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
                     src={signedUrl}
                     preload="metadata"
                 />
-                <div className="absolute top-6 left-6 bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-xl border border-white/20 animate-in slide-in-from-left duration-500">
+                <div className="absolute top-6 left-6 bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-xl border border-white/20">
                     Vidéo Consultant ({auditType.toUpperCase()})
                 </div>
             </div>
         );
     }
 
-    // YOUTUBE branch - Manually forcing iframe for better reliability
     if (resource.source_type === 'youtube') {
         const videoId = getYoutubeId(resource.url);
         if (videoId) {
             return (
                 <div className="bg-black rounded-[2rem] overflow-hidden aspect-video relative shadow-2xl border border-white/10">
                     <iframe 
-                        width="100%" 
-                        height="100%" 
+                        width="100%" height="100%" 
                         src={`https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&showinfo=0`}
-                        title="YouTube video player" 
-                        frameBorder="0" 
+                        title="YouTube player" frameBorder="0" 
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                        allowFullScreen
-                        className="w-full h-full"
+                        allowFullScreen className="w-full h-full"
                     ></iframe>
-                    <div className="absolute top-6 left-6 bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-xl border border-white/20 pointer-events-none z-10 text-center">
+                    <div className="absolute top-6 left-6 bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-xl border border-white/20">
                         EXTRAIT {auditType.toUpperCase()}
                     </div>
                 </div>
@@ -142,12 +135,16 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
         }
     }
 
-    // Fallback if URL parsing failed
     return (
         <div className="bg-slate-900 rounded-[2rem] overflow-hidden aspect-video flex flex-col items-center justify-center relative shadow-2xl border border-white/5 p-12 text-center text-slate-400">
-            <AlertCircle className="h-10 w-10 mb-4 opacity-20" />
-            <p className="text-sm font-bold uppercase tracking-widest">Contenu non disponible</p>
-            <p className="text-xs mt-2 opacity-60">Le lien fourni n'est pas un format YouTube valide pour l'audit {auditType}.</p>
+            <AlertCircle className="h-10 w-10 mb-4 opacity-20 text-red-500" />
+            <p className="text-sm font-bold uppercase tracking-widest text-white">Contenu non disponible</p>
+            <p className="text-xs mt-2 opacity-60">
+                {error ? `Erreur: ${error}` : "La ressource n'a pas pu être chargée."}
+            </p>
+            <p className="text-[8px] mt-4 opacity-20 font-mono">
+                ID: {indicatorId} | Audit: {auditType} | Path: {resource?.file_path || 'N/A'}
+            </p>
         </div>
     );
 }

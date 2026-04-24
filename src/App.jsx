@@ -19,6 +19,7 @@ import ConsultantBackups from './pages/consultant/ConsultantBackups'
 import Profile from './pages/Profile'
 import Unauthorized from './pages/Unauthorized'
 import MaquetteDemo from './pages/MaquetteDemo'
+import Maintenance from './pages/Maintenance'
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
           <Route path="/update-password" element={<UpdatePassword />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
           <Route path="/maquette" element={<MaquetteDemo />} />
+          <Route path="/maintenance" element={<Maintenance />} />
 
           {/* Shared Protected Routes */}
           <Route element={<ProtectedRoute />}>

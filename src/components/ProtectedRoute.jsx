@@ -2,10 +2,16 @@ import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const ProtectedRoute = ({ allowedRoles }) => {
-    const { user, role, loading } = useAuth()
+    const { user, role, loading, maintenanceMode } = useAuth()
 
     if (loading) {
         return <div className="flex justify-center items-center h-screen">Chargement...</div>
+    }
+
+    // 🛠️ MAINTENANCE MODE CHECK
+    // If maintenance is ON and user is NOT an admin, they go to maintenance page
+    if (maintenanceMode && role !== 'admin') {
+        return <Navigate to="/maintenance" replace />
     }
 
     if (!user) {

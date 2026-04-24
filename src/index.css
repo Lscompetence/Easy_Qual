@@ -37,3 +37,12 @@ body {
 .animate-bounce-in {
   animation: bounce-in 0.5s cubic-bezier(0.215, 0.610, 0.355, 1.000) both;
 }
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 3s linear infinite;
+}

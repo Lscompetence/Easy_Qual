@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell, Menu } from 'lucide-react'
+import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell, Menu, ShieldAlert, Settings } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Logo from '../../components/Logo'
 
@@ -16,7 +16,8 @@ const COUNTRY_CODES = [
     { code: '+39', label: 'IT', flag: '🇮🇹' },
     { code: '+44', label: 'GB', flag: '🇬🇧' },
     { code: '+351', label: 'PT', flag: '🇵🇹' },
-    { code: '+31', label: 'NL', flag: '🇳🇱' }
+    { code: '+31', label: 'NL', flag: '🇳🇱' },
+    { code: '+212', label: 'MA', flag: '🇲🇦' }
 ]
 
 export default function AdminDashboard() {
@@ -95,14 +96,20 @@ export default function AdminDashboard() {
     const [notifications, setNotifications] = useState([])
     const [showNotifications, setShowNotifications] = useState(false)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
+    const [showCountryDropdown, setShowCountryDropdown] = useState(false)
     const [financialStats, setFinancialStats] = useState({
         totalDistributed: 0,
         totalPurchased: 0,
     })
 
+    const [maintenanceMode, setMaintenanceMode] = useState(false)
+    const [maintenanceLoading, setMaintenanceLoading] = useState(false)
+    const [showMaintenanceConfirmModal, setShowMaintenanceConfirmModal] = useState(false)
+
     useEffect(() => {
         fetchDashboardData()
         fetchNotifications()
+        fetchMaintenanceStatus()
 
         // Subscribe to real-time notifications
         const channel = supabase
@@ -126,12 +133,52 @@ export default function AdminDashboard() {
     const fetchNotifications = async () => {
         const { data, error } = await supabase
             .from('admin_notifications')
-            .select('*')
+            .select('id, title, content, created_at, is_read')
             .order('created_at', { ascending: false })
             .limit(10);
 
         if (!error && data) {
             setNotifications(data);
+        }
+    }
+
+    const fetchMaintenanceStatus = async () => {
+        const { data, error } = await supabase
+            .from('system_settings')
+            .select('value')
+            .eq('key', 'maintenance_mode')
+            .single()
+
+        if (!error && data) {
+            setMaintenanceMode(data.value === true)
+        }
+    }
+
+    const toggleMaintenanceMode = async () => {
+        setShowMaintenanceConfirmModal(false)
+        try {
+            setMaintenanceLoading(true)
+            const newValue = !maintenanceMode
+            
+            const { error } = await supabase
+                .from('system_settings')
+                .upsert({ 
+                    key: 'maintenance_mode', 
+                    value: newValue, 
+                    updated_at: new Date().toISOString() 
+                })
+
+            if (error) throw error
+            
+            setMaintenanceMode(newValue)
+            setSuccessMsg(newValue ? 'Mode maintenance activé' : 'Mode maintenance désactivé')
+            setSuccessMsgType(newValue ? 'error' : 'success')
+            setTimeout(() => setSuccessMsg(null), 3000)
+        } catch (err) {
+            console.error('Error toggling maintenance mode:', err)
+            alert('Erreur lors de la modification du mode maintenance')
+        } finally {
+            setMaintenanceLoading(false)
         }
     }
 
@@ -161,11 +208,11 @@ export default function AdminDashboard() {
                         .order('created_at', { ascending: false }),
                     supabase
                         .from('tenants')
-                        .select('*', { count: 'exact', head: true })
+                        .select('id', { count: 'exact', head: true })
                         .not('created_by', 'is', null), // Only count tenants belonging to someone
                     supabase
                         .from('cases')
-                        .select('*, tenants!inner(created_by)', { count: 'exact', head: true })
+                        .select('id, tenants!inner(created_by)', { count: 'exact', head: true })
                         .not('tenants.created_by', 'is', null) // Only count cases with a consultant
                 ])
 
@@ -636,7 +683,15 @@ export default function AdminDashboard() {
 
         } catch (err) {
             console.error('Error sending invitation:', err)
-            setError(`L'envoi automatique a échoué : ${err.message}.`)
+            
+            // Fetch the temp password locally as a fallback to show the admin
+            const { data: profData } = await supabase.from('profiles').select('temp_password, first_name, last_name').eq('email', email).single()
+            
+            const fallbackInfo = profData?.temp_password 
+                ? `\n\nIdentifiants de secours :\nEmail: ${email}\nMot de passe: ${profData.temp_password}`
+                : ""
+
+            setError(`L'envoi automatique a échoué. ${err.message}${fallbackInfo}`)
             setSuccessMsgType('error')
             setShowErrorModal(true)
             setShowEmailConfirmModal(false)
@@ -697,7 +752,24 @@ export default function AdminDashboard() {
                             </button>
                         </div>
 
-                        <div className="flex items-center space-x-6">
+                        <div className="flex items-center space-x-4">
+                            {/* Maintenance Toggle */}
+                            <button
+                                onClick={() => setShowMaintenanceConfirmModal(true)}
+                                disabled={maintenanceLoading}
+                                className={`group flex items-center gap-2.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 border ${
+                                    maintenanceMode 
+                                    ? 'bg-amber-500 text-white border-amber-400 shadow-lg shadow-amber-200 animate-pulse' 
+                                    : 'bg-white text-gray-400 border-gray-100 hover:border-blue-200 hover:text-blue-600 hover:shadow-md'
+                                }`}
+                            >
+                                <div className={`p-1 rounded-md ${maintenanceMode ? 'bg-white/20' : 'bg-gray-50 group-hover:bg-blue-50'}`}>
+                                    <ShieldAlert className={`h-3.5 w-3.5 ${maintenanceMode ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
+                                </div>
+                                <span className="hidden lg:inline">{maintenanceMode ? 'Mode Maintenance Actif' : 'Maintenance'}</span>
+                                {maintenanceMode && <span className="flex h-2 w-2 rounded-full bg-white animate-ping"></span>}
+                            </button>
+
                             <div className="relative">
                                 <button
                                     onClick={() => setShowNotifications(!showNotifications)}
@@ -1116,19 +1188,57 @@ export default function AdminDashboard() {
                                     </div>
                                     <div>
                                         <label className="block text-gray-700 text-sm font-bold mb-2">Téléphone</label>
-                                        <div className="flex w-full overflow-hidden">
-                                            <select
-                                                className="px-2 py-2 border border-gray-300 rounded-l-lg bg-gray-50 border-r-0 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-bold"
-                                                value={newConsultant.countryCode}
-                                                onChange={(e) => setNewConsultant({ ...newConsultant, countryCode: e.target.value })}
-                                                style={{ minWidth: '85px' }}
-                                            >
-                                                {COUNTRY_CODES.map(c => (
-                                                    <option key={c.code} value={c.code}>
-                                                        {c.flag} {c.code}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                        <div className="flex w-full relative">
+                                            {/* Custom Country Selector */}
+                                            <div className="relative">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+                                                    className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-l-lg bg-gray-50 border-r-0 focus:outline-none focus:ring-2 focus:ring-blue-500 h-full"
+                                                    style={{ minWidth: '100px' }}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <img
+                                                            src={`https://flagcdn.com/w40/${COUNTRY_CODES.find(c => c.code === newConsultant.countryCode)?.label.toLowerCase()}.png`}
+                                                            alt="flag"
+                                                            className="w-5 h-auto shadow-sm rounded-sm"
+                                                        />
+                                                        <span className="text-xs font-bold text-gray-700">
+                                                            {newConsultant.countryCode}
+                                                        </span>
+                                                    </div>
+                                                    <MoreHorizontal className="h-3 w-3 text-gray-400 ml-1" />
+                                                </button>
+
+                                                {showCountryDropdown && (
+                                                    <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-[70] max-h-60 overflow-y-auto">
+                                                        {COUNTRY_CODES.map(c => (
+                                                            <div
+                                                                key={c.code}
+                                                                onClick={() => {
+                                                                    setNewConsultant({ ...newConsultant, countryCode: c.code })
+                                                                    setShowCountryDropdown(false)
+                                                                }}
+                                                                className="flex items-center gap-3 px-3 py-2 hover:bg-blue-50 cursor-pointer transition-colors"
+                                                            >
+                                                                <img
+                                                                    src={`https://flagcdn.com/w40/${c.label.toLowerCase()}.png`}
+                                                                    alt={c.label}
+                                                                    className="w-6 h-auto shadow-sm rounded-sm"
+                                                                />
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-xs font-bold text-gray-900">{c.label}</span>
+                                                                    <span className="text-[10px] text-gray-500">{c.code}</span>
+                                                                </div>
+                                                                {newConsultant.countryCode === c.code && (
+                                                                    <Check className="h-3 w-3 text-blue-600 ml-auto" />
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+
                                             <input
                                                 type="tel"
                                                 required
@@ -1782,6 +1892,47 @@ export default function AdminDashboard() {
                     </button>
                 </div>
             </aside>
+            {/* Maintenance Confirmation Modal */}
+            {showMaintenanceConfirmModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden transform animate-in zoom-in-95 duration-300 border border-gray-100">
+                        <div className={`p-8 text-center ${maintenanceMode ? 'bg-blue-50/50' : 'bg-amber-50/50'}`}>
+                            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner ${
+                                maintenanceMode ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'
+                            }`}>
+                                <ShieldAlert className="h-10 w-10" />
+                            </div>
+                            <h3 className="text-2xl font-black text-gray-900 mb-2">
+                                {maintenanceMode ? 'Désactiver la maintenance ?' : 'Activer la maintenance ?'}
+                            </h3>
+                            <p className="text-gray-500 leading-relaxed">
+                                {maintenanceMode 
+                                    ? "La plateforme sera à nouveau accessible pour tous les clients et consultants immédiatement."
+                                    : "Tous les utilisateurs (hors admins) seront redirigés vers la page de maintenance. Les sessions en cours seront interrompues."
+                                }
+                            </p>
+                        </div>
+                        <div className="p-6 bg-white flex gap-3">
+                            <button
+                                onClick={() => setShowMaintenanceConfirmModal(false)}
+                                className="flex-1 px-6 py-3.5 rounded-2xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={toggleMaintenanceMode}
+                                className={`flex-1 px-6 py-3.5 rounded-2xl text-sm font-black text-white shadow-lg transition-all active:scale-95 ${
+                                    maintenanceMode 
+                                    ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200' 
+                                    : 'bg-amber-500 hover:bg-amber-600 shadow-amber-200'
+                                }`}
+                            >
+                                {maintenanceMode ? 'Confirmer la réouverture' : 'Confirmer l\'activation'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

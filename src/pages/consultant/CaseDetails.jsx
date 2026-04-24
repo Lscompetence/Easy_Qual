@@ -358,7 +358,7 @@ export default function CaseDetails() {
 
             const { data: cData, error: cError } = await supabase
                 .from('cases')
-                .select(`*, tenants (name, siret, logo_url, owner_id, client_email)`)
+                .select(`id, tenant_id, audit_type, training_categories, consultant_id, created_at, progress, status, tenants (id, name, siret, logo_url, owner_id, client_email)`)
                 .eq('id', id)
                 .single()
 
@@ -409,7 +409,7 @@ export default function CaseDetails() {
 
             const { data: sData, error: sError } = await supabase
                 .from('case_indicator_states')
-                .select('*')
+                .select('id, case_id, indicator_id, status, consultant_comment, consultant_verdict, client_comment, audit_type, updated_at')
                 .eq('case_id', id)
                 .order('updated_at', { ascending: true })
 
@@ -441,7 +441,7 @@ export default function CaseDetails() {
             // Fetch events
             const { data: eventData } = await supabase
                 .from('case_events')
-                .select('*')
+                .select('id, case_id, event_date, title, visio_link, event_type, status, description')
                 .eq('case_id', id)
                 .order('event_date', { ascending: true })
 
@@ -515,7 +515,7 @@ export default function CaseDetails() {
             setLoadingMessages(true)
             const { data, error } = await supabase
                 .from('case_messages')
-                .select('*')
+                .select('id, case_id, sender_id, content, created_at, read_at')
                 .eq('case_id', id)
                 .order('created_at', { ascending: true })
 
@@ -618,7 +618,7 @@ export default function CaseDetails() {
             if (upsertError) throw upsertError
 
             // 2. Refresh all states to calculate accurate progress
-            const { data: allStates } = await supabase.from('case_indicator_states').select('*').eq('case_id', id)
+            const { data: allStates } = await supabase.from('case_indicator_states').select('id, status, consultant_verdict, audit_type, indicator_id').eq('case_id', id)
             if (allStates) setAllIndicatorStates(allStates)
 
             // 3. Global Progress Calculation (Across all audit types)

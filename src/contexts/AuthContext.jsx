@@ -10,6 +10,7 @@ export const AuthProvider = ({ children }) => {
     const [role, setRole] = useState(null)
     const [profile, setProfile] = useState(null)
     const [loading, setLoading] = useState(true)
+    const [maintenanceMode, setMaintenanceMode] = useState(false)
 
     useEffect(() => {
         let mounted = true
@@ -28,6 +29,8 @@ export const AuthProvider = ({ children }) => {
 
         // Initialize Session
         const initAuth = async () => {
+            // Fetch Maintenance Status first
+            fetchMaintenanceStatus()
             try {
                 // Determine if we have a session
                 const { data: { session } } = await supabase.auth.getSession()
@@ -78,10 +81,25 @@ export const AuthProvider = ({ children }) => {
             }
         })
 
+        // Listen for maintenance mode changes
+        const settingsChannel = supabase
+            .channel('system_settings_changes')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'system_settings'
+            }, (payload) => {
+                if (payload.new && payload.new.key === 'maintenance_mode') {
+                    setMaintenanceMode(payload.new.value === true)
+                }
+            })
+            .subscribe()
+
         return () => {
             mounted = false
             clearTimeout(safetyTimer)
             subscription.unsubscribe()
+            settingsChannel.unsubscribe()
         }
     }, [])
 
@@ -111,6 +129,21 @@ export const AuthProvider = ({ children }) => {
             // setRole('of') // Optional: Default to lowest priv, or let nullable
         } finally {
             setLoading(false)
+        }
+    }
+
+    const fetchMaintenanceStatus = async () => {
+        try {
+            const { data } = await supabase
+                .from('system_settings')
+                .select('value')
+                .eq('key', 'maintenance_mode')
+                .single()
+            if (data) {
+                setMaintenanceMode(data.value === true)
+            }
+        } catch (err) {
+            console.error('Error fetching maintenance status:', err)
         }
     }
 
@@ -170,7 +203,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ user, role, profile, refreshProfile, login, logout, resetPassword, loading }}>
+        <AuthContext.Provider value={{ user, role, profile, refreshProfile, login, logout, resetPassword, loading, maintenanceMode }}>
             {loading ? (
                 <div className="fixed inset-0 bg-white flex flex-col items-center justify-center z-50">
                     {/* Minimalist Spinner */}

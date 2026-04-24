@@ -5,12 +5,13 @@ import { useAuth } from '../../contexts/AuthContext'
 import {
     CheckCircle, Clock, XCircle, CircleOff, AlertTriangle,
     Upload, Download, FileText, ChevronDown, ChevronUp, Send, MessageSquare,
-    ArrowRight, CheckSquare, Check, Trash2, Video, Sun, Flag, Ban, PlayCircle
+    ArrowRight, CheckSquare, Check, Trash2, Video, Sun, Flag, Ban, PlayCircle, GraduationCap
 } from 'lucide-react'
 import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
 import UniversalPlayer from '../../components/shared/UniversalPlayer'
 import StatusModal from '../../components/shared/StatusModal'
+import QuizModal from '../../components/shared/QuizModal'
 
 const isInitialAudit = (type) => {
     const t = String(type || '').toLowerCase().trim()
@@ -24,6 +25,7 @@ export default function ClientDashboard() {
 
     const [tenant, setTenant] = useState(null)
     const [myCase, setMyCase] = useState(null)
+    const [casesData, setCasesData] = useState([])
     const [indicators, setIndicators] = useState([
         { id: 1, criterion_id: 1, label: "Information accessible au public, détaillée et vérifiable.", criteria: { id: 1, label: "Information du public" } },
         { id: 2, criterion_id: 1, label: "Indicateurs de résultats adaptés à la nature des prestations.", criteria: { id: 1, label: "Information du public" } },
@@ -60,6 +62,7 @@ export default function ClientDashboard() {
     const [allStatesData, setAllStatesData] = useState([])
     const [allQuizData, setAllQuizData] = useState([])
     const [caseEvents, setCaseEvents] = useState([])
+    const [isQuizOpen, setIsQuizOpen] = useState(false)
 
     // Status Modal State
     const [statusModal, setStatusModal] = useState({
@@ -106,12 +109,17 @@ export default function ClientDashboard() {
     }, [myCase?.id])
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        // Use a small timeout to ensure DOM is rendered before scrolling
+        const timer = setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }, 100)
+        return () => clearTimeout(timer)
     }, [messages])
 
     useEffect(() => {
         if (!myCase?.id) return
 
+        console.log("Setting up real-time for case:", myCase.id);
         const channel = supabase
             .channel(`client_realtime:${myCase.id}`)
             .on('postgres_changes', {
@@ -120,6 +128,7 @@ export default function ClientDashboard() {
                 table: 'case_events',
                 filter: `case_id=eq.${myCase.id}`
             }, (payload) => {
+                console.log("Real-time event:", payload);
                 if (payload.eventType === 'DELETE') {
                     setCaseEvents(prev => prev.filter(e => e.id !== payload.old.id))
                 } else if (payload.eventType === 'INSERT') {
@@ -134,29 +143,54 @@ export default function ClientDashboard() {
                 table: 'case_messages',
                 filter: `case_id=eq.${myCase.id}`
             }, (payload) => {
+                console.log("Real-time message received:", payload.new);
                 if (payload.new.content.startsWith('[SYSTEM]')) return
                 setMessages(prev => {
                     if (prev.some(m => m.id === payload.new.id)) return prev
-                    return [...prev, payload.new]
+                    const filtered = prev.filter(m => !String(m.id).startsWith('temp-') || m.content !== payload.new.content)
+                    return [...filtered, payload.new]
                 })
             })
-            .subscribe()
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'cases',
+                filter: `tenant_id=eq.${myCase.tenant_id}`
+            }, (payload) => {
+                console.log("Real-time case update:", payload);
+                if (payload.eventType === 'UPDATE') {
+                    setCasesData(prev => prev.map(c => c.id === payload.new.id ? payload.new : c))
+                    if (myCase?.id === payload.new.id) {
+                        setMyCase(payload.new)
+                    }
+                }
+            })
+            .subscribe((status) => {
+                console.log("Real-time subscription status:", status);
+            })
 
         return () => {
+            console.log("Cleaning up real-time for case:", myCase.id);
             supabase.removeChannel(channel)
         }
     }, [myCase?.id])
 
     const fetchMessages = async () => {
         if (!myCase) return
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('case_messages')
-            .select('*')
+            .select('id, case_id, sender_id, content, created_at, read_at')
             .eq('case_id', myCase.id)
             .order('created_at', { ascending: true })
         
+        if (error) {
+            console.error("fetchMessages error:", error);
+            return;
+        }
+
         // Filter out system messages for the chat
         const userMessages = (data || []).filter(m => !m.content.startsWith('[SYSTEM]'))
+        console.log("Fetched messages:", userMessages.length);
         setMessages(userMessages)
     }
 
@@ -191,13 +225,15 @@ export default function ClientDashboard() {
             // Match by either owner_id (consultant) OR client_email (client)
             const { data: tenantsData } = await supabase
                 .from('tenants')
-                .select('*')
+                .select('id, name, logo_url, siret, nda, client_email, owner_id, created_by, created_at')
                 .or(`owner_id.eq.${user.id},client_email.eq.${user.email}`)
 
             if (tenantsData && tenantsData.length > 0) {
                 const tenantIds = tenantsData.map(t => t.id)
                 const { data: casesData } = await supabase
-                    .from('cases').select('*').in('tenant_id', tenantIds)
+                    .from('cases')
+                    .select('id, tenant_id, audit_type, training_categories, consultant_id, created_at')
+                    .in('tenant_id', tenantIds)
 
                 const caseData = casesData?.sort((a, b) => {
                     const aScore = (a.training_categories?.length || 0) + (a.audit_type?.length || 0)
@@ -210,6 +246,7 @@ export default function ClientDashboard() {
                     const tenantData = tenantsData.find(t => t.id === caseData.tenant_id)
                     setTenant(tenantData)
                     setMyCase(caseData)
+                    setCasesData(casesData || [])
                     
                     // Default selected audit to the last one in the list if not set
                     if (!selectedAudit) {
@@ -232,21 +269,21 @@ export default function ClientDashboard() {
                     // 1. Fetch indicator states 
                     const { data: statesData } = await supabase
                         .from('case_indicator_states')
-                        .select('*')
+                        .select('id, case_id, indicator_id, status, consultant_comment, consultant_verdict, client_comment, audit_type, updated_at')
                         .eq('case_id', caseData.id)
                     setAllStatesData(statesData || [])
 
                     // 2. Fetch quiz uploads
                     const { data: quizData } = await supabase
                         .from('criterion_quiz_uploads')
-                        .select('*')
+                        .select('id, case_id, criterion_id, audit_type, file_name, file_url, uploaded_at')
                         .eq('case_id', caseData.id)
                     setAllQuizData(quizData || [])
 
                     // 3. Fetch case events (sessions/visios)
                     const { data: eventsData } = await supabase
                         .from('case_events')
-                        .select('*')
+                        .select('id, case_id, event_date, title, visio_link, event_type')
                         .eq('case_id', caseData.id)
                         .order('event_date', { ascending: true })
                     setCaseEvents(eventsData || [])
@@ -579,21 +616,60 @@ export default function ClientDashboard() {
         )
     }
 
+    useEffect(() => {
+        if (isMessages && myCase?.id) {
+            console.log("Entering messages view, fetching messages for case:", myCase.id);
+            fetchMessages();
+        }
+    }, [isMessages, myCase?.id]);
+
     const handleSendMessage = async (e) => {
         e.preventDefault()
-        if (!newMessage.trim() || !myCase) return
+        const content = newMessage.trim()
+        if (!content || !myCase) {
+            console.warn("Cannot send message: content empty or myCase missing", { content, myCase });
+            return
+        }
+        
+        console.log("Sending message to case:", myCase.id, "Content:", content);
         setSendingMsg(true)
+        
+        // 🚀 OPTIMISTIC UPDATE
+        const tempId = 'temp-' + Date.now()
+        const optimisticMsg = {
+            id: tempId,
+            case_id: myCase.id,
+            sender_id: user.id,
+            content: content,
+            created_at: new Date().toISOString(),
+            is_read: false
+        }
+        
+        setMessages(prev => [...prev, optimisticMsg])
+        setNewMessage('')
+
         try {
-            const { error } = await supabase.from('case_messages').insert({
+            const { data, error } = await supabase.from('case_messages').insert({
                 case_id: myCase.id,
                 sender_id: user.id,
-                content: newMessage.trim()
-            })
-            if (error) throw error
-            setNewMessage('')
-            fetchMessages()
+                content: content
+            }).select()
+            
+            if (error) {
+                console.error("Supabase insert error:", error);
+                setMessages(prev => prev.filter(m => m.id !== tempId))
+                throw error
+            }
+            
+            console.log("Message inserted successfully:", data);
+            // We don't strictly need fetchMessages() here if real-time is working,
+            // but it helps ensure consistency. We'll wait a bit to let DB settle.
+            setTimeout(() => fetchMessages(), 500);
         } catch (err) {
-            alert('Erreur envoi : ' + err.message)
+            console.error('Erreur envoi détaillé :', err)
+            setNewMessage(content)
+            setGlobalMessage('ERREUR : Impossible d\'envoyer le message')
+            setTimeout(() => setGlobalMessage(null), 3000)
         } finally {
             setSendingMsg(false)
         }
@@ -676,7 +752,7 @@ export default function ClientDashboard() {
                     indicators={indicators}
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
-                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
@@ -720,14 +796,30 @@ export default function ClientDashboard() {
                                 ) : (
                                     messages.map((msg) => {
                                         const isMe = msg.sender_id === user.id
+                                        const isTemp = String(msg.id).startsWith('temp-')
                                         return (
-                                            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-[78%] px-4 py-2.5 rounded-2xl text-sm font-medium leading-relaxed whitespace-pre-line ${isMe
-                                                    ? 'bg-[#cc6d3e] text-white rounded-br-md'
+                                            <div key={msg.id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                                {!isMe && (
+                                                    <div className="h-8 w-8 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-black text-gray-400 border border-white shadow-sm flex-shrink-0">
+                                                        {consultantName[0] || 'C'}
+                                                    </div>
+                                                )}
+                                                <div className={`relative max-w-[78%] px-4 py-2.5 rounded-2xl text-sm font-medium leading-relaxed whitespace-pre-line ${isMe
+                                                    ? 'bg-[#cc6d3e] text-white rounded-br-md shadow-lg shadow-[#cc6d3e]/10'
                                                     : 'bg-white text-gray-800 border border-gray-100 shadow-sm rounded-bl-md'
-                                                    }`}>
+                                                    } ${isTemp ? 'opacity-70 animate-pulse' : ''}`}>
                                                     {msg.content}
+                                                    {isMe && isTemp && (
+                                                        <div className="absolute -bottom-4 right-0">
+                                                            <span className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">Envoi...</span>
+                                                        </div>
+                                                    )}
                                                 </div>
+                                                {isMe && (
+                                                    <div className="h-8 w-8 rounded-lg bg-[#faf1ec] flex items-center justify-center text-[10px] font-black text-[#cc6d3e] border border-white shadow-sm flex-shrink-0">
+                                                        {tenant?.name?.[0] || user.email?.[0]?.toUpperCase() || 'M'}
+                                                    </div>
+                                                )}
                                             </div>
                                         )
                                     })
@@ -912,30 +1004,54 @@ export default function ClientDashboard() {
                     )}
                     <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
                         {/* Phase Selector in Detail View */}
-                        <div className="mb-8 flex gap-2 overflow-x-auto pb-4 scrollbar-hide">
-                            {(Array.isArray(myCase?.audit_type) ? myCase.audit_type : []).map((type, i) => {
-                                const normalizeAudit = (t) => {
-                                    const str = String(t || '').toLowerCase().trim()
-                                    if (str.includes('initial')) return 'initial'
-                                    if (str.includes('surveillance')) return 'surveillance'
-                                    if (str.includes('renouvellement')) return 'renouvellement'
-                                    return str
-                                }
-                                const isActive = normalizeAudit(selectedAudit) === normalizeAudit(type)
-                                return (
-                                    <button 
-                                        key={i} 
-                                        onClick={() => setSelectedAudit(type)}
-                                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border-2 whitespace-nowrap shadow-sm ${
-                                            isActive 
-                                                ? 'bg-[#cc6d3e] text-white border-[#cc6d3e] scale-105' 
-                                                : 'bg-white text-gray-400 border-gray-100 hover:border-gray-300'
-                                        }`}
-                                    >
-                                        <div className={`h-2 w-2 rounded-full ${isActive ? 'bg-white animate-pulse' : 'bg-gray-200'}`} />
-                                        {type}
-                                    </button>
-                                )
+                        {/* Audit Selection Tabs (Consistent with Dashboard) */}
+                        <div className="flex flex-wrap gap-3 mb-10">
+                            {casesData?.flatMap((c) => {
+                                const types = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
+                                return types.map((type, typeIdx) => {
+                                    const isActive = selectedAudit === type;
+                                    const cleanType = type.replace(/audit/gi, '').trim();
+                                    
+                                    const getColors = (t) => {
+                                        const typeStr = t.toLowerCase();
+                                        if (typeStr.includes('initial')) return { 
+                                            active: 'bg-[#cc6d3e] text-white border-[#cc6d3e] shadow-[#cc6d3e]/30', 
+                                            inactive: 'hover:border-[#cc6d3e]/30 hover:bg-[#cc6d3e]/5 text-slate-400',
+                                            dot: 'bg-[#cc6d3e]' 
+                                        };
+                                        if (typeStr.includes('surveillance')) return { 
+                                            active: 'bg-blue-600 text-white border-blue-600 shadow-blue-600/30', 
+                                            inactive: 'hover:border-blue-600/30 hover:bg-blue-600/5 text-slate-400',
+                                            dot: 'bg-blue-600' 
+                                        };
+                                        if (typeStr.includes('renouvellement')) return { 
+                                            active: 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-600/30', 
+                                            inactive: 'hover:border-emerald-600/30 hover:bg-emerald-600/5 text-slate-400',
+                                            dot: 'bg-emerald-600' 
+                                        };
+                                        return { active: 'bg-slate-800 text-white', inactive: 'text-slate-400', dot: 'bg-slate-400' };
+                                    };
+                                    
+                                    const colors = getColors(type);
+
+                                    return (
+                                        <button
+                                            key={`${c.id}-${typeIdx}`}
+                                            onClick={() => {
+                                                setMyCase(c);
+                                                setSelectedAudit(type);
+                                            }}
+                                            className={`flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
+                                                isActive 
+                                                    ? `${colors.active} shadow-[0_10px_30px_-10px_rgba(0,0,0,0.3)] scale-105 z-10` 
+                                                    : `bg-white border-slate-50 ${colors.inactive} shadow-sm translate-y-0`
+                                            } hover:-translate-y-1 active:scale-95`}
+                                        >
+                                            <div className={`h-2.5 w-2.5 rounded-full shadow-inner ${isActive ? 'bg-white animate-pulse' : colors.dot} transition-colors duration-500`} />
+                                            AUDIT {cleanType}
+                                        </button>
+                                    );
+                                });
                             })}
                         </div>
                         {/* Criterion Header */}
@@ -1034,20 +1150,109 @@ export default function ClientDashboard() {
 
                                         return (
                                             <button
-                                                onClick={() => { setPendingCriterionId('crit_' + currentCriterion.id); fileInputRef.current?.click() }}
+                                                onClick={() => setIsQuizOpen(true)}
                                                 disabled={uploadingFor === 'crit_' + currentCriterion.id}
                                                 className="w-full py-2 bg-[#cc6d3e] text-white rounded-xl text-xs font-bold hover:bg-[#b35d32] transition-all shadow-md shadow-[#cc6d3e]/20 disabled:opacity-50 flex items-center justify-center gap-2"
                                             >
-                                                {uploadingFor === 'crit_' + currentCriterion.id ? (
-                                                    <div className="h-3 w-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                ) : <Upload className="h-3.5 w-3.5" />}
-                                                {uploadingFor === 'crit_' + currentCriterion.id ? 'Téléchargement...' : 'Lancer le Quiz'}
+                                                <PlayCircle className="h-3.5 w-3.5" />
+                                                Lancer le Quiz
                                             </button>
                                         )
                                     })()}
                                 </div>
                             </div>
                         </div>
+
+                        {/* Quiz Modal */}
+                        <QuizModal 
+                            isOpen={isQuizOpen}
+                            onClose={() => setIsQuizOpen(false)}
+                            criterionId={currentCriterion.id}
+                            criterionLabel={currentCriterion.label}
+                            onComplete={async (score, details) => {
+                                try {
+                                    const normAudit = (selectedAudit || 'initial').trim().toLowerCase();
+                                    const targetKey = 'crit_' + currentCriterion.id;
+                                    
+                                    // 1. Generate detailed report content
+                                    let report = `RAPPORT DE TEST QUALIOPI - EASYQUAL\n`;
+                                    report += `------------------------------------\n`;
+                                    report += `Date : ${new Date().toLocaleString('fr-FR')}\n`;
+                                    report += `Client : ${user.email}\n`;
+                                    report += `Critère : ${currentCriterion.id} - ${currentCriterion.label}\n`;
+                                    report += `Score Final : ${score}%\n`;
+                                    report += `Statut : ${score >= 70 ? 'RÉUSSI' : 'ÉCHEC'}\n\n`;
+                                    report += `DÉTAILS DES RÉPONSES :\n`;
+                                    report += `------------------------------------\n`;
+                                    
+                                    details.questions.forEach((q, idx) => {
+                                        const userAnswerIdx = details.answers[idx];
+                                        const isCorrect = userAnswerIdx === q.correct;
+                                        report += `${idx + 1}. ${q.q}\n`;
+                                        report += `   Réponse donnée : ${q.options[userAnswerIdx] || 'Aucune'}\n`;
+                                        report += `   Résultat : ${isCorrect ? '✅ CORRECT' : '❌ INCORRECT'}\n`;
+                                        if (!isCorrect) {
+                                            report += `   Réponse attendue : ${q.options[q.correct]}\n`;
+                                        }
+                                        report += `\n`;
+                                    });
+
+                                    // 2. Create a File (Blob)
+                                    const fileName = `Rapport_Quiz_C${currentCriterion.id}_${Date.now()}.txt`;
+                                    const blob = new Blob([report], { type: 'text/plain' });
+                                    const file = new File([blob], fileName, { type: 'text/plain' });
+
+                                    // 3. Upload to Storage
+                                    const path = `${myCase.id}/${fileName}`;
+                                    const { error: uploadError } = await supabase.storage
+                                        .from('quiz-uploads').upload(path, file, { upsert: true });
+                                    
+                                    if (uploadError) throw uploadError;
+                                    
+                                    const { data: urlData } = supabase.storage.from('quiz-uploads').getPublicUrl(path);
+
+                                    // 4. Save to DB
+                                    const { error: dbError } = await supabase.from('criterion_quiz_uploads').upsert({
+                                        case_id: myCase.id,
+                                        criterion_id: targetKey,
+                                        audit_type: normAudit,
+                                        file_name: fileName,
+                                        file_url: urlData.publicUrl,
+                                        uploaded_at: new Date().toISOString()
+                                    }, { onConflict: 'case_id,criterion_id,audit_type' });
+
+                                    if (dbError) throw dbError;
+
+                                    // 5. Notify Consultant
+                                    await supabase.from('case_messages').insert({
+                                        case_id: myCase.id,
+                                        sender_id: user.id,
+                                        content: `[SYSTEM] 🏆 Quiz validé avec rapport détaillé !\n🎯 Critère ${currentCriterion.id}\n📊 Score : ${score}%\n📄 Fichier généré : ${fileName}`
+                                    });
+
+                                    // 6. Update local UI
+                                    setQuizUploads(prev => ({
+                                        ...prev,
+                                        [targetKey]: {
+                                            ...(prev[targetKey] || {}),
+                                            [normAudit]: { 
+                                                file_name: fileName,
+                                                file_url: urlData.publicUrl,
+                                                uploaded_at: new Date().toISOString() 
+                                            }
+                                        }
+                                    }));
+
+                                    showStatus('success', 'Rapport généré !', `Votre score de ${score}% et le détail de vos réponses ont été transmis à votre consultant.`);
+                                } catch (err) {
+                                    console.error("Error saving detailed quiz score:", err);
+                                    showStatus('error', 'Erreur', "Impossible de générer le rapport : " + err.message);
+                                }
+                            }}
+                        />
+
+
+
 
                         {/* Preuves documentaires */}
                         <div className="relative">
@@ -1314,7 +1519,7 @@ export default function ClientDashboard() {
                 indicators={indicators}
                 indicatorStates={indicatorStates}
                 consultantName={consultantName}
-                unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
                 upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                 isOpen={showMobileMenu}
                 onClose={() => setShowMobileMenu(false)}
@@ -1330,32 +1535,62 @@ export default function ClientDashboard() {
 
                 {globalMessage && (
                     <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] animate-in slide-in-from-top duration-300">
-                            <div className={`px-6 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 ${globalMessage.includes('ERREUR') || globalMessage.includes('Erreur') ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                        <div className={`px-6 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 ${globalMessage.includes('ERREUR') || globalMessage.includes('Erreur') ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
                             <CheckCircle className="h-5 w-5" />
                             <span className="text-sm font-black uppercase tracking-wider">{globalMessage}</span>
-                            </div>
+                        </div>
                     </div>
                 )}
 
                 <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
+                    {/* Audit Selection Tabs (Horizontal Badges) */}
+                    <div className="flex flex-wrap gap-3 mb-10">
+                        {casesData?.flatMap((c) => {
+                            const types = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
+                            return types.map((type, typeIdx) => {
+                                const getColors = (t) => {
+                                    const typeStr = t.toLowerCase();
+                                    if (typeStr.includes('initial')) return { 
+                                        active: 'bg-[#cc6d3e] text-white border-[#cc6d3e] shadow-[#cc6d3e]/30', 
+                                        inactive: 'hover:border-[#cc6d3e]/30 hover:bg-[#cc6d3e]/5 text-slate-400',
+                                        dot: 'bg-[#cc6d3e]' 
+                                    };
+                                    if (typeStr.includes('surveillance')) return { 
+                                        active: 'bg-blue-600 text-white border-blue-600 shadow-blue-600/30', 
+                                        inactive: 'hover:border-blue-600/30 hover:bg-blue-600/5 text-slate-400',
+                                        dot: 'bg-blue-600' 
+                                    };
+                                    if (typeStr.includes('renouvellement')) return { 
+                                        active: 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-600/30', 
+                                        inactive: 'hover:border-emerald-600/30 hover:bg-emerald-600/5 text-slate-400',
+                                        dot: 'bg-emerald-600' 
+                                    };
+                                    return { active: 'bg-slate-800 text-white', inactive: 'text-slate-400', dot: 'bg-slate-400' };
+                                };
+                                
+                                const colors = getColors(type);
+                                const isSelected = myCase?.id === c.id && selectedAudit === type;
+                                const cleanType = type.replace(/audit/gi, '').trim();
 
-                    {/* Title + audit badges */}
-                    <div className="mb-6">
-                        <h1 className="text-2xl font-black text-gray-900 mb-3">Tableau de bord de votre audit</h1>
-                        <div className="flex gap-2 flex-wrap">
-                            {(Array.isArray(myCase?.audit_type) ? myCase.audit_type : []).map((type, i) => (
-                                <span key={i} className="flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-bold text-gray-600 shadow-sm">
-                                    <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-                                    {type.toUpperCase()}
-                                </span>
-                            ))}
-                            {(Array.isArray(myCase?.training_categories) ? myCase.training_categories : []).map((cat, i) => (
-                                <span key={i} className="flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-bold text-gray-600 shadow-sm">
-                                    <span className="h-2 w-2 rounded-full bg-blue-500"></span>
-                                    ACTION DE FORMATION ({cat})
-                                </span>
-                            ))}
-                        </div>
+                                return (
+                                    <button
+                                        key={`${c.id}-${typeIdx}`}
+                                        onClick={() => {
+                                            setMyCase(c);
+                                            setSelectedAudit(type);
+                                        }}
+                                        className={`flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
+                                            isSelected 
+                                                ? `${colors.active} shadow-[0_10px_30px_-10px_rgba(0,0,0,0.3)] scale-105 z-10` 
+                                                : `bg-white border-slate-50 ${colors.inactive} shadow-sm translate-y-0`
+                                        } hover:-translate-y-1 active:scale-95`}
+                                    >
+                                        <div className={`h-2.5 w-2.5 rounded-full shadow-inner ${isSelected ? 'bg-white animate-pulse' : colors.dot} transition-colors duration-500`} />
+                                        AUDIT {cleanType}
+                                    </button>
+                                );
+                            });
+                        })}
                     </div>
 
                     {/* Welcome card */}
