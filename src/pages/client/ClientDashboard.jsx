@@ -384,9 +384,10 @@ export default function ClientDashboard() {
             const normalizedAudit = (selectedAudit || 'initial').trim().toLowerCase();
             const state = indicatorStates[indicatorId] || {};
             
-            // Check if status changed compared to DB to avoid duplicate notifications
+            // Check if status or comment changed compared to DB to avoid duplicate notifications
             const dbState = allStatesData.find(s => s.indicator_id === indicatorId && (s.audit_type || 'initial') === normalizedAudit);
             const statusChanged = state.status && state.status !== dbState?.status;
+            const commentChanged = state.client_comment && state.client_comment !== dbState?.client_comment;
 
             // 1. Upload file if pending
             const pendingFile = pendingFiles[indicatorId];
@@ -447,7 +448,7 @@ export default function ClientDashboard() {
             const indicatorLabel = indicators.find(i => i.id === indicatorId)?.label || `Indicateur ${indicatorId}`;
             const statusLabels = { 'done': 'Fait', 'not_applicable': 'Non applicable', 'doing': 'En cours', 'to_do': 'À traiter' };
             
-            if (statusChanged || fileUploaded) {
+            if (statusChanged || commentChanged || fileUploaded) {
                 let msgContent = `📝 Indicateur mis à jour : ${indicatorLabel.substring(0, 50)}...\n`;
                 if (statusChanged) msgContent += `🔹 Statut : ${statusLabels[state.status] || state.status}\n`;
                 if (state.status === 'not_applicable' && state.client_comment) {
@@ -456,12 +457,13 @@ export default function ClientDashboard() {
                 if (fileUploaded) msgContent += `📁 Document joint : ${pendingFile.name}\n`;
                 
                 try {
-                    await supabase.from('case_messages').insert({
+                    const { error: msgErr } = await supabase.from('case_messages').insert({
                         case_id: myCase.id,
                         sender_id: user.id,
                         content: `[SYSTEM] ${msgContent}`
                     });
-                } catch (e) { console.warn("Could not insert notification:", e); }
+                    if (msgErr) console.error("Failed to insert [SYSTEM] message:", msgErr);
+                } catch (e) { console.warn("Could not insert notification exception:", e); }
             }
 
             // IMMEDIATE LOCAL SYNC
@@ -1224,11 +1226,12 @@ export default function ClientDashboard() {
                                     if (dbError) throw dbError;
 
                                     // 5. Notify Consultant
-                                    await supabase.from('case_messages').insert({
+                                    const { error: msgErr } = await supabase.from('case_messages').insert({
                                         case_id: myCase.id,
                                         sender_id: user.id,
                                         content: `[SYSTEM] 🏆 Quiz validé avec rapport détaillé !\n🎯 Critère ${currentCriterion.id}\n📊 Score : ${score}%\n📄 Fichier généré : ${fileName}`
                                     });
+                                    if (msgErr) console.error("Quiz success message error:", msgErr);
 
                                     // 6. Update local UI
                                     setQuizUploads(prev => ({
@@ -1247,6 +1250,19 @@ export default function ClientDashboard() {
                                 } catch (err) {
                                     console.error("Error saving detailed quiz score:", err);
                                     showStatus('error', 'Erreur', "Impossible de générer le rapport : " + err.message);
+                                }
+                            }}
+                            onFail={async (score, details) => {
+                                try {
+                                    // Notify Consultant of failed attempt
+                                    const { error: failErr } = await supabase.from('case_messages').insert({
+                                        case_id: myCase.id,
+                                        sender_id: user.id,
+                                        content: `[SYSTEM] ❌ Tentative de quiz échouée (Score : ${score}%)\n🎯 Critère ${currentCriterion.id}\nLe client n'a pas atteint les 70% requis.`
+                                    });
+                                    if (failErr) console.error("Quiz fail message error:", failErr);
+                                } catch (err) {
+                                    console.error("Error logging failed quiz attempt:", err);
                                 }
                             }}
                         />

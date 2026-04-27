@@ -17,7 +17,7 @@ const QUIZ_DATA = {
     ]
 };
 
-export default function QuizModal({ isOpen, onClose, criterionId, criterionLabel, onComplete }) {
+export default function QuizModal({ isOpen, onClose, criterionId, criterionLabel, onComplete, onFail }) {
     const [step, setStep] = useState('intro'); // intro, questions, result
     const [currentQuestion, setCurrentQuestion] = useState(0);
     const [answers, setAnswers] = useState([]);
@@ -78,6 +78,8 @@ export default function QuizModal({ isOpen, onClose, criterionId, criterionLabel
             setIsSubmitting(false);
             if (finalScore >= 70) {
                 onComplete?.(finalScore, { questions, answers: finalAnswers });
+            } else {
+                onFail?.(finalScore, { questions, answers: finalAnswers });
             }
         }, 500);
     };

@@ -5,14 +5,15 @@ import StatusModal from '../shared/StatusModal';
 import UniversalPlayer from '../shared/UniversalPlayer';
 
 export default function ResourceManager() {
-    const [auditType, setAuditType] = useState('initial');
+    const getUrlParam = (key) => new URLSearchParams(window.location.search).get(key);
+    
+    const [auditType, setAuditType] = useState(getUrlParam('audit') || 'initial');
     const resourceType = 'video'; 
     const [indicators, setIndicators] = useState([]);
     const [resources, setResources] = useState({});
     const [loading, setLoading] = useState(true);
     const [currentUserId, setCurrentUserId] = useState(null);
     
-    // Selection state
     const [activeCriterion, setActiveCriterion] = useState(null);
     const [activeIndicator, setActiveIndicator] = useState(null);
     const [showPreview, setShowPreview] = useState(false);
@@ -44,18 +45,20 @@ export default function ResourceManager() {
     const fetchData = async () => {
         setLoading(true);
         try {
+            // 1. Fetch Indicators
             const { data: indData } = await supabase
                 .from('indicators')
                 .select('id, label, code, criterion_id, criteria(label)')
                 .order('id', { ascending: true });
             setIndicators(indData || []);
 
+            // 2. Fetch User & Resources
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
                 setCurrentUserId(user.id);
                 const { data: resData } = await supabase
                     .from('consultant_resources')
-                    .select('id, consultant_id, indicator_id, audit_type, resource_type, file_name, file_url, source_type, url')
+                    .select('id, consultant_id, indicator_id, audit_type, resource_type, source_type, url, file_path')
                     .eq('consultant_id', user.id)
                     .eq('resource_type', 'video')
                     .eq('audit_type', auditType);
@@ -64,14 +67,38 @@ export default function ResourceManager() {
                 resData?.forEach(r => { resMap[r.indicator_id] = r; });
                 setResources(resMap);
 
-                if (activeIndicator) {
+                // 3. Handle Initial Selection from URL if not yet set
+                const urlCritId = getUrlParam('crit');
+                const urlIndId = getUrlParam('ind');
+
+                if (urlCritId && !activeCriterion && indData) {
+                    const critInds = indData.filter(i => String(i.criterion_id) === String(urlCritId));
+                    if (critInds.length > 0) {
+                        const critObj = {
+                            id: Number(urlCritId),
+                            label: critInds[0].criteria?.label || `Critère ${urlCritId}`,
+                            indicators: critInds
+                        };
+                        setActiveCriterion(critObj);
+                        
+                        if (urlIndId) {
+                            const targetInd = critInds.find(i => String(i.id) === String(urlIndId));
+                            if (targetInd) {
+                                setActiveIndicator(targetInd);
+                                const existing = resMap[targetInd.id];
+                                if (existing) {
+                                    setSourceType(existing.source_type);
+                                    setUrl(existing.url || '');
+                                    setShowPreview(true);
+                                }
+                            }
+                        }
+                    }
+                } else if (activeIndicator) {
                     const existing = resMap[activeIndicator.id];
                     if (existing) {
                         setSourceType(existing.source_type);
                         setUrl(existing.url || '');
-                    } else {
-                        setSourceType('youtube');
-                        setUrl('');
                     }
                 }
             }
@@ -82,9 +109,19 @@ export default function ResourceManager() {
         }
     };
 
+    const updateUrl = (params) => {
+        const url = new URL(window.location);
+        Object.entries(params).forEach(([k, v]) => {
+            if (v) url.searchParams.set(k, v);
+            else url.searchParams.delete(k);
+        });
+        window.history.replaceState({}, '', url);
+    };
+
     const handleEditCriterion = (crit) => {
         setActiveCriterion(crit);
         handleEditIndicator(crit.indicators[0]);
+        updateUrl({ crit: crit.id, ind: crit.indicators[0].id });
     };
 
     const handleEditIndicator = (ind) => {
@@ -94,13 +131,15 @@ export default function ResourceManager() {
             setSourceType(existing.source_type);
             setUrl(existing.url || '');
             setFile(null);
+            setShowPreview(true);
         } else {
             setSourceType('youtube');
             setUrl('');
             setFile(null);
+            setShowPreview(false);
         }
         setUploadProgress(0);
-        setShowPreview(false);
+        updateUrl({ ind: ind.id });
     };
 
     const handleSave = async () => {
@@ -231,6 +270,7 @@ export default function ResourceManager() {
                                 setAuditType(type.id);
                                 setActiveCriterion(null);
                                 setActiveIndicator(null);
+                                updateUrl({ audit: type.id, crit: '', ind: '' });
                             }}
                             className={`flex-1 sm:flex-none whitespace-nowrap px-4 py-2.5 rounded-[14px] text-[10px] font-black tracking-widest transition-all ${
                                 auditType === type.id 
@@ -247,7 +287,11 @@ export default function ResourceManager() {
             {activeCriterion && (
                 <div className="mb-10 bg-indigo-50/40 border border-indigo-100/50 rounded-[28px] p-8 relative animate-in slide-in-from-top-4 duration-300">
                     <button 
-                        onClick={() => { setActiveCriterion(null); setActiveIndicator(null); }} 
+                        onClick={() => { 
+                            setActiveCriterion(null); 
+                            setActiveIndicator(null); 
+                            updateUrl({ crit: '', ind: '' });
+                        }} 
                         className="absolute top-6 right-6 p-2 text-gray-400 hover:text-gray-900 rounded-xl hover:bg-white transition-all shadow-sm"
                     >
                         <X className="h-5 w-5" />
@@ -321,6 +365,7 @@ export default function ResourceManager() {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                                     {[
                                         { id: 'youtube', label: 'Youtube', icon: <LinkIcon className="h-4 w-4" /> },
+                                        { id: 'vimeo', label: 'Vimeo', icon: <PlayCircle className="h-4 w-4" /> },
                                         { id: 'upload', label: 'Fichier natif (.mp4)', icon: <Upload className="h-4 w-4" /> },
                                         { id: 'default', label: 'Revenir par défaut', icon: <Trash2 className="h-4 w-4" /> }
                                     ].map(type => (
@@ -335,9 +380,9 @@ export default function ResourceManager() {
                                 </div>
                             )}
 
-                            {!showPreview && sourceType === 'youtube' && (
+                            {!showPreview && (sourceType === 'youtube' || sourceType === 'vimeo') && (
                                 <div className="mb-8 group">
-                                    <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 block ml-1">Lien Youtube</label>
+                                    <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 block ml-1">Lien {sourceType === 'youtube' ? 'Youtube' : 'Vimeo'}</label>
                                     <div className="relative">
                                         <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
                                         <input type="url" placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-white border border-indigo-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none transition-all font-medium text-gray-900" />

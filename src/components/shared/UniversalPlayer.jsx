@@ -9,6 +9,14 @@ const getYoutubeId = (url) => {
     return (match && match[1]) ? match[1] : null;
 };
 
+const getVimeoId = (url) => {
+    if (!url) return null;
+    const regExp = /(?:vimeo\.com\/|player\.vimeo\.com\/video\/)([0-9]+)/;
+    const match = url.match(regExp);
+    return (match && match[1]) ? match[1] : null;
+};
+
+
 export default function UniversalPlayer({ indicatorId, consultantId, auditType = 'initial', fallbackVideoUrl = "https://www.w3schools.com/html/mov_bbb.mp4" }) {
     const [loading, setLoading] = useState(true);
     const [resource, setResource] = useState(null);
@@ -81,7 +89,7 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
         );
     }
 
-    if (!resource || resource.source_type === 'default' || resource.source_type === 'vimeo') {
+    if (!resource || resource.source_type === 'default') {
         return (
             <div className="bg-slate-900 rounded-[2rem] overflow-hidden aspect-video relative shadow-2xl group">
                 <video
@@ -129,6 +137,26 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
                     ></iframe>
                     <div className="absolute top-6 left-6 bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-xl border border-white/20">
                         EXTRAIT {auditType.toUpperCase()}
+                    </div>
+                </div>
+            );
+        }
+    }
+
+    if (resource.source_type === 'vimeo') {
+        const videoId = getVimeoId(resource.url);
+        if (videoId) {
+            return (
+                <div className="bg-black rounded-[2rem] overflow-hidden aspect-video relative shadow-2xl border border-white/10">
+                    <iframe 
+                        src={`https://player.vimeo.com/video/${videoId}?badge=0&autopause=0&player_id=0&app_id=58479`} 
+                        width="100%" height="100%" 
+                        frameBorder="0" allow="autoplay; fullscreen; picture-in-picture" 
+                        allowFullScreen title="Vimeo player"
+                        className="w-full h-full"
+                    ></iframe>
+                    <div className="absolute top-6 left-6 bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-xl border border-white/20">
+                        VIMEO {auditType.toUpperCase()}
                     </div>
                 </div>
             );

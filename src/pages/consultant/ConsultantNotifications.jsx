@@ -45,7 +45,22 @@ export default function ConsultantNotifications() {
     const fetchNotifications = async () => {
         setLoading(true)
         try {
-            // 1. Fetch messages with case_id and tenant_id
+            // [AUTO-REPAIR] Fix old cases missing consultant_id
+            try {
+                // Find all cases we have access to where consultant_id is null
+                const { data: missingCases } = await supabase
+                    .from('cases')
+                    .select('id')
+                    .is('consultant_id', null);
+                
+                if (missingCases && missingCases.length > 0) {
+                    const ids = missingCases.map(c => c.id);
+                    await supabase.from('cases').update({ consultant_id: user.id }).in('id', ids);
+                    console.log("[AUTO-REPAIR] Repaired cases with null consultant_id:", ids);
+                }
+            } catch (e) { console.warn("[AUTO-REPAIR] Failed to repair cases:", e); }
+
+            // 1. Fetch messages with case_id, tenant_id and sender_id
             const { data, error } = await supabase
                 .from('case_messages')
                 .select(`
@@ -54,13 +69,13 @@ export default function ConsultantNotifications() {
                     created_at,
                     read_at,
                     case_id,
+                    sender_id,
                     cases!inner (
                         id,
                         tenant_id,
                         consultant_id
                     )
                 `)
-                .eq('cases.consultant_id', user.id)
                 .ilike('content', '%[SYSTEM]%')
                 .order('created_at', { ascending: false })
                 .limit(100)
@@ -78,6 +93,7 @@ export default function ConsultantNotifications() {
 
             // 2. Fetch tenant names using tenant_ids from the cases
             const tenantIds = [...new Set(data?.map(n => n.cases?.tenant_id))].filter(Boolean)
+            const tenantMap = {}
             if (tenantIds.length > 0) {
                 const { data: tenantsData } = await supabase
                     .from('tenants')
@@ -85,17 +101,48 @@ export default function ConsultantNotifications() {
                     .in('id', tenantIds)
                 
                 if (tenantsData) {
-                    const tenantMap = {}
                     tenantsData.forEach(t => {
                         tenantMap[t.id] = t.commercial_name || t.name || `${t.first_name || ''} ${t.last_name || ''}`.trim()
                     })
-                    
-                    setNotifications(prev => prev.map(n => ({
-                        ...n,
-                        clientName: tenantMap[n.cases?.tenant_id] || 'Client'
-                    })))
                 }
             }
+
+            // 3. Fetch specific client profile names using sender_id
+            const senderIds = [...new Set(data?.map(n => n.sender_id))].filter(Boolean)
+            const profilesMap = {}
+            if (senderIds.length > 0) {
+                const { data: profilesData } = await supabase
+                    .from('profiles')
+                    .select('id, first_name, last_name, commercial_name')
+                    .in('id', senderIds)
+                
+                if (profilesData) {
+                    profilesData.forEach(p => {
+                        const name = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
+                        profilesMap[p.id] = name || p.commercial_name || null
+                    })
+                }
+            }
+
+            // 4. Combine into display name
+            setNotifications(prev => prev.map(n => {
+                const tenantName = tenantMap[n.cases?.tenant_id];
+                const profileName = profilesMap[n.sender_id];
+                
+                let displayName = 'Client';
+                if (profileName && tenantName && profileName !== tenantName) {
+                    displayName = `${profileName} (${tenantName})`;
+                } else if (profileName) {
+                    displayName = profileName;
+                } else if (tenantName) {
+                    displayName = tenantName;
+                }
+
+                return {
+                    ...n,
+                    clientName: displayName
+                }
+            }))
         } catch (err) {
             console.error('Error fetching notifications:', err)
         } finally {
@@ -196,7 +243,7 @@ export default function ConsultantNotifications() {
                         ) : (
                             filteredNotifications.map((notif) => {
                             const clientName = notif.clientName || 'Client'
-                            const isAction = notif.content.startsWith('📝') || notif.content.startsWith('📁') || notif.content.startsWith('🔐') || notif.content.startsWith('👤')
+                            const isAction = notif.content.startsWith('📝') || notif.content.startsWith('📁') || notif.content.startsWith('🔐') || notif.content.startsWith('👤') || notif.content.startsWith('🏆') || notif.content.startsWith('❌')
 
                             const getClientTheme = (id) => {
                                 const themes = [
