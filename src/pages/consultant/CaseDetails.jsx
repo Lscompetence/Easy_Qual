@@ -94,10 +94,16 @@ export default function CaseDetails() {
     const [showMobileMenu, setShowMobileMenu] = useState(false)
 
     // NEW TABS STATE
-    const [activeTab, setActiveTab] = useState('suivi_rno')
-    const [selectedAudit, setSelectedAudit] = useState('initial') // 'initial' | 'surveillance 1' | ...
-    const [activeCriterion, setActiveCriterion] = useState(null)
-    const [selectedIndicatorId, setSelectedIndicatorId] = useState(null) // which indicator is expanded
+    const [activeTab, setActiveTab] = useState(() => localStorage.getItem(`consultantActiveTab_${id}`) || 'suivi_rno')
+    const [selectedAudit, setSelectedAudit] = useState(() => localStorage.getItem(`consultantSelectedAudit_${id}`) || 'initial') // 'initial' | 'surveillance 1' | ...
+    const [activeCriterion, setActiveCriterion] = useState(() => {
+        const saved = localStorage.getItem(`consultantActiveCriterion_${id}`)
+        return saved ? JSON.parse(saved) : null
+    })
+    const [selectedIndicatorId, setSelectedIndicatorId] = useState(() => {
+        const saved = localStorage.getItem(`consultantSelectedIndicator_${id}`)
+        return saved ? JSON.parse(saved) : null
+    })
     const [criterionComments, setCriterionComments] = useState({}) // { criterion_id: string }
     const [savingComment, setSavingComment] = useState(null) // criterion_id being saved
     const [saveConfirmation, setSaveConfirmation] = useState(null) // { id: criterion_id, type: 'success' | 'error' }
@@ -141,6 +147,25 @@ export default function CaseDetails() {
             isLoading: false
         })
     }
+
+    // Persist States
+    useEffect(() => {
+        localStorage.setItem(`consultantActiveTab_${id}`, activeTab)
+    }, [activeTab, id])
+
+    useEffect(() => {
+        localStorage.setItem(`consultantSelectedAudit_${id}`, selectedAudit)
+    }, [selectedAudit, id])
+
+    useEffect(() => {
+        if (activeCriterion) localStorage.setItem(`consultantActiveCriterion_${id}`, JSON.stringify(activeCriterion))
+        else localStorage.removeItem(`consultantActiveCriterion_${id}`)
+    }, [activeCriterion, id])
+
+    useEffect(() => {
+        if (selectedIndicatorId) localStorage.setItem(`consultantSelectedIndicator_${id}`, JSON.stringify(selectedIndicatorId))
+        else localStorage.removeItem(`consultantSelectedIndicator_${id}`)
+    }, [selectedIndicatorId, id])
 
     // Removed redundant isInitialAudit helper (using global version)
 

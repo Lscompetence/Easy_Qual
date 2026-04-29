@@ -5,15 +5,26 @@ const QUIZ_DATA = {
     '1': [
         { q: "Quelle est la durée de validité de la certification Qualiopi ?", options: ["2 ans", "3 ans", "4 ans", "5 ans"], correct: 1 },
         { q: "Quelles sont les catégories d'actions concernées par Qualiopi ?", options: ["Uniquement les formations", "Formations, Bilans de compétences, VAE, Apprentissage", "Uniquement l'apprentissage", "Formations et VAE uniquement"], correct: 1 },
-        { q: "L'indicateur 1 exige que les indicateurs de résultats soient...", options: ["Optionnels", "Accessibles au public et détaillés", "Confidentiels", "Anonymes"], correct: 1 }
+        { q: "L'indicateur 1 exige que les indicateurs de résultats soient...", options: ["Optionnels", "Accessibles au public et détaillés", "Confidentiels", "Anonymes"], correct: 1 },
+        { q: "Quand le logo Qualiopi peut-il être utilisé ?", options: ["Dès la signature du contrat", "Uniquement après l'obtention du certificat", "Pendant l'audit", "Jamais"], correct: 1 },
+        { q: "Qui délivre la certification Qualiopi ?", options: ["Le Ministère du Travail directement", "Un organisme certificateur accrédité par le Cofrac", "Pôle Emploi", "L'OPCO"], correct: 1 },
+        { q: "Quel est le but principal de l'indicateur 1 ?", options: ["Vendre plus de formations", "Prouver que l'on communique de manière transparente sur l'offre", "Créer un site web obligatoire", "Cacher les résultats"], correct: 1 }
     ],
     '2': [
         { q: "Le critère 2 porte sur...", options: ["La qualification des formateurs", "L'identification précise des objectifs", "Les moyens techniques", "L'amélioration continue"], correct: 1 },
-        { q: "Qu'est-ce qu'une action de formation selon le code du travail ?", options: ["Un simple cours magistral", "Un parcours permettant d'atteindre un objectif pro", "Un entretien annuel", "Un séminaire de vacances"], correct: 1 }
+        { q: "Qu'est-ce qu'une action de formation selon le code du travail ?", options: ["Un simple cours magistral", "Un parcours permettant d'atteindre un objectif pro", "Un entretien annuel", "Un séminaire de vacances"], correct: 1 },
+        { q: "Comment les objectifs doivent-ils être évalués ?", options: ["Par le bouche à oreille", "Par des critères mesurables et vérifiables", "Au hasard", "Uniquement par le formateur à la fin"], correct: 1 },
+        { q: "Le public visé doit-il être clairement identifié ?", options: ["Non, c'est inutile", "Oui, c'est obligatoire", "Seulement pour les diplômes", "Seulement si le client le demande"], correct: 1 },
+        { q: "Les prérequis de la formation doivent être...", options: ["Inexistants", "Vérifiés en amont", "Vérifiés après la formation", "Laissés à l'appréciation de l'apprenant"], correct: 1 },
+        { q: "Quelle preuve peut justifier l'identification des objectifs ?", options: ["Une facture", "Un programme de formation détaillé", "Une feuille d'émargement", "Un certificat de réalisation"], correct: 1 }
     ],
     'default': [
         { q: "Qualiopi est une marque déposée par...", options: ["L'État (Ministère du Travail)", "Une entreprise privée", "L'Union Européenne", "Pôle Emploi"], correct: 0 },
-        { q: "L'audit de surveillance a lieu entre...", options: ["6 et 12 mois", "14 et 22 mois", "24 et 30 mois", "36 et 42 mois"], correct: 1 }
+        { q: "L'audit de surveillance a lieu entre...", options: ["6 et 12 mois", "14 et 22 mois", "24 et 30 mois", "36 et 42 mois"], correct: 1 },
+        { q: "Le référentiel national qualité (RNQ) est composé de...", options: ["5 critères", "7 critères", "9 critères", "10 critères"], correct: 1 },
+        { q: "Combien d'indicateurs compte au maximum le référentiel Qualiopi ?", options: ["21", "25", "32", "35"], correct: 2 },
+        { q: "La non-conformité majeure entraîne...", options: ["Un avertissement", "Le refus ou la suspension de la certification si non levée", "Une simple remarque", "Aucune conséquence directe"], correct: 1 },
+        { q: "Quel est l'objectif principal de Qualiopi ?", options: ["Attester de la qualité du processus mis en œuvre", "Contrôler les impôts", "Évaluer les compétences techniques des apprenants", "Vendre des formations plus cher"], correct: 0 }
     ]
 };
 
