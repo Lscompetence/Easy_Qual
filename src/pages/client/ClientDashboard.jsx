@@ -12,10 +12,19 @@ import ClientTopBar from '../../components/client/ClientTopBar'
 import UniversalPlayer from '../../components/shared/UniversalPlayer'
 import StatusModal from '../../components/shared/StatusModal'
 import QuizModal from '../../components/shared/QuizModal'
+import { jsPDF } from 'jspdf'
 
 const isInitialAudit = (type) => {
     const t = String(type || '').toLowerCase().trim()
     return t === 'initial' || t.includes('initial') || t.includes('initiale')
+}
+
+const normalizeAudit = (type) => {
+    const str = String(type || '').toLowerCase().trim()
+    if (str.includes('initial')) return 'initial'
+    if (str.includes('surveillance')) return 'surveillance'
+    if (str.includes('renouvellement')) return 'renouvellement'
+    return str
 }
 
 export default function ClientDashboard() {
@@ -49,7 +58,10 @@ export default function ClientDashboard() {
     const fileInputRef = useRef(null)
     const [pendingCriterionId, setPendingCriterionId] = useState(null)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
-    const [selectedVideoIndicator, setSelectedVideoIndicator] = useState(null)
+    const [selectedVideoIndicator, setSelectedVideoIndicator] = useState(() => {
+        const saved = localStorage.getItem('clientSelectedVideo')
+        return saved ? JSON.parse(saved) : null
+    })
     const messagesEndRef = useRef(null)
 
     // Manual Save States
@@ -58,7 +70,11 @@ export default function ClientDashboard() {
     const [savingIndicator, setSavingIndicator] = useState(null)
     const [saveSuccess, setSaveSuccess] = useState({})
     const [globalMessage, setGlobalMessage] = useState(null)
-    const [selectedAudit, setSelectedAudit] = useState('initial')
+    const [selectedAudit, setSelectedAudit] = useState(() => localStorage.getItem('clientSelectedAudit') || 'initial')
+    const [lastFailedScores, setLastFailedScores] = useState(() => {
+        const saved = localStorage.getItem('lastFailedScores')
+        return saved ? JSON.parse(saved) : {}
+    })
     const [allStatesData, setAllStatesData] = useState([])
     const [allQuizData, setAllQuizData] = useState([])
     const [caseEvents, setCaseEvents] = useState([])
@@ -103,6 +119,15 @@ export default function ClientDashboard() {
         }
         init()
     }, [user])
+
+    // Persist video state
+    useEffect(() => {
+        if (selectedVideoIndicator) {
+            localStorage.setItem('clientSelectedVideo', JSON.stringify(selectedVideoIndicator))
+        } else {
+            localStorage.removeItem('clientSelectedVideo')
+        }
+    }, [selectedVideoIndicator])
 
     useEffect(() => {
         if (myCase?.id) fetchMessages()
@@ -249,9 +274,11 @@ export default function ClientDashboard() {
                     setCasesData(casesData || [])
                     
                     // Default selected audit to the last one in the list if not set
-                    if (!selectedAudit) {
+                    if (!localStorage.getItem('clientSelectedAudit')) {
                         const types = Array.isArray(caseData.audit_type) ? caseData.audit_type : ['initial']
-                        setSelectedAudit(types[0] || 'initial')
+                        const defaultAudit = types[0] || 'initial'
+                        setSelectedAudit(defaultAudit)
+                        localStorage.setItem('clientSelectedAudit', defaultAudit)
                     }
                     
                     console.log("CLIENT CASE ID:", caseData.id)
@@ -558,7 +585,7 @@ export default function ClientDashboard() {
         }
     };
 
-    const handleDeleteFile = async (targetKey) => {
+    const handleDeleteFile = async (targetKey, exactAuditType = null) => {
         if (!myCase) return;
 
         showStatus(
@@ -568,16 +595,24 @@ export default function ClientDashboard() {
             async () => {
                 setStatusModal(prev => ({ ...prev, isLoading: true }))
                 try {
-                    const normAudit = (selectedAudit || 'initial').trim().toLowerCase()
                     const caseId = myCase.id
+                    
+                    // Fallback logic to find correct audit_type if not explicitly provided
+                    let targetAuditType = exactAuditType;
+                    if (!targetAuditType) {
+                        const aKey = normalizeAudit(selectedAudit || 'initial');
+                        const possibleMatch = (quizUploads[targetKey] || {})[aKey] || 
+                                              Object.values(quizUploads[targetKey] || {}).find(q => normalizeAudit(q.audit_type) === aKey);
+                        targetAuditType = possibleMatch ? possibleMatch.audit_type : (selectedAudit || 'initial').trim().toLowerCase();
+                    }
 
                     // Identify the file path first to delete from storage if possible
                     const { data: record } = await supabase.from('criterion_quiz_uploads')
                         .select('file_url')
                         .eq('case_id', caseId)
                         .eq('criterion_id', targetKey)
-                        .eq('audit_type', normAudit)
-                        .single()
+                        .eq('audit_type', targetAuditType)
+                        .maybeSingle()
 
                     if (record?.file_url) {
                         const pathParts = record.file_url.split('/')
@@ -591,15 +626,16 @@ export default function ClientDashboard() {
                         .delete()
                         .eq('case_id', caseId)
                         .eq('criterion_id', targetKey)
-                        .eq('audit_type', normAudit)
+                        .eq('audit_type', targetAuditType)
 
                     if (error1) throw error1
 
-                    // Update UI
+                    // Update UI with deep copy to trigger render
                     setQuizUploads(prev => {
                         const updated = { ...prev }
                         if (updated[targetKey]) {
-                            delete updated[targetKey][normAudit]
+                            updated[targetKey] = { ...updated[targetKey] }
+                            delete updated[targetKey][targetAuditType]
                             if (Object.keys(updated[targetKey]).length === 0) delete updated[targetKey]
                         }
                         return updated
@@ -1042,6 +1078,7 @@ export default function ClientDashboard() {
                                             onClick={() => {
                                                 setMyCase(c);
                                                 setSelectedAudit(type);
+                                                localStorage.setItem('clientSelectedAudit', type);
                                             }}
                                             className={`flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
                                                 isActive 
@@ -1108,27 +1145,30 @@ export default function ClientDashboard() {
                                     <p className="text-xs text-gray-500 mb-3">Remplissez le fichier ressource et téléversez-le ici</p>
                                     
                                     {(() => {
-                                        const normalizeAudit = (t) => {
-                                            const str = String(t || '').toLowerCase().trim()
-                                            if (str.includes('initial')) return 'initial'
-                                            if (str.includes('surveillance')) return 'surveillance'
-                                            if (str.includes('renouvellement')) return 'renouvellement'
-                                            return str
-                                        }
                                         const aKey = normalizeAudit(selectedAudit || 'initial')
                                         const quiz = (quizUploads['crit_' + currentCriterion.id] || {})[aKey] || 
                                                      Object.values(quizUploads['crit_' + currentCriterion.id] || {}).find(q => normalizeAudit(q.audit_type) === aKey)
                                         
                                         if (quiz) {
+                                            const match = quiz.file_name.match(/_SCORE_(\d+)/);
+                                            const savedScore = match ? match[1] : null;
+
                                             return (
                                                 <div className="space-y-2">
-                                                    <div className="flex items-center gap-2 p-2 bg-emerald-50 rounded-xl border border-emerald-100">
-                                                        <CheckCircle className="h-4 w-4 text-emerald-500" />
-                                                        <span className="text-xs font-bold text-emerald-700 truncate">
-                                                            {quiz.file_name}
-                                                        </span>
+                                                    <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100 shadow-sm">
+                                                        <CheckCircle className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+                                                        <div className="flex flex-col min-w-0 flex-1">
+                                                            <span className="text-xs font-bold text-emerald-700 truncate">
+                                                                {quiz.file_name.replace(/_SCORE_\d+/, '')}
+                                                            </span>
+                                                            {savedScore && (
+                                                                <span className="text-[10px] font-black text-emerald-600 bg-white px-2 py-0.5 rounded border border-emerald-200 uppercase tracking-widest mt-1 w-max">
+                                                                    Score : {savedScore}%
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <Download 
-                                                            className="h-3.5 w-3.5 text-emerald-500 ml-auto cursor-pointer" 
+                                                            className="h-4 w-4 text-emerald-500 hover:text-emerald-700 ml-auto cursor-pointer flex-shrink-0 transition-colors" 
                                                             onClick={() => window.open(quiz.file_url, '_blank')} 
                                                         />
                                                     </div>
@@ -1140,7 +1180,7 @@ export default function ClientDashboard() {
                                                             Remplacer
                                                         </button>
                                                         <button
-                                                            onClick={() => handleDeleteFile('crit_' + currentCriterion.id)}
+                                                            onClick={() => handleDeleteFile('crit_' + currentCriterion.id, quiz.audit_type)}
                                                             className="text-[10px] font-bold text-red-400 hover:text-red-600 transition-colors"
                                                         >
                                                             Supprimer
@@ -1150,15 +1190,25 @@ export default function ClientDashboard() {
                                             )
                                         }
 
+                                        const failedScore = lastFailedScores['crit_' + currentCriterion.id];
+
                                         return (
-                                            <button
-                                                onClick={() => setIsQuizOpen(true)}
-                                                disabled={uploadingFor === 'crit_' + currentCriterion.id}
-                                                className="w-full py-2 bg-[#cc6d3e] text-white rounded-xl text-xs font-bold hover:bg-[#b35d32] transition-all shadow-md shadow-[#cc6d3e]/20 disabled:opacity-50 flex items-center justify-center gap-2"
-                                            >
-                                                <PlayCircle className="h-3.5 w-3.5" />
-                                                Lancer le Quiz
-                                            </button>
+                                            <div className="w-full">
+                                                {failedScore !== undefined && (
+                                                    <div className="mb-3 p-2.5 bg-rose-50 rounded-xl border border-rose-100 flex items-center justify-center gap-2 shadow-sm animate-in fade-in zoom-in duration-300">
+                                                        <AlertTriangle className="h-4 w-4 text-rose-500" />
+                                                        <span className="text-xs font-bold text-rose-700">Dernier essai : {failedScore}% (Échec)</span>
+                                                    </div>
+                                                )}
+                                                <button
+                                                    onClick={() => setIsQuizOpen(true)}
+                                                    disabled={uploadingFor === 'crit_' + currentCriterion.id}
+                                                    className="w-full py-2.5 bg-[#cc6d3e] text-white rounded-xl text-xs font-bold hover:bg-[#b35d32] transition-all shadow-md shadow-[#cc6d3e]/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                                                >
+                                                    <PlayCircle className="h-4 w-4" />
+                                                    {failedScore !== undefined ? "Retenter le Quiz" : "Lancer le Quiz"}
+                                                </button>
+                                            </div>
                                         )
                                     })()}
                                 </div>
@@ -1176,33 +1226,75 @@ export default function ClientDashboard() {
                                     const normAudit = (selectedAudit || 'initial').trim().toLowerCase();
                                     const targetKey = 'crit_' + currentCriterion.id;
                                     
-                                    // 1. Generate detailed report content
-                                    let report = `RAPPORT DE TEST QUALIOPI - EASYQUAL\n`;
-                                    report += `------------------------------------\n`;
-                                    report += `Date : ${new Date().toLocaleString('fr-FR')}\n`;
-                                    report += `Client : ${user.email}\n`;
-                                    report += `Critère : ${currentCriterion.id} - ${currentCriterion.label}\n`;
-                                    report += `Score Final : ${score}%\n`;
-                                    report += `Statut : ${score >= 70 ? 'RÉUSSI' : 'ÉCHEC'}\n\n`;
-                                    report += `DÉTAILS DES RÉPONSES :\n`;
-                                    report += `------------------------------------\n`;
+                                    // 1. Generate PDF report
+                                    const doc = new jsPDF();
                                     
+                                    doc.setFont("helvetica");
+                                    doc.setFontSize(18);
+                                    doc.setTextColor(79, 70, 229);
+                                    doc.text("RAPPORT DE TEST QUALIOPI - EASYQUAL", 20, 20);
+                                    
+                                    doc.setFontSize(11);
+                                    doc.setTextColor(100, 100, 100);
+                                    doc.text(`Date : ${new Date().toLocaleString('fr-FR')}`, 20, 35);
+                                    doc.text(`Client : ${user.email}`, 20, 42);
+                                    doc.text(`Critère : ${currentCriterion.id} - ${currentCriterion.label}`, 20, 49);
+                                    
+                                    doc.setFontSize(14);
+                                    if (score >= 70) {
+                                        doc.setTextColor(16, 185, 129); // Emerald
+                                    } else {
+                                        doc.setTextColor(225, 29, 72); // Rose
+                                    }
+                                    doc.text(`Score Final : ${score}% - ${score >= 70 ? 'RÉUSSI' : 'ÉCHEC'}`, 20, 60);
+                                    
+                                    doc.setFontSize(12);
+                                    doc.setTextColor(30, 41, 59);
+                                    doc.text("DÉTAILS DES RÉPONSES :", 20, 75);
+                                    
+                                    doc.setFontSize(10);
+                                    
+                                    let yPos = 85;
                                     details.questions.forEach((q, idx) => {
+                                        if (yPos > 270) {
+                                            doc.addPage();
+                                            yPos = 20;
+                                        }
                                         const userAnswerIdx = details.answers[idx];
                                         const isCorrect = userAnswerIdx === q.correct;
-                                        report += `${idx + 1}. ${q.q}\n`;
-                                        report += `   Réponse donnée : ${q.options[userAnswerIdx] || 'Aucune'}\n`;
-                                        report += `   Résultat : ${isCorrect ? '✅ CORRECT' : '❌ INCORRECT'}\n`;
-                                        if (!isCorrect) {
-                                            report += `   Réponse attendue : ${q.options[q.correct]}\n`;
+                                        
+                                        doc.setFont("helvetica", "bold");
+                                        doc.setTextColor(30, 41, 59);
+                                        const splitTitle = doc.splitTextToSize(`${idx + 1}. ${q.q}`, 170);
+                                        doc.text(splitTitle, 20, yPos);
+                                        yPos += splitTitle.length * 5 + 2;
+                                        
+                                        doc.setFont("helvetica", "normal");
+                                        doc.text(`Réponse donnée : ${q.options[userAnswerIdx] || 'Aucune'}`, 25, yPos);
+                                        yPos += 6;
+                                        
+                                        if (isCorrect) {
+                                            doc.setTextColor(16, 185, 129);
+                                            doc.text(`Résultat : CORRECT`, 25, yPos);
+                                        } else {
+                                            doc.setTextColor(225, 29, 72);
+                                            doc.text(`Résultat : INCORRECT`, 25, yPos);
                                         }
-                                        report += `\n`;
+                                        yPos += 6;
+                                        
+                                        if (!isCorrect) {
+                                            doc.setTextColor(71, 85, 105);
+                                            doc.text(`Réponse attendue : ${q.options[q.correct]}`, 25, yPos);
+                                            yPos += 6;
+                                        }
+                                        
+                                        yPos += 4;
                                     });
 
                                     // 2. Create a File (Blob)
-                                    const fileName = `Rapport_Quiz_C${currentCriterion.id}_${Date.now()}.txt`;
-                                    const blob = new Blob([report], { type: 'text/plain' });
-                                    const file = new File([blob], fileName, { type: 'text/plain' });
+                                    const fileName = `Rapport_Quiz_C${currentCriterion.id}_SCORE_${score}_${Date.now()}.pdf`;
+                                    const blob = doc.output('blob');
+                                    const file = new File([blob], fileName, { type: 'application/pdf' });
 
                                     // 3. Upload to Storage
                                     const path = `${myCase.id}/${fileName}`;
@@ -1241,7 +1333,8 @@ export default function ClientDashboard() {
                                             [normAudit]: { 
                                                 file_name: fileName,
                                                 file_url: urlData.publicUrl,
-                                                uploaded_at: new Date().toISOString() 
+                                                uploaded_at: new Date().toISOString(),
+                                                audit_type: normAudit
                                             }
                                         }
                                     }));
@@ -1254,6 +1347,13 @@ export default function ClientDashboard() {
                             }}
                             onFail={async (score, details) => {
                                 try {
+                                    const key = 'crit_' + currentCriterion.id;
+                                    setLastFailedScores(prev => {
+                                        const next = { ...prev, [key]: score }
+                                        localStorage.setItem('lastFailedScores', JSON.stringify(next))
+                                        return next
+                                    })
+
                                     // Notify Consultant of failed attempt
                                     const { error: failErr } = await supabase.from('case_messages').insert({
                                         case_id: myCase.id,
@@ -1418,7 +1518,7 @@ export default function ClientDashboard() {
                                                                                             return rest
                                                                                         })
                                                                                     } else {
-                                                                                        handleDeleteFile('ind_' + ind.id)
+                                                                                        handleDeleteFile('ind_' + ind.id, fileData?.audit_type)
                                                                                     }
                                                                                 }}
                                                                                 className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer z-20"
@@ -1594,6 +1694,7 @@ export default function ClientDashboard() {
                                         onClick={() => {
                                             setMyCase(c);
                                             setSelectedAudit(type);
+                                            localStorage.setItem('clientSelectedAudit', type);
                                         }}
                                         className={`flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
                                             isSelected 
