@@ -1,4 +1,4 @@
-﻿import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { MessageSquare, Check, Menu } from 'lucide-react'
 
 export default function ClientTopBar({ breadcrumbs = [], consultantName = '', onContact, setShowMobileMenu }) {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
 
 export default function UpdatePassword() {
@@ -11,6 +12,14 @@ export default function UpdatePassword() {
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState(null) // { type: 'error' | 'success', text: '' }
     const navigate = useNavigate()
+    const { maintenanceMode } = useAuth()
+
+    // 🛠️ MAINTENANCE REDIRECT
+    useEffect(() => {
+        if (maintenanceMode && roleParam !== 'admin') {
+            navigate('/maintenance')
+        }
+    }, [maintenanceMode, roleParam, navigate])
 
     const config = useMemo(() => {
         switch (roleParam) {

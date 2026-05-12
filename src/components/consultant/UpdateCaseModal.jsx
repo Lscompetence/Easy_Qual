@@ -167,7 +167,12 @@ export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuc
                                             const updated = current.includes(type)
                                                 ? current.filter(t => t !== type)
                                                 : [...current, type]
-                                            setFormData({ ...formData, auditTypes: updated })
+                                            
+                                            // Sort consistently
+                                            const order = ['Audit Initial', 'Audit Surveillance', 'Audit Renouvellement']
+                                            const sorted = updated.sort((a, b) => order.indexOf(a) - order.indexOf(b))
+                                            
+                                            setFormData({ ...formData, auditTypes: sorted })
                                         }}
                                         className={`px-2 py-2 text-[10px] sm:text-xs font-bold rounded-lg border-2 transition-all ${formData.auditTypes.includes(type)
                                             ? 'border-purple-600 bg-purple-50 text-purple-700'

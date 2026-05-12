@@ -17,6 +17,9 @@ async function finalAdminRepair() {
         return
     }
 
+
+
+
     // 🔥 CRITIQUE: On injecte le rôle dans les "user_metadata"
     // C'est ce qui permet au site de vous laisser passer sans attendre !
     console.log("[🛠️] Injection du rôle Admin dans les métadonnées d'identité...")

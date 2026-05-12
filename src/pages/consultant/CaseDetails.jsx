@@ -77,6 +77,19 @@ const normalizeAudit = (type) => {
     return t
 }
 
+const getAuditRank = (type) => {
+    const norm = normalizeAudit(type);
+    if (norm === 'initial') return 1;
+    if (norm === 'surveillance') return 2;
+    if (norm === 'renouvellement') return 3;
+    return 4;
+};
+
+const sortAuditTypes = (types) => {
+    if (!Array.isArray(types)) return types;
+    return [...types].sort((a, b) => getAuditRank(a) - getAuditRank(b));
+};
+
 export default function CaseDetails() {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -288,14 +301,42 @@ export default function CaseDetails() {
         }
     }, [progressPercent, caseData?.progress, caseData?.status, id])
 
-    // Handle tab initialization from URL
+    // Handle tab and deep links from URL
     useEffect(() => {
         const params = new URLSearchParams(location.search)
         const tab = params.get('tab')
+        const critId = params.get('criterionId')
+        const indId = params.get('indicatorId')
+        const audit = params.get('audit')
+
         if (tab === 'planification' || tab === 'messagerie' || tab === 'suivi_rno') {
             setActiveTab(tab)
         }
-    }, [location.search])
+
+        if (audit) {
+            setSelectedAudit(audit)
+        }
+
+        if (critId && criteriaData.length > 0) {
+            const crit = criteriaData.find(c => String(c.id) === String(critId))
+            if (crit) setActiveCriterion(crit)
+        }
+
+        if (indId) {
+            setSelectedIndicatorId(Number(indId))
+        }
+
+        // Auto-scroll to linked element
+        setTimeout(() => {
+            if (indId) {
+                const el = document.getElementById(`indicator-${indId}`)
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            } else if (critId) {
+                const el = document.getElementById(`criterion-${critId}`)
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }
+        }, 800)
+    }, [location.search, criteriaData])
 
     useEffect(() => {
         if (!caseData || criteriaData.length === 0) return
@@ -641,6 +682,14 @@ export default function CaseDetails() {
             }, { onConflict: 'case_id,indicator_id,audit_type' }).select().single()
 
             if (upsertError) throw upsertError
+
+            // [NOTIFICATION] Notify client of verdict
+            const verdictLabel = verdict === 'validated' ? 'Validé' : verdict === 'not_applicable' ? 'Non applicable' : 'À retravailler';
+            await supabase.from('case_messages').insert({
+                case_id: id,
+                sender_id: user.id,
+                content: `[SYSTEM] ✅ Votre consultant a rendu son verdict sur l'indicateur ${indicatorId} : ${verdictLabel}`
+            })
 
             // 2. Refresh all states to calculate accurate progress
             const { data: allStates } = await supabase.from('case_indicator_states').select('id, status, consultant_verdict, audit_type, indicator_id').eq('case_id', id)
@@ -1265,7 +1314,7 @@ export default function CaseDetails() {
                                                 {cat.includes(' / ') ? 'CFA' : cat}
                                             </span>
                                         ))}
-                                        {Array.isArray(caseData.audit_type) && caseData.audit_type.map((type, idx) => (
+                                        {Array.isArray(caseData.audit_type) && sortAuditTypes(caseData.audit_type).map((type, idx) => (
                                             <span key={idx} className="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] font-bold uppercase rounded border border-amber-100">
                                                 {type.split(' ')[1]}
                                             </span>
@@ -1462,7 +1511,7 @@ export default function CaseDetails() {
                             {/* AUDIT TYPE TABS */}
                             {caseData.audit_type && caseData.audit_type.length > 0 && (
                                 <div className="flex items-center gap-3 mb-8 overflow-x-auto pb-4 scrollbar-hide">
-                                    {caseData.audit_type.map((type, i) => {
+                                    {sortAuditTypes(caseData.audit_type).map((type, i) => {
                                         const trimmedType = String(type).trim()
                                         const isActive = normalizeAudit(selectedAudit) === normalizeAudit(trimmedType)
                                         return (
@@ -1547,7 +1596,7 @@ export default function CaseDetails() {
                                     const savedComment = quiz?.consultant_comment || ''
 
                                     return (
-                                        <div key={crit.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                        <div key={crit.id} id={`criterion-${crit.id}`} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden scroll-mt-20">
 
                                             {/* ── Criterion Header ── */}
                                             <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100">
@@ -1595,7 +1644,7 @@ export default function CaseDetails() {
                                                     const isOpen = selectedIndicatorId === ind.id
 
                                                     return (
-                                                        <div key={ind.id}>
+                                                        <div key={ind.id} id={`indicator-${ind.id}`} className="scroll-mt-20">
                                                             {/* Row — click to expand */}
                                                             <button
                                                                 onClick={() => setSelectedIndicatorId(isOpen ? null : ind.id)}

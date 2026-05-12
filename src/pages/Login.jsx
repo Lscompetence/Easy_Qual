@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
@@ -13,8 +13,15 @@ export default function Login() {
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(false)
 
-    const { login, logout } = useAuth()
+    const { login, logout, maintenanceMode } = useAuth()
     const navigate = useNavigate()
+
+    // 🛠️ MAINTENANCE REDIRECT
+    useEffect(() => {
+        if (maintenanceMode && roleParam !== 'admin') {
+            navigate('/maintenance')
+        }
+    }, [maintenanceMode, roleParam, navigate])
 
     const getRoleConfig = () => {
         switch (roleParam) {

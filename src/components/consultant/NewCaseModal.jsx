@@ -9,8 +9,10 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
     const [newCaseData, setNewCaseData] = useState({
         tenantName: '',
         siret: '',
+        clientFirstName: '', // Nouveau
+        clientLastName: '',  // Nouveau
         clientEmail: '',
-        password: '', // Nouveau champ
+        password: '',
         category: 'mono-site',
         auditTypes: [],
         trainingCategories: []
@@ -88,7 +90,9 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                         email: cleanedEmail,
                         password: cleanedPassword,
                         tenant_id: rpcData.tenant_id,
-                        tenant_name: cleanedTenantName
+                        tenant_name: cleanedTenantName,
+                        first_name: newCaseData.clientFirstName.trim(),
+                        last_name: newCaseData.clientLastName.trim()
                     })
                 });
 
@@ -105,6 +109,8 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 setNewCaseData({
                     tenantName: '',
                     siret: '',
+                    clientFirstName: '',
+                    clientLastName: '',
                     clientEmail: '',
                     password: '',
                     category: 'mono-site',
@@ -225,6 +231,29 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                             />
                         </div>
 
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[13px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Prénom du Client</label>
+                                <input
+                                    type="text"
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all placeholder-gray-400 text-sm font-semibold"
+                                    placeholder="Prénom"
+                                    value={newCaseData.clientFirstName}
+                                    onChange={(e) => setNewCaseData({ ...newCaseData, clientFirstName: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[13px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Nom du Client</label>
+                                <input
+                                    type="text"
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all placeholder-gray-400 text-sm font-semibold"
+                                    placeholder="Nom"
+                                    value={newCaseData.clientLastName}
+                                    onChange={(e) => setNewCaseData({ ...newCaseData, clientLastName: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
                         <div>
                             <label className="block text-[13px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Numéro SIRET</label>
                             <input
@@ -249,7 +278,12 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                                             const updated = current.includes(type)
                                                 ? current.filter(t => t !== type)
                                                 : [...current, type]
-                                            setNewCaseData({ ...newCaseData, auditTypes: updated })
+                                            
+                                            // Sort consistently
+                                            const order = ['Audit Initial', 'Audit Surveillance', 'Audit Renouvellement']
+                                            const sorted = updated.sort((a, b) => order.indexOf(a) - order.indexOf(b))
+
+                                            setNewCaseData({ ...newCaseData, auditTypes: sorted })
                                         }}
                                         className={`px-2 py-2 text-[10px] sm:text-xs font-bold rounded-lg border-2 transition-all ${newCaseData.auditTypes.includes(type)
                                             ? 'border-purple-600 bg-purple-50 text-purple-700'

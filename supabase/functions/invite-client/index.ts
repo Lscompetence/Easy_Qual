@@ -10,11 +10,13 @@ serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
     try {
-        let { email, password, tenant_id, tenant_name } = await req.json()
+        let { email, password, tenant_id, tenant_name, first_name, last_name } = await req.json()
 
         // Nettoyage des entrées
         email = email?.trim()?.toLowerCase();
         tenant_name = tenant_name?.trim();
+        first_name = first_name?.trim();
+        last_name = last_name?.trim();
 
         console.log(`🚀 Start invite-client for: ${email}`);
 
@@ -93,6 +95,20 @@ serve(async (req) => {
         } else {
             console.log(`✅ Tenant linked successfully.`);
         }
+
+        // 4. Update Profile with First/Last Name
+        console.log(`👤 Updating profile for ${userId}...`);
+        const { error: pErr } = await supabaseAdmin
+            .from('profiles')
+            .upsert({
+                id: userId,
+                first_name: first_name || null,
+                last_name: last_name || null,
+                role: 'of'
+            });
+        
+        if (pErr) console.error("⚠️ Profile sync error:", pErr.message);
+        else console.log(`✅ Profile updated.`);
 
         return new Response(JSON.stringify({
             success: true,

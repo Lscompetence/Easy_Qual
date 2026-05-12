@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
 import { ArrowLeft, Check, Mail } from 'lucide-react'
@@ -12,7 +12,16 @@ export default function ForgotPassword() {
     const [loading, setLoading] = useState(false)
     const [success, setSuccess] = useState(false)
     const [error, setError] = useState(null)
-    const { resetPassword } = useAuth()
+    const { resetPassword, maintenanceMode } = useAuth()
+    const navigate = useNavigate()
+    const location = useLocation()
+
+    // 🛠️ MAINTENANCE REDIRECT
+    useEffect(() => {
+        if (maintenanceMode && roleParam !== 'admin') {
+            navigate('/maintenance')
+        }
+    }, [maintenanceMode, roleParam, navigate])
 
     const config = useMemo(() => {
         switch (roleParam) {

@@ -1,16 +1,28 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { 
+    MessageSquare, 
+    BellRing, 
+    Clock, 
+    CheckCircle, 
+    ArrowRight, 
+    Filter,
+    FileText,
+    TrendingUp,
+    AlertCircle,
+    Search
+} from 'lucide-react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { useNavigate } from 'react-router-dom'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
-import { MessageSquare, Clock, ArrowRight, CheckCircle, FileText, BellRing, Filter, X } from 'lucide-react'
 
 export default function ConsultantNotifications() {
     const { user } = useAuth()
     const navigate = useNavigate()
-    const [loading, setLoading] = useState(true)
     const [notifications, setNotifications] = useState([])
+    const [casesCount, setCasesCount] = useState(0)
+    const [loading, setLoading] = useState(true)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
 
     useEffect(() => {
@@ -47,102 +59,71 @@ export default function ConsultantNotifications() {
         try {
             // [AUTO-REPAIR] Fix old cases missing consultant_id
             try {
-                // Find all cases we have access to where consultant_id is null
                 const { data: missingCases } = await supabase
                     .from('cases')
                     .select('id')
                     .is('consultant_id', null);
                 
                 if (missingCases && missingCases.length > 0) {
-                    const ids = missingCases.map(c => c.id);
-                    await supabase.from('cases').update({ consultant_id: user.id }).in('id', ids);
-                    console.log("[AUTO-REPAIR] Repaired cases with null consultant_id:", ids);
+                    console.log("[AUTO-REPAIR] Found cases without consultant_id:", missingCases.length);
+                    for (const c of missingCases) {
+                        await supabase.from('cases').update({ consultant_id: user.id }).eq('id', c.id);
+                    }
                 }
             } catch (e) { console.warn("[AUTO-REPAIR] Failed to repair cases:", e); }
 
-            // 1. Fetch messages with case_id, tenant_id and sender_id
+            // 1. Fetch case IDs for this consultant (Simple select, no joins to avoid RLS drops)
+            const { data: casesData } = await supabase
+                .from('cases')
+                .select('id, tenant_id')
+                .eq('consultant_id', user.id)
+
+            const caseIds = casesData?.map(c => c.id) || []
+            if (caseIds.length === 0) {
+                setNotifications([])
+                setLoading(false)
+                return
+            }
+
+            // 2. Fetch messages for these cases
             const { data, error } = await supabase
                 .from('case_messages')
-                .select(`
-                    id,
-                    content,
-                    created_at,
-                    read_at,
-                    case_id,
-                    sender_id,
-                    cases!inner (
-                        id,
-                        tenant_id,
-                        consultant_id
-                    )
-                `)
-                .ilike('content', '%[SYSTEM]%')
+                .select('id, content, created_at, read_at, case_id, sender_id')
+                .in('case_id', caseIds)
                 .order('created_at', { ascending: false })
                 .limit(100)
 
             if (error) throw error
             
-            const cleaned = (data || []).map(notif => ({
-                ...notif,
-                is_read: !!notif.read_at,
-                content: notif.content.replace(/\[SYSTEM\]/i, '').trim(),
-                clientName: 'Chargement...' 
-            }))
-            
-            setNotifications(cleaned)
-
-            // 2. Fetch tenant names using tenant_ids from the cases
-            const tenantIds = [...new Set(data?.map(n => n.cases?.tenant_id))].filter(Boolean)
-            const tenantMap = {}
-            if (tenantIds.length > 0) {
-                const { data: tenantsData } = await supabase
-                    .from('tenants')
-                    .select('id, name, commercial_name, first_name, last_name')
-                    .in('id', tenantIds)
-                
-                if (tenantsData) {
-                    tenantsData.forEach(t => {
-                        tenantMap[t.id] = t.commercial_name || t.name || `${t.first_name || ''} ${t.last_name || ''}`.trim()
-                    })
-                }
-            }
-
-            // 3. Fetch specific client profile names using sender_id
+            // 3. Resolve unique sender IDs to fetch profiles (More reliable for names)
             const senderIds = [...new Set(data?.map(n => n.sender_id))].filter(Boolean)
             const profilesMap = {}
+            
             if (senderIds.length > 0) {
                 const { data: profilesData } = await supabase
                     .from('profiles')
                     .select('id, first_name, last_name, commercial_name')
                     .in('id', senderIds)
                 
-                if (profilesData) {
-                    profilesData.forEach(p => {
-                        const name = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
-                        profilesMap[p.id] = name || p.commercial_name || null
-                    })
-                }
+                profilesData?.forEach(p => {
+                    const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
+                    profilesMap[p.id] = fullName || p.commercial_name || 'Client'
+                })
             }
 
-            // 4. Combine into display name
-            setNotifications(prev => prev.map(n => {
-                const tenantName = tenantMap[n.cases?.tenant_id];
-                const profileName = profilesMap[n.sender_id];
-                
-                let displayName = 'Client';
-                if (profileName && tenantName && profileName !== tenantName) {
-                    displayName = `${profileName} (${tenantName})`;
-                } else if (profileName) {
-                    displayName = profileName;
-                } else if (tenantName) {
-                    displayName = tenantName;
-                }
+            // 4. Process and set state
+            const processed = (data || []).map(n => {
+                const profileName = profilesMap[n.sender_id] || 'Client'
 
                 return {
                     ...n,
-                    clientName: displayName
+                    is_read: !!n.read_at,
+                    content: n.content.replace(/\[SYSTEM\]/i, '').trim(),
+                    clientName: profileName
                 }
-            }))
+            })
+
+            setNotifications(processed)
         } catch (err) {
             console.error('Error fetching notifications:', err)
         } finally {
@@ -156,10 +137,9 @@ export default function ConsultantNotifications() {
             .from('case_messages')
             .update({ read_at: now })
             .eq('case_id', caseId)
-            .ilike('content', '%[SYSTEM]%')
+            .neq('sender_id', user.id)
             .is('read_at', null)
             
-        // Refresh local UI
         setNotifications(prev => prev.map(n => n.case_id === caseId ? { ...n, is_read: true, read_at: now } : n))
     }
 
@@ -182,7 +162,6 @@ export default function ConsultantNotifications() {
                 />
 
                 <main className="flex-1 p-6 lg:p-8 max-w-5xl mx-auto w-full">
-                    {/* Header Section */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
                         <div>
                             <div className="flex items-center gap-3 mb-2">
@@ -222,7 +201,6 @@ export default function ConsultantNotifications() {
                         </div>
                     </div>
 
-                    {/* Notifications List */}
                     <div className="space-y-4">
                         {loading && notifications.length === 0 ? (
                             Array(5).fill(0).map((_, i) => (
@@ -242,78 +220,84 @@ export default function ConsultantNotifications() {
                             </div>
                         ) : (
                             filteredNotifications.map((notif) => {
-                            const clientName = notif.clientName || 'Client'
-                            const isAction = notif.content.startsWith('📝') || notif.content.startsWith('📁') || notif.content.startsWith('🔐') || notif.content.startsWith('👤') || notif.content.startsWith('🏆') || notif.content.startsWith('❌')
+                                const isAction = notif.content.startsWith('📝') || notif.content.startsWith('📁') || notif.content.startsWith('🔐') || notif.content.startsWith('👤') || notif.content.startsWith('🏆') || notif.content.startsWith('❌')
+                                
+                                const getClientTheme = (id) => {
+                                    const themes = [
+                                        { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-100' },
+                                        { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100' },
+                                        { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100' },
+                                        { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-100' },
+                                        { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-100' },
+                                        { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100' },
+                                        { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-100' }
+                                    ]
+                                    const hash = (id || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+                                    return themes[hash % themes.length]
+                                }
 
-                            const getClientTheme = (id) => {
-                                const themes = [
-                                    { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-100' },
-                                    { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-100' },
-                                    { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-100' },
-                                    { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-100' },
-                                    { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-100' },
-                                    { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-violet-100' },
-                                    { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-100' }
-                                ]
-                                const cid = notif.cases?.tenant_id || id || 'default'
-                                const hash = cid.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-                                return themes[hash % themes.length]
-                            }
+                                const theme = getClientTheme(notif.case_id)
 
-                            const theme = getClientTheme(notif.case_id)
+                                return (
+                                    <div 
+                                        key={notif.id}
+                                        className={`group relative overflow-hidden bg-white rounded-3xl border-2 transition-all hover:scale-[1.01] hover:shadow-2xl hover:shadow-purple-100 ${
+                                            notif.is_read ? 'border-gray-50' : 'border-purple-100 shadow-xl shadow-purple-50'
+                                        }`}
+                                    >
+                                        {!notif.is_read && (
+                                            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-purple-600"></div>
+                                        )}
 
-                            return (
-                                <div 
-                                    key={notif.id}
-                                    className={`group relative overflow-hidden bg-white rounded-3xl border-2 transition-all hover:scale-[1.01] hover:shadow-2xl hover:shadow-purple-100 ${
-                                        notif.is_read ? 'border-gray-50' : 'border-purple-100 shadow-xl shadow-purple-50'
-                                    }`}
-                                >
-                                    {!notif.is_read && (
-                                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-purple-600"></div>
-                                    )}
-
-                                    <div className="p-6 flex items-start gap-4">
-                                        <div className={`h-12 w-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${theme.bg} ${theme.text}`}>
-                                            {isAction ? (
-                                                <FileText className="h-6 w-6" />
-                                            ) : (
-                                                <MessageSquare className="h-6 w-6" />
-                                            )}
-                                        </div>
-
-                                        <div className="flex-1 min-w-0 pr-12">
-                                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${theme.bg} ${theme.text} ${theme.border}`}>
-                                                    {clientName}
-                                                </span>
-                                                <span className="text-[10px] font-bold text-gray-400">
-                                                    • {new Date(notif.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                                                </span>
-                                                {!notif.is_read && (
-                                                    <span className="h-2 w-2 rounded-full bg-purple-600 animate-pulse"></span>
-                                                )}
+                                        <div className="p-6 flex items-start gap-4">
+                                            <div className={`h-12 w-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${theme.bg} ${theme.text}`}>
+                                                {isAction ? <FileText className="h-6 w-6" /> : <MessageSquare className="h-6 w-6" />}
                                             </div>
-                                            <p className={`text-sm leading-relaxed whitespace-pre-line ${
-                                                notif.is_read ? 'text-gray-500' : 'text-gray-800 font-medium'
-                                            }`}>
-                                                {notif.content}
-                                            </p>
-                                        </div>
 
-                                        <button 
-                                            onClick={() => {
-                                                markAsRead(notif.case_id)
-                                                navigate(`/consultant/case/${notif.case_id}`)
-                                            }}
-                                            className="absolute right-6 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-purple-600 hover:text-white transition-all group-hover:bg-purple-100 group-hover:text-purple-600"
-                                        >
-                                            <ArrowRight className="h-5 w-5" />
-                                        </button>
+                                            <div className="flex-1 min-w-0 pr-12">
+                                                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                                    <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${theme.bg} ${theme.text} ${theme.border}`}>
+                                                        {notif.clientName}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-gray-400">
+                                                        • {new Date(notif.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                    {!notif.is_read && <span className="h-2 w-2 rounded-full bg-purple-600 animate-pulse"></span>}
+                                                </div>
+                                                <p className={`text-sm leading-relaxed whitespace-pre-line ${notif.is_read ? 'text-gray-500' : 'text-gray-800 font-medium'}`}>
+                                                    {notif.content}
+                                                </p>
+                                            </div>
+
+                                            <button 
+                                                onClick={() => {
+                                                    markAsRead(notif.case_id)
+                                                    
+                                                    // Smart Redirection logic
+                                                    const content = notif.content
+                                                    let targetUrl = `/consultant/case/${notif.case_id}`
+                                                    
+                                                    if (content.includes('Indicateur')) {
+                                                        const match = content.match(/Indicateur\s+(\d+)/i)
+                                                        targetUrl += `?tab=suivi_rno${match ? `&indicatorId=${match[1]}` : ''}`
+                                                    } else if (content.includes('Quiz')) {
+                                                        const match = content.match(/Critère\s+(\d+)/i)
+                                                        targetUrl += `?tab=suivi_rno${match ? `&criterionId=${match[1]}` : ''}`
+                                                    } else if (!notif.content.startsWith('📝') && !notif.content.startsWith('📁')) {
+                                                        // Likely a chat message
+                                                        targetUrl += `?tab=messagerie`
+                                                    }
+                                                    
+                                                    navigate(targetUrl)
+                                                }}
+                                                className="absolute right-6 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-purple-600 hover:text-white transition-all group-hover:bg-purple-100 group-hover:text-purple-600"
+                                            >
+                                                <ArrowRight className="h-5 w-5" />
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            )
-                        })
+                                )
+                            })
                         )}
                     </div>
                 </main>

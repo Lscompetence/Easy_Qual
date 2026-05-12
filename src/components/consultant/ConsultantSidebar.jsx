@@ -39,14 +39,17 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
     }
 
     const fetchUnreadCounts = async () => {
+        if (!user) return
         try {
             // Count unread system notifications for this consultant's cases
             const { count, error } = await supabase
                 .from('case_messages')
-                .select(`id, cases!inner(id, tenant_id)`, { count: 'exact', head: true })
+                .select(`id, cases!inner(consultant_id)`, { count: 'exact', head: true })
+                .eq('cases.consultant_id', user.id)
                 .is('read_at', null)
                 .ilike('content', '%[SYSTEM]%')
             
+            if (error) throw error
             setUnreadNotifications(count || 0)
         } catch (err) {
             console.error('Error fetching unread counts:', err)

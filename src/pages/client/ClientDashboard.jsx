@@ -27,6 +27,18 @@ const normalizeAudit = (type) => {
     return str
 }
 
+const getAuditRank = (type) => {
+    const norm = normalizeAudit(type);
+    if (norm === 'initial') return 1;
+    if (norm === 'surveillance') return 2;
+    if (norm === 'renouvellement') return 3;
+    return 4;
+};
+
+const sortAuditTypes = (types) => {
+    return [...types].sort((a, b) => getAuditRank(a) - getAuditRank(b));
+};
+
 export default function ClientDashboard() {
     const { user, profile } = useAuth()
     const navigate = useNavigate()
@@ -133,6 +145,30 @@ export default function ClientDashboard() {
         if (myCase?.id) fetchMessages()
     }, [myCase?.id])
 
+    const markAllMessagesAsRead = async () => {
+        if (!myCase || !user) return
+        const unreadIds = messages
+            .filter(m => m.sender_id !== user.id && !m.read_at)
+            .map(m => m.id)
+        
+        if (unreadIds.length === 0) return
+
+        const { error } = await supabase
+            .from('case_messages')
+            .update({ read_at: new Date().toISOString() })
+            .in('id', unreadIds)
+        
+        if (!error) {
+            setMessages(prev => prev.map(m => unreadIds.includes(m.id) ? { ...m, read_at: new Date().toISOString() } : m))
+        }
+    }
+
+    useEffect(() => {
+        if (isMessages && messages.some(m => m.sender_id !== user.id && !m.read_at)) {
+            markAllMessagesAsRead()
+        }
+    }, [isMessages, messages.length])
+
     useEffect(() => {
         // Use a small timeout to ensure DOM is rendered before scrolling
         const timer = setTimeout(() => {
@@ -169,7 +205,8 @@ export default function ClientDashboard() {
                 filter: `case_id=eq.${myCase.id}`
             }, (payload) => {
                 console.log("Real-time message received:", payload.new);
-                if (payload.new.content.startsWith('[SYSTEM]')) return
+                // Only ignore system messages sent by the client themselves
+                if (payload.new.content.startsWith('[SYSTEM]') && payload.new.sender_id === user.id) return
                 setMessages(prev => {
                     if (prev.some(m => m.id === payload.new.id)) return prev
                     const filtered = prev.filter(m => !String(m.id).startsWith('temp-') || m.content !== payload.new.content)
@@ -213,10 +250,10 @@ export default function ClientDashboard() {
             return;
         }
 
-        // Filter out system messages for the chat
-        const userMessages = (data || []).filter(m => !m.content.startsWith('[SYSTEM]'))
-        console.log("Fetched messages:", userMessages.length);
-        setMessages(userMessages)
+        // Filter out system messages sent by the client themselves
+        const filteredMessages = (data || []).filter(m => !m.content.startsWith('[SYSTEM]') || m.sender_id !== user.id)
+        console.log("Fetched messages:", filteredMessages.length);
+        setMessages(filteredMessages)
     }
 
     const fetchClientData = async () => {
@@ -772,6 +809,7 @@ export default function ClientDashboard() {
                     consultantName={consultantName}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
+                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                 />
                 <div className="flex-1 flex items-center justify-center">
@@ -907,7 +945,7 @@ export default function ClientDashboard() {
                     indicators={indicators}
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
-                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
@@ -1016,7 +1054,7 @@ export default function ClientDashboard() {
                     indicators={indicators}
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
-                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
@@ -1045,7 +1083,8 @@ export default function ClientDashboard() {
                         {/* Audit Selection Tabs (Consistent with Dashboard) */}
                         <div className="flex flex-wrap gap-3 mb-10">
                             {casesData?.flatMap((c) => {
-                                const types = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
+                                const rawTypes = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
+                                const types = sortAuditTypes(rawTypes);
                                 return types.map((type, typeIdx) => {
                                     const isActive = selectedAudit === type;
                                     const cleanType = type.replace(/audit/gi, '').trim();
@@ -1662,7 +1701,8 @@ export default function ClientDashboard() {
                     {/* Audit Selection Tabs (Horizontal Badges) */}
                     <div className="flex flex-wrap gap-3 mb-10">
                         {casesData?.flatMap((c) => {
-                            const types = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
+                            const rawTypes = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
+                            const types = sortAuditTypes(rawTypes);
                             return types.map((type, typeIdx) => {
                                 const getColors = (t) => {
                                     const typeStr = t.toLowerCase();

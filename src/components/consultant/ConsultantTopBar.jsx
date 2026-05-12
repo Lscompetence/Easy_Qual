@@ -40,14 +40,29 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
     }
 
     const fetchUnreadCount = async () => {
+        if (!user) return
         try {
-            // Count ONLY unread [SYSTEM] messages for cases owned by this consultant
+            // 1. Fetch case IDs for this consultant
+            const { data: casesData } = await supabase
+                .from('cases')
+                .select('id')
+                .eq('consultant_id', user.id)
+
+            const caseIds = casesData?.map(c => c.id) || []
+            if (caseIds.length === 0) {
+                setUnreadCount(0)
+                return
+            }
+
+            // 2. Count unread messages for these cases
             const { count, error } = await supabase
                 .from('case_messages')
-                .select(`id, cases!inner(id, tenant_id)`, { count: 'exact', head: true })
+                .select('id', { count: 'exact', head: true })
+                .in('case_id', caseIds)
+                .neq('sender_id', user.id)
                 .is('read_at', null)
-                .ilike('content', '%[SYSTEM]%')
 
+            if (error) throw error
             setUnreadCount(count || 0)
         } catch (err) {
             console.error('Error fetching unread count:', err)
@@ -144,14 +159,17 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
                 {/* Notifications Bell */}
                 <button 
                     onClick={() => navigate('/consultant/notifications')}
-                    className="relative p-2 text-gray-400 hover:text-purple-600 transition-colors bg-gray-50 rounded-xl border border-gray-100 group"
+                    className={`relative p-2 transition-all rounded-xl border group shadow-sm ${
+                        unreadCount > 0 
+                        ? 'bg-red-50 border-red-100 text-red-600' 
+                        : 'text-gray-400 hover:text-purple-600 bg-gray-50 border-gray-100'
+                    }`}
                 >
-                    <Bell className="h-5 w-5" />
+                    <Bell className={`h-5 w-5 ${unreadCount > 0 ? 'animate-bounce' : ''}`} />
                     {unreadCount > 0 && (
-                        <>
-                            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 animate-ping opacity-75"></span>
-                            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 shadow-sm"></span>
-                        </>
+                        <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-red-600/20 border-2 border-white animate-in zoom-in duration-300">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
                     )}
                 </button>
 

@@ -60,11 +60,11 @@ export default function Maintenance() {
                                     </p>
                                     
                                     <a 
-                                        href="mailto:contact@easyqual.fr" 
+                                        href="mailto:devweb.lsc@outlook.com" 
                                         className="flex items-center justify-center gap-2 text-sm font-bold text-gray-600 hover:text-blue-600 transition-colors"
                                     >
                                         <Mail className="h-4 w-4" />
-                                        contact@easyqual.fr
+                                        devweb.lsc@outlook.com
                                     </a>
                                 </>
                             ) : (
