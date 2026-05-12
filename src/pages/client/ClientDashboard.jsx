@@ -1167,15 +1167,31 @@ export default function ClientDashboard() {
                                 {/* Resources */}
                                 <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
                                     <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Ressources</h3>
-                                    <div className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl hover:bg-[#faf1ec] transition-all cursor-pointer group">
-                                        <div className="h-8 w-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                            <FileText className="h-4 w-4 text-red-500" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-800">Référentiel_C{criterionIndex + 1}.pdf</p>
-                                            <p className="text-[10px] text-gray-400">Télécharger le fichier</p>
-                                        </div>
-                                    </div>
+                                    {(() => {
+                                        const pdfFiles = [
+                                            "Critere1_Information_du_public_pilote.pdf",
+                                            "Critere2_Conception_de_loffre.pdf",
+                                            "Critere3_Mise_en_oeuvre.pdf",
+                                            "Critere4_Moyens_pedagogiques.pdf",
+                                            "Critere5_Competences_equipe.pdf",
+                                            "Critere6_Environnement.pdf",
+                                            "Critere7_Amelioration_continue.pdf"
+                                        ];
+                                        const fileName = pdfFiles[criterionIndex] || `Référentiel_C${criterionIndex + 1}.pdf`;
+                                        const fileUrl = `/ressources/${fileName}`;
+                                        
+                                        return (
+                                            <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl hover:bg-[#faf1ec] transition-all cursor-pointer group">
+                                                <div className="h-8 w-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                                                    <FileText className="h-4 w-4 text-red-500" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-bold text-gray-800 truncate" title={fileName}>{fileName}</p>
+                                                    <p className="text-[10px] text-gray-400 group-hover:text-[#cc6d3e] transition-colors">Télécharger le fichier</p>
+                                                </div>
+                                            </a>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Quiz / Ressource */}
