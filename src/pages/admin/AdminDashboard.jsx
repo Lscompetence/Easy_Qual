@@ -497,69 +497,24 @@ export default function AdminDashboard() {
         setError(null)
 
         try {
-            // --- SOLUTION DE CONTOURNEMENT TEMPORAIRE ---
-            // Puisque votre PC bloque le déploiement de la Edge Function (Device Guard),
-            // nous utilisons exceptionnellement la clé d'administration directement ici.
-            // Cela permet de créer le compte avec LE BON MOT DE PASSE garanti !
-            const TEMP_URL = 'https://gxworwhpcyfuqwuxocxx.supabase.co'
-            const TEMP_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4d29yd2hwY3lmdXF3dXhvY3h4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTU5MDAxOCwiZXhwIjoyMDg1MTY2MDE4fQ.-2V0Fr7H54IyJxzgAglYLolrDuF0CH8kN1G3NHjaS_k'
-            
-            // On importe dynamiquement createClient
-            const { createClient } = await import('@supabase/supabase-js');
-            const rootAdmin = createClient(TEMP_URL, TEMP_KEY);
-
-            const { data: authData, error: authError } = await rootAdmin.auth.admin.createUser({
-                email: newConsultant.email,
-                password: newConsultant.password,
-                email_confirm: true,
-                user_metadata: { first_name: newConsultant.firstName, last_name: newConsultant.lastName, role: 'consultant' }
-            });
-
-            if (authError) {
-                if (authError.message.includes('already used')) {
-                    throw new Error("Désolé, cet email existe déjà. Veuillez essayer une autre adresse email correcte.")
+            const { data: funcData, error: funcError } = await supabase.functions.invoke('admin_create_consultant', {
+                body: {
+                    action: 'create_consultant',
+                    email: newConsultant.email,
+                    password: newConsultant.password,
+                    firstName: newConsultant.firstName,
+                    lastName: newConsultant.lastName,
+                    commercialName: newConsultant.commercialName || '',
+                    siret: newConsultant.siret || '',
+                    phone: `${newConsultant.countryCode || '+33'}${newConsultant.phone || ''}`,
+                    initialCredits: newConsultant.initialCredits !== undefined ? newConsultant.initialCredits : 10
                 }
-                throw authError;
-            }
+            })
 
-            const responseData = { user: authData.user, success: true };
-            // ---------------------------------------------
+            if (funcError) throw funcError
+            if (funcData && funcData.success === false) throw new Error(funcData.error)
 
-            console.log('Consultant created successfully:', responseData)
-
-            // --- LOCAL WORKAROUND: Save temp password from frontend ---
-            // Because the edge function couldn't be deployed due to Device Guard, 
-            // the old edge function runs but it doesn't save the temp_password to the database.
-            // Since you are Admin, we can securely update the profile from the frontend here.
-            const userId = responseData?.user?.id 
-            if (userId) {
-                const { error: pwdErr } = await rootAdmin
-                    .from('profiles')
-                    .update({ 
-                        temp_password: newConsultant.password,
-                        commercial_name: newConsultant.commercialName || '',
-                        siret: newConsultant.siret || '',
-                        phone: `${newConsultant.countryCode || '+33'}${newConsultant.phone || ''}`
-                    })
-                    .eq('id', userId)
-                
-                // Sauvegarde séparée des crédits dans la bonne table 'credits_wallet'
-                const initialBal = newConsultant.initialCredits !== undefined ? newConsultant.initialCredits : 10;
-                await rootAdmin.from('credits_wallet').upsert({ consultant_id: userId, balance: initialBal });
-                
-                if (pwdErr) console.warn("Impossible de sauvegarder le profil :", pwdErr)
-            } else {
-                // Si l'ID n'est pas dans la rep, on cherche par email
-                 await rootAdmin
-                    .from('profiles')
-                    .update({ 
-                        temp_password: newConsultant.password,
-                        commercial_name: newConsultant.commercialName || '',
-                        siret: newConsultant.siret || '',
-                        phone: `${newConsultant.countryCode || '+33'}${newConsultant.phone || ''}`
-                    })
-                    .eq('email', newConsultant.email)
-            }
+            const responseData = { user: funcData.user, success: true };
 
             // --- UI UPDATE ---
             setCreatedConsultantParams({ ...newConsultant })
