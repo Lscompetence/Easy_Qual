@@ -74,7 +74,7 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
 
             // 📧 PHASE 2: Auth account creation (Edge Function)
             try {
-                console.log("Calling invite-client for:", cleanedEmail);
+
                 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
                 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
                 const functionUrl = `${supabaseUrl}/functions/v1/invite-client`;
@@ -132,7 +132,7 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                         p_consultant_id: user.id,
                         p_cost: cost
                     })
-                    console.log("Rollback completed successfully.")
+
                 } catch (rollbackErr) {
                     console.error("Rollback failed!", rollbackErr)
                 }

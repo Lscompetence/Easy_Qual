@@ -284,7 +284,7 @@ export default function CaseDetails() {
             (progressPercent > 0 && currentDBStatus !== 'active' && currentDBStatus !== 'validated')
 
         if (needsSync) {
-            console.log(`Syncing progress to DB: ${progressPercent}%, status: ${targetStatus}`)
+
             const syncProgress = async () => {
                 const { error: syncError } = await supabase.from('cases').update({
                     progress: progressPercent,
@@ -367,7 +367,7 @@ export default function CaseDetails() {
                     table: 'case_indicator_states',
                     filter: `case_id=eq.${id}`
                 }, (payload) => {
-                    console.log('Realtime indicator sync:', payload.eventType)
+
                     if (payload.eventType === 'DELETE') {
                         setAllIndicatorStates(prev => prev.filter(s => s.id !== (payload.old.id || payload.old.id_indicateur_perdu))) // Fallback to id
                     } else {
@@ -417,7 +417,7 @@ export default function CaseDetails() {
     }, [id, user])
 
     const fetchCaseDetails = async () => {
-        console.log('Fetching details for case:', id)
+
         try {
             setLoading(true)
             setError(null)
@@ -480,7 +480,7 @@ export default function CaseDetails() {
                 .order('updated_at', { ascending: true })
 
             if (sError) throw sError
-            console.log('Fetched indicator states:', sData?.length || 0)
+
             setAllIndicatorStates(sData || [])
 
             // Fetch quiz uploads & comments for this case

@@ -79,7 +79,7 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }
             }
 
             const expectedBalance = (balance || 0) + (selectedPack?.credits || 0);
-            console.log('📈 Expected balance calculation:', { current: balance, added: selectedPack?.credits, expected: expectedBalance });
+
 
             // TRY RPC first (Best way, security definer)
             const { error: rpcError } = await supabase.rpc('add_credits', {
@@ -113,7 +113,7 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }
                 });
             }
 
-            console.log('✅ Credits successfully updated in database');
+
 
             // Wait a bit more for DB to settle
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -131,7 +131,7 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }
             const dbBalance = updatedWallet?.balance;
             const finalBalanceToShow = (dbBalance && dbBalance > balance) ? dbBalance : expectedBalance;
 
-            console.log('🏦 Final result:', { db: dbBalance, localMath: expectedBalance, chosen: finalBalanceToShow });
+
 
             setCurrentTotalBalance(finalBalanceToShow);
             setBoughtCredits(selectedPack.credits);
@@ -139,7 +139,7 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }
             setStep('success');
 
             if (onSuccess) {
-                console.log('📣 Calling onSuccess callback from CreditsModal');
+
                 setTimeout(() => onSuccess(finalBalanceToShow), 300);
             }
         } catch (error) {

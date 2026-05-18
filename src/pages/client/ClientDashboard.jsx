@@ -180,7 +180,7 @@ export default function ClientDashboard() {
     useEffect(() => {
         if (!myCase?.id) return
 
-        console.log("Setting up real-time for case:", myCase.id);
+
         const channel = supabase
             .channel(`client_realtime:${myCase.id}`)
             .on('postgres_changes', {
@@ -189,7 +189,7 @@ export default function ClientDashboard() {
                 table: 'case_events',
                 filter: `case_id=eq.${myCase.id}`
             }, (payload) => {
-                console.log("Real-time event:", payload);
+
                 if (payload.eventType === 'DELETE') {
                     setCaseEvents(prev => prev.filter(e => e.id !== payload.old.id))
                 } else if (payload.eventType === 'INSERT') {
@@ -204,7 +204,7 @@ export default function ClientDashboard() {
                 table: 'case_messages',
                 filter: `case_id=eq.${myCase.id}`
             }, (payload) => {
-                console.log("Real-time message received:", payload.new);
+
                 // Only ignore system messages sent by the client themselves
                 if (payload.new.content.startsWith('[SYSTEM]') && payload.new.sender_id === user.id) return
                 setMessages(prev => {
@@ -219,7 +219,7 @@ export default function ClientDashboard() {
                 table: 'cases',
                 filter: `tenant_id=eq.${myCase.tenant_id}`
             }, (payload) => {
-                console.log("Real-time case update:", payload);
+
                 if (payload.eventType === 'UPDATE') {
                     setCasesData(prev => prev.map(c => c.id === payload.new.id ? payload.new : c))
                     if (myCase?.id === payload.new.id) {
@@ -228,11 +228,11 @@ export default function ClientDashboard() {
                 }
             })
             .subscribe((status) => {
-                console.log("Real-time subscription status:", status);
+
             })
 
         return () => {
-            console.log("Cleaning up real-time for case:", myCase.id);
+
             supabase.removeChannel(channel)
         }
     }, [myCase?.id])
@@ -252,7 +252,7 @@ export default function ClientDashboard() {
 
         // Filter out system messages sent by the client themselves
         const filteredMessages = (data || []).filter(m => !m.content.startsWith('[SYSTEM]') || m.sender_id !== user.id)
-        console.log("Fetched messages:", filteredMessages.length);
+
         setMessages(filteredMessages)
     }
 
@@ -318,7 +318,7 @@ export default function ClientDashboard() {
                         localStorage.setItem('clientSelectedAudit', defaultAudit)
                     }
                     
-                    console.log("CLIENT CASE ID:", caseData.id)
+
 
                     // Fetch consultant name
                     const consultantIdToFetch = caseData.consultant_id || tenantData.created_by;
@@ -693,7 +693,7 @@ export default function ClientDashboard() {
 
     useEffect(() => {
         if (isMessages && myCase?.id) {
-            console.log("Entering messages view, fetching messages for case:", myCase.id);
+
             fetchMessages();
         }
     }, [isMessages, myCase?.id]);
@@ -706,7 +706,7 @@ export default function ClientDashboard() {
             return
         }
         
-        console.log("Sending message to case:", myCase.id, "Content:", content);
+
         setSendingMsg(true)
         
         // 🚀 OPTIMISTIC UPDATE
@@ -736,7 +736,7 @@ export default function ClientDashboard() {
                 throw error
             }
             
-            console.log("Message inserted successfully:", data);
+
             // We don't strictly need fetchMessages() here if real-time is working,
             // but it helps ensure consistency. We'll wait a bit to let DB settle.
             setTimeout(() => fetchMessages(), 500);

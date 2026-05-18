@@ -70,7 +70,7 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
     }
 
     const handleCreditsSuccess = (newBalance) => {
-        console.log('🎊 handleCreditsSuccess triggered in TopBar with balance:', newBalance);
+
         if (typeof newBalance === 'number' && newBalance > 0) {
             setCredits(newBalance);
             // We set it locally first to be instant

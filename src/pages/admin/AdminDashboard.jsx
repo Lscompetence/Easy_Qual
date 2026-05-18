@@ -119,7 +119,7 @@ export default function AdminDashboard() {
                 schema: 'public',
                 table: 'admin_notifications'
             }, (payload) => {
-                console.log('🔔 New Admin Notification:', payload.new);
+
                 setNotifications(prev => [payload.new, ...prev].slice(0, 20)); // Keep latest 20
                 // Optional: Show a toast or sound
             })
@@ -238,8 +238,8 @@ export default function AdminDashboard() {
 
             // Force React to detect the change by creating a new array
             setConsultants([...(consultantsData || [])])
-            console.log('📊 Consultants updated:', consultantsData?.length, 'consultants')
-            console.log('📋 First consultant is_active:', consultantsData?.[0]?.is_active, 'Email:', consultantsData?.[0]?.email)
+
+
             setStats({
                 consultants: consultantsData?.length || 0,
                 tenants: tenantsCount || 0,
@@ -311,7 +311,7 @@ export default function AdminDashboard() {
         const currentStatus = consultantToToggle.is_active
 
         try {
-            console.log('🔄 Toggling status for consultant:', consultantId, 'Current status:', currentStatus)
+
             setShowStatusConfirmModal(false)
             setTogglingConsultantId(consultantId)
 
@@ -322,7 +322,7 @@ export default function AdminDashboard() {
 
             if (error) throw error
 
-            console.log('✅ Database updated successfully')
+
 
             // Immediately update the local state to force UI refresh
             setConsultants(prev => prev.map(c =>
@@ -335,7 +335,7 @@ export default function AdminDashboard() {
             // Refresh data from database to ensure persistence (silent mode to keep table visible)
             await fetchDashboardData(true)
 
-            console.log('✅ Data refreshed from database')
+
 
             const statusMessage = !currentStatus
                 ? "Ce consultant est maintenant ACTIF."

@@ -96,7 +96,7 @@ export default function ConsultantCases() {
                     schema: 'public',
                     table: 'cases'
                 }, (payload) => {
-                    console.log('Case list realtime sync:', payload.new.id)
+
                     setCases(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c))
                 })
                 .on('postgres_changes', {

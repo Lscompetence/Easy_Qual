@@ -40,7 +40,7 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
             setSignedUrl(null);
             try {
                 const normAudit = normalizeAudit(auditType);
-                console.log(`[UniversalPlayer] Target: Ind=${indicatorId}, Audit=${normAudit}, Consultant=${consultantId}`);
+
                 
                 const { data, error: fetchError } = await supabase
                     .from('consultant_resources')
@@ -55,7 +55,7 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
                 if (data) {
                     setResource(data);
                     if (data.source_type === 'upload' && data.file_path) {
-                        console.log(`[UniversalPlayer] Attempting to sign path: ${data.file_path}`);
+
                         const { data: signData, error: signError } = await supabase.storage
                             .from('consultant-assets')
                             .createSignedUrl(data.file_path, 3600);

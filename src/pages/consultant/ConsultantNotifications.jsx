@@ -65,7 +65,7 @@ export default function ConsultantNotifications() {
                     .is('consultant_id', null);
                 
                 if (missingCases && missingCases.length > 0) {
-                    console.log("[AUTO-REPAIR] Found cases without consultant_id:", missingCases.length);
+
                     for (const c of missingCases) {
                         await supabase.from('cases').update({ consultant_id: user.id }).eq('id', c.id);
                     }

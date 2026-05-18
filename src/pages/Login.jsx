@@ -79,7 +79,7 @@ export default function Login() {
         const cleanEmail = email.trim().toLowerCase()
         const rawPassword = password
 
-        console.log('🔑 Tentative de connexion avec:', cleanEmail, '| longueur:', rawPassword.length)
+
 
         try {
             // Race between Login and a 30s Timeout
@@ -95,7 +95,7 @@ export default function Login() {
                 // 🛠️ SELF-HEALING LOGIC for CLIENTS
                 // If login fails and we are in the client space, let's check if the account exists in tenants but not in Auth
                 if (roleParam === 'client' && (err.status === 400 || err.message?.includes('Invalid login credentials'))) {
-                    console.log('🔍 Auth failed. Checking if this client needs a repair...');
+
 
                     // 1. Check if email exists in tenants table
                     const { data: tenant, error: tErr } = await supabase
@@ -106,7 +106,7 @@ export default function Login() {
 
                     // 2. If found and the password matches the one in our records
                     if (tenant && tenant.initial_password === rawPassword) {
-                        console.log('🛠️ Client found in DB. Triggering auto-repair...');
+
 
                         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
                         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -128,7 +128,7 @@ export default function Login() {
                         });
 
                         if (repairRes.ok) {
-                            console.log('✅ Auto-repair successful. Retrying login...');
+
                             // Try login again after repair
                             authResponse = await login(cleanEmail, rawPassword);
                         } else {
