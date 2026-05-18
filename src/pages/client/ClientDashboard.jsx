@@ -91,6 +91,7 @@ export default function ClientDashboard() {
     const [allQuizData, setAllQuizData] = useState([])
     const [caseEvents, setCaseEvents] = useState([])
     const [isQuizOpen, setIsQuizOpen] = useState(false)
+    const [templateModalOpen, setTemplateModalOpen] = useState(false)
 
     // Status Modal State
     const [statusModal, setStatusModal] = useState({
@@ -1501,9 +1502,12 @@ export default function ClientDashboard() {
                                             <div className="ml-[14px] pl-8">
                                                 <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_4px_24px_rgba(0,0,0,0.04)] p-8 relative transition-all">
                                                     {/* Top Right Model Button */}
-                                                    {status !== 'non_applicable' && (
+                                                    {status !== 'non_applicable' && (ind.id === 1 || String(ind.id) === '1') && (
                                                         <div className="absolute top-6 right-8">
-                                                            <button className="flex items-center gap-2 px-4 py-2 bg-[#f5f0ff] text-[#7c3aed] rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-[#ede5ff] transition-all">
+                                                            <button 
+                                                                onClick={() => setTemplateModalOpen(true)}
+                                                                className="flex items-center gap-2 px-4 py-2 bg-[#f5f0ff] text-[#7c3aed] rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-[#ede5ff] transition-all"
+                                                            >
                                                                 <Download className="h-3.5 w-3.5" /> Télécharger le modèle type
                                                             </button>
                                                         </div>
@@ -1678,6 +1682,72 @@ export default function ClientDashboard() {
                     cancelText={statusModal.cancelText}
                     isLoading={statusModal.isLoading}
                 />
+
+                {templateModalOpen && (
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                        <div className="max-w-2xl w-full bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 relative flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+                            {/* Close Button */}
+                            <button 
+                                onClick={() => setTemplateModalOpen(false)}
+                                className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-50 transition-all"
+                            >
+                                <XCircle className="h-6 w-6" />
+                            </button>
+
+                            {/* Header */}
+                            <div className="mb-4 pr-8">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-50 text-[#7c3aed] mb-2">
+                                    Modèles Types
+                                </span>
+                                <h3 className="text-xl font-black text-slate-900">Contrats & Conventions de Formation</h3>
+                                <p className="text-xs text-slate-400 font-medium mt-1">
+                                    Indicateur 1 : Téléchargez le modèle type adapté à vos besoins pour le remplir, puis déposez-le comme preuve documentaire.
+                                </p>
+                            </div>
+
+                            {/* Scrollable File List */}
+                            <div className="overflow-y-auto space-y-3 my-2 pr-1 flex-1">
+                                {[
+                                    { name: "Contrat de Formation Professionnelle FOAD (Partie Pédagogique)", file: "Modele_Contrat_Formation_Pro_FOAD__Pedagogique.docx" },
+                                    { name: "Contrat de Formation Professionnelle FOAD (Partie Signature)", file: "Modele_Contrat_Formation_Pro_FOAD__Signature.docx" },
+                                    { name: "Contrat de Formation Professionnelle Classique (Partie Pédagogique)", file: "Modele_Contrat_Formation_Pro__Pedagogique.docx" },
+                                    { name: "Contrat de Formation Professionnelle Classique (Partie Signature)", file: "Modele_Contrat_Formation_Pro__Signature.docx" },
+                                    { name: "Convention de Formation Professionnelle (Partie Pédagogique)", file: "Modele_Convention_Formation__Pedagogique.docx" },
+                                    { name: "Convention de Formation Professionnelle (Partie Signature)", file: "Modele_Convention_Formation__Signature.docx" },
+                                    { name: "Convention Tripartite CFA (Partie Pédagogique)", file: "Modele_Convention_Tripartite_CFA__Pedagogique.docx" },
+                                    { name: "Convention Tripartite CFA (Partie Signature)", file: "Modele_Convention_Tripartite_CFA__Signature.docx" }
+                                ].map((item, idx) => (
+                                    <div key={idx} className="flex items-center gap-4 p-4 bg-slate-50/50 hover:bg-[#ede5ff]/30 border border-slate-100/50 hover:border-[#7c3aed]/20 rounded-2xl transition-all group">
+                                        <div className="h-10 w-10 bg-indigo-50 text-[#7c3aed] rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                                            <FileText className="h-5 w-5" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="text-xs font-bold text-slate-800 leading-snug truncate">{item.name}</h4>
+                                            <p className="text-[10px] text-slate-400 font-medium mt-0.5 truncate">{item.file}</p>
+                                        </div>
+                                        <a 
+                                            href={`/ressources/Indicateur 1 Contrat et convention de formation/${item.file}`} 
+                                            download 
+                                            className="flex items-center gap-2 px-4 py-2 bg-[#7c3aed] text-white hover:bg-[#6d28d9] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md shadow-[#7c3aed]/10 hover:shadow-[#7c3aed]/20 active:scale-95 flex-shrink-0"
+                                        >
+                                            <Download className="h-3.5 w-3.5" /> Télécharger
+                                        </a>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
+                                <button 
+                                    onClick={() => setTemplateModalOpen(false)}
+                                    className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all"
+                                >
+                                    Fermer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         )
     }
