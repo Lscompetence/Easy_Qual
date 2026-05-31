@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, FolderOpen, Calendar, BookOpen, Settings, LogOut, MoreVertical, X, MessageSquare, BellRing, HardDrive } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, Calendar, BookOpen, Settings, LogOut, MoreVertical, X, MessageSquare, BellRing, HardDrive, LifeBuoy, Archive } from 'lucide-react'
+import FeedbackModal from '../shared/FeedbackModal'
 import { Link, useLocation } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext' // Adjust path if needed
@@ -11,6 +12,7 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
     const [caseCount, setCaseCount] = useState(0)
     const [unreadMessages, setUnreadMessages] = useState(0)
     const [unreadNotifications, setUnreadNotifications] = useState(0)
+    const [feedbackOpen, setFeedbackOpen] = useState(false)
 
     useEffect(() => {
         if (user) {
@@ -154,6 +156,21 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                                     <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
                                 )}
                             </Link>
+
+                            <Link
+                                to="/consultant/reclamations"
+                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive('/consultant/reclamations')
+                                    ? 'bg-purple-50 text-purple-700'
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                    }`}
+                            >
+                                <Archive className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/reclamations') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
+                                    }`} />
+                                Mes Réclamations
+                                {isActive('/consultant/reclamations') && (
+                                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
+                                )}
+                            </Link>
                         </nav>
                     </div>
 
@@ -193,6 +210,7 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                     </div>
                 </div>
             </aside>
+            <FeedbackModal isOpen={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
         </>
     )
 }

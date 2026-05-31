@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../../supabaseClient'
-import { Building, Mail, CheckCircle, AlertCircle, Lock } from 'lucide-react'
+import { Building, Mail, CheckCircle, AlertCircle, Lock, X } from 'lucide-react'
 
 export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onSuccess }) {
     const [actionLoading, setActionLoading] = useState(false)
@@ -118,8 +118,8 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                     trainingCategories: []
                 })
 
-                if (onSuccess) onSuccess()
-                setTimeout(() => { setSuccessMsg(null); onClose(); }, 2500)
+                if (onSuccess) onSuccess(`Dossier créé et compte client activé pour ${cleanedEmail} !`)
+                setTimeout(() => { setSuccessMsg(null); onClose(); }, 2000)
 
             } catch (authErr) {
                 console.error('CRITICAL: Auth creation failed after DB creation. Rolling back...', authErr)
@@ -160,9 +160,17 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
     if (!isOpen) return null
 
     return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50 px-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg transform transition-all p-6">
-                <div className="mb-6 border-b border-gray-100 pb-4">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm h-full w-full flex items-center justify-center z-50 px-4 py-8">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-full overflow-y-auto custom-scrollbar transform transition-all p-6 relative">
+                
+                <button
+                    onClick={onClose}
+                    className="absolute top-5 right-5 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                    <X className="h-5 w-5" />
+                </button>
+
+                <div className="mb-6 border-b border-gray-100 pb-4 pr-10">
                     <h3 className="text-xl font-bold text-gray-900">Nouveau Dossier Qualiopi</h3>
                     <p className="text-sm text-gray-500 mt-1">
                         Cette action débitera votre compte de crédits.

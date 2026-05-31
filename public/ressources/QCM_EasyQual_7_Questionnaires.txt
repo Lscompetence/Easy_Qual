@@ -1,0 +1,761 @@
+================================================================================
+QUESTIONNAIRES D'ÉVALUATION DES ACQUIS — FORMATION EASY'QUAL
+LS Compétences · 7 questionnaires (1 par critère) · 10 questions chacun
+================================================================================
+
+RÈGLES DE SCORING (communes aux 7 questionnaires)
+--------------------------------------------------------------------------------
+- 10 questions par questionnaire. Chaque question vaut 1 point. Total = 10 points.
+- 4 réponses proposées par question (A, B, C, D).
+- Une ou plusieurs bonnes réponses selon la question.
+- Question à réponse unique : 1 point si la bonne réponse est cochée, sinon 0.
+- Question à réponses multiples : 1 point ÷ nombre de bonnes réponses, par bonne
+  réponse correctement cochée.
+    Exemple : 2 bonnes réponses -> chaque bonne réponse cochée = 0,5 point.
+              3 bonnes réponses -> chaque bonne réponse cochée ≈ 0,333 point.
+  (Recommandation : une mauvaise réponse cochée annule le point de la question,
+   à valider avec le développeur selon le comportement souhaité.)
+- Seuil de réussite : 80 %, soit 8 points sur 10 minimum.
+- Le score est établi et affiché à la fin de chaque questionnaire.
+- IMPORTANT : la validation du test n'est PAS obligatoire pour passer au module
+  suivant. L'apprenant peut continuer et revenir refaire le test plus tard.
+
+Légende du corrigé : [✓] = bonne réponse · [ ] = mauvaise réponse
+
+
+MESSAGES DE RÉSULTAT (à afficher selon le score, en fin de questionnaire)
+--------------------------------------------------------------------------------
+Remplacer « X » par le numéro du critère concerné. Pour le Critère 7, il n'y a
+pas de module suivant : adapter le message « 80% et plus » (voir note finale).
+
+>> Score >= 80 % (test réussi) :
+"Félicitations ! Vous avez bien compris les enjeux du critère X, je vous invite
+à passer au module suivant le critère X."
+
+>> Score de 60 % à moins de 80 % :
+"C'est pas mal du tout, mais c'est malheureusement insuffisant, je vous invite à
+reprendre les cours et refaire le test."
+
+>> Score < 60 % :
+"Oh dommage, vous avez encore quelques lacunes ! Je vous invite à revoir le cours
+et revenir plus fort pour passer le test, courage !"
+
+
+================================================================================
+QUESTIONNAIRE 1 — CRITÈRE 1 : L'INFORMATION DU PUBLIC
+================================================================================
+
+--- Q1 ---
+Quelles informations doivent obligatoirement figurer dans la communication
+publique sur une prestation de formation ?
+A) Les prérequis, objectifs et durée de la prestation
+B) Les tarifs et les modalités/délais d'accès
+C) Le chiffre d'affaires de l'organisme
+D) La liste nominative des anciens stagiaires
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q2 ---
+Les résultats de l'organisme (taux de satisfaction, de réussite) doivent être :
+A) Tenus strictement confidentiels
+B) Communiqués uniquement à l'auditeur
+C) Rendus publics et accessibles
+D) Diffusés seulement sur demande écrite du financeur
+CORRIGÉ : A [ ] · B [ ] · C [✓] · D [ ]
+(1 bonne réponse → 1 pt)
+
+--- Q3 ---
+Pour une prestation conduisant à une certification professionnelle, l'organisme
+doit publier :
+A) Le taux d'obtention de la certification
+B) Les débouchés et passerelles possibles
+C) La rémunération moyenne des anciens stagiaires
+D) Le nom du certificateur et l'intitulé exact de la certification
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q4 ---
+L'information diffusée au public doit être :
+A) Actualisée et cohérente sur l'ensemble des supports
+B) Rédigée une fois pour toutes sans mise à jour
+C) Différente selon les supports pour s'adapter
+D) Conservée uniquement en interne
+CORRIGÉ : A [✓] · B [ ] · C [ ] · D [ ]
+(1 bonne réponse → 1 pt)
+
+--- Q5 ---
+Concernant l'accessibilité aux personnes en situation de handicap, l'information
+publique doit mentionner :
+A) Les coordonnées du référent handicap
+B) Que l'organisme n'accueille pas de public handicapé
+C) Les possibilités d'adaptation de la prestation
+D) Le taux de personnes handicapées déjà formées
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q6 ---
+Quel document précise les objectifs et le contenu détaillé d'une action ?
+A) Le programme de formation
+B) La facture
+C) Le règlement intérieur
+D) Le bilan comptable
+CORRIGÉ : A [✓] · B [ ] · C [ ] · D [ ]
+(1 bonne réponse → 1 pt)
+
+--- Q7 ---
+Les délais d'accès à la prestation correspondent :
+A) Au temps estimé entre la demande et l'entrée en formation
+B) À la durée totale de la formation
+C) À la date limite de paiement
+D) Au délai de rétractation uniquement
+CORRIGÉ : A [✓] · B [ ] · C [ ] · D [ ]
+(1 bonne réponse → 1 pt)
+
+--- Q8 ---
+Qui est concerné par l'information sur les prestations ?
+A) Les prospects et futurs bénéficiaires
+B) Les financeurs et prescripteurs
+C) Uniquement les salariés de l'organisme
+D) Les entreprises clientes
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q9 ---
+Une information incomplète ou non actualisée sur le site web peut entraîner :
+A) Une non-conformité en audit Qualiopi
+B) Aucune conséquence
+C) Une amélioration automatique du référencement
+D) La suspension immédiate de l'organisme par l'État
+CORRIGÉ : A [✓] · B [ ] · C [ ] · D [ ]
+(1 bonne réponse → 1 pt)
+
+--- Q10 ---
+Parmi ces éléments, lesquels relèvent de l'information publique obligatoire ?
+A) Les méthodes mobilisées et les modalités d'évaluation
+B) Les contacts de l'organisme
+C) Les mots de passe d'accès à la plateforme
+D) Les modalités pédagogiques (présentiel, distanciel...)
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+>> MESSAGES DE RÉSULTAT — QUESTIONNAIRE 1 (CRITÈRE 1)
+- Score >= 80 % : "Félicitations ! Vous avez bien compris les enjeux du critère 1, je vous invite à passer au module suivant le critère 2."
+- Score 60 % à < 80 % : "C'est pas mal du tout, mais c'est malheureusement insuffisant, je vous invite à reprendre les cours et refaire le test."
+- Score < 60 % : "Oh dommage, vous avez encore quelques lacunes ! Je vous invite à revoir le cours et revenir plus fort pour passer le test, courage !"
+
+
+================================================================================
+QUESTIONNAIRE 2 — CRITÈRE 2 : L'IDENTIFICATION DES BESOINS
+================================================================================
+
+--- Q1 ---
+L'analyse du besoin du bénéficiaire a pour objectif de :
+A) Adapter la prestation à sa situation et ses objectifs
+B) Fixer uniquement le tarif
+C) Vérifier les prérequis et le projet
+D) Remplir une obligation purement administrative
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q2 ---
+Les objectifs pédagogiques d'une formation doivent être :
+A) Définis de manière vague pour rester flexibles
+B) Formulés de façon précise et évaluable
+C) Identiques pour tous les publics sans exception
+D) En lien avec le besoin identifié
+CORRIGÉ : A [ ] · B [✓] · C [ ] · D [✓]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q3 ---
+Le positionnement à l'entrée en formation sert à :
+A) Évaluer le niveau initial du bénéficiaire
+B) Adapter le parcours si nécessaire
+C) Sélectionner les meilleurs candidats uniquement
+D) Justifier une augmentation du tarif
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q4 ---
+Pour un bilan de compétences, l'analyse de la demande doit notamment respecter :
+A) La confidentialité et le consentement du bénéficiaire
+B) Le caractère volontaire de la démarche
+C) L'obligation de communiquer les résultats à l'employeur
+D) L'analyse du besoin et des attentes
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q5 ---
+Un objectif pédagogique bien rédigé commence idéalement par :
+A) Un verbe d'action observable
+B) Le mot « comprendre » systématiquement
+C) Une formulation mesurable
+D) Le nom du formateur
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q6 ---
+Adapter la prestation au public signifie :
+A) Tenir compte des prérequis et du niveau réel
+B) Proposer des modalités adaptées si besoin
+C) Imposer un parcours unique à tous
+D) Ajuster le contenu aux objectifs visés
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q7 ---
+Le besoin du financeur ou de l'entreprise :
+A) Doit aussi être pris en compte dans l'analyse
+B) N'a aucune importance
+C) Peut compléter le besoin du bénéficiaire
+D) Remplace toujours le besoin du bénéficiaire
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q8 ---
+L'absence d'analyse du besoin documentée peut entraîner :
+A) Une non-conformité en audit
+B) Une prestation mal adaptée
+C) Un meilleur taux de satisfaction garanti
+D) Aucune conséquence
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q9 ---
+Le test de positionnement peut prendre la forme :
+A) D'un questionnaire d'auto-évaluation
+B) D'un entretien individuel
+C) D'une mise en situation ou test technique
+D) D'un simple paiement d'acompte
+CORRIGÉ : A [✓] · B [✓] · C [✓] · D [ ]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q10 ---
+La synthèse du positionnement permet de :
+A) Tracer le niveau initial et les adaptations décidées
+B) Justifier le parcours proposé
+C) Remplacer le programme de formation
+D) Servir de preuve en audit
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+>> MESSAGES DE RÉSULTAT — QUESTIONNAIRE 2 (CRITÈRE 2)
+- Score >= 80 % : "Félicitations ! Vous avez bien compris les enjeux du critère 2, je vous invite à passer au module suivant le critère 3."
+- Score 60 % à < 80 % : "C'est pas mal du tout, mais c'est malheureusement insuffisant, je vous invite à reprendre les cours et refaire le test."
+- Score < 60 % : "Oh dommage, vous avez encore quelques lacunes ! Je vous invite à revoir le cours et revenir plus fort pour passer le test, courage !"
+
+
+================================================================================
+QUESTIONNAIRE 3 — CRITÈRE 3 : L'ADAPTATION AUX PUBLICS (ACCUEIL, SUIVI, ÉVAL.)
+================================================================================
+
+--- Q1 ---
+L'émargement en présentiel doit être signé :
+A) Une seule fois en fin de formation
+B) Par demi-journée
+C) Par chaque participant présent
+D) Uniquement par le formateur
+CORRIGÉ : A [ ] · B [✓] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q2 ---
+Le suivi de l'assiduité du bénéficiaire permet de :
+A) Détecter un risque d'abandon
+B) Justifier la réalisation de la prestation
+C) Augmenter automatiquement la note finale
+D) Tracer la présence effective
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q3 ---
+L'évaluation des acquis a pour but de :
+A) Mesurer l'atteinte des objectifs pédagogiques
+B) Vérifier les compétences développées
+C) Sanctionner les bénéficiaires les plus lents
+D) Servir de preuve d'efficacité de la formation
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q4 ---
+En formation à distance (FOAD), la traçabilité repose notamment sur :
+A) Les connexions et l'activité sur la plateforme
+B) Les travaux rendus et évaluations
+C) La seule déclaration orale du bénéficiaire
+D) Les temps de connexion enregistrés
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q5 ---
+Le certificat de réalisation atteste :
+A) De l'exécution effective de la prestation
+B) De l'obtention automatique d'un diplôme
+C) Des dates et de la durée réalisées
+D) Du paiement intégral de la formation
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q6 ---
+L'accueil des bénéficiaires comprend :
+A) L'information sur le déroulement et les modalités
+B) La présentation des moyens et contacts utiles
+C) La remise des documents nécessaires
+D) Aucune obligation particulière
+CORRIGÉ : A [✓] · B [✓] · C [✓] · D [ ]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q7 ---
+En cas d'abandon d'un bénéficiaire, l'organisme doit :
+A) Tracer la cause et la date de l'abandon
+B) Ignorer la situation
+C) Adapter ou proposer une solution si possible
+D) Conserver les justificatifs
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q8 ---
+Le PV de jury (prestation certifiante) sert à :
+A) Tracer la délibération et la décision du jury
+B) Établir la liste des candidats reçus
+C) Remplacer l'évaluation des acquis
+D) Constituer une preuve en audit
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q9 ---
+Une feuille d'émargement signée globalement en fin de session est :
+A) Conforme aux attendus de l'audit
+B) Non conforme : la signature doit être par demi-journée
+C) Suffisante si le formateur la contresigne
+D) Insuffisante comme preuve d'assiduité
+CORRIGÉ : A [ ] · B [✓] · C [ ] · D [✓]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q10 ---
+Le suivi individuel du bénéficiaire permet de :
+A) Adapter l'accompagnement à sa progression
+B) Tracer les acquis et difficultés
+C) Garantir une note de 20/20
+D) Documenter la personnalisation du parcours
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+>> MESSAGES DE RÉSULTAT — QUESTIONNAIRE 3 (CRITÈRE 3)
+- Score >= 80 % : "Félicitations ! Vous avez bien compris les enjeux du critère 3, je vous invite à passer au module suivant le critère 4."
+- Score 60 % à < 80 % : "C'est pas mal du tout, mais c'est malheureusement insuffisant, je vous invite à reprendre les cours et refaire le test."
+- Score < 60 % : "Oh dommage, vous avez encore quelques lacunes ! Je vous invite à revoir le cours et revenir plus fort pour passer le test, courage !"
+
+
+================================================================================
+QUESTIONNAIRE 4 — CRITÈRE 4 : L'ADÉQUATION DES MOYENS PÉDAGOGIQUES
+================================================================================
+
+--- Q1 ---
+Les moyens pédagogiques et techniques doivent être :
+A) Adaptés aux objectifs et aux publics
+B) Décrits et mis à disposition des bénéficiaires
+C) Identiques quels que soient les besoins
+D) En cohérence avec les prestations délivrées
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q2 ---
+La coordination de l'équipe pédagogique vise à :
+A) Garantir la cohérence des interventions
+B) Assurer le suivi et l'harmonisation des contenus
+C) Réduire le nombre de formateurs
+D) Faciliter les échanges entre intervenants
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q3 ---
+Pour la formation à distance, l'organisme doit notamment garantir :
+A) Une assistance technique et pédagogique
+B) Des modalités de suivi adaptées
+C) Aucun accompagnement particulier
+D) Une plateforme accessible et fonctionnelle
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q4 ---
+L'inventaire du matériel pédagogique sert à :
+A) Prouver l'adéquation des moyens en audit
+B) Suivre l'état et la disponibilité des équipements
+C) Calculer l'impôt de l'organisme
+D) Documenter les moyens mobilisés
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q5 ---
+La coordination des intervenants peut être tracée par :
+A) Des comptes-rendus de réunions pédagogiques
+B) Des échanges écrits formalisés
+C) Aucune trace n'est nécessaire
+D) Un registre des réunions
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q6 ---
+Les ressources pédagogiques mises à disposition doivent être :
+A) Accessibles aux bénéficiaires
+B) Adaptées au contenu de la formation
+C) Réservées aux seuls formateurs
+D) Réactualisées si nécessaire
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q7 ---
+Un environnement de formation adapté comprend :
+A) Des locaux ou outils adaptés à la prestation
+B) Des conditions favorables à l'apprentissage
+C) Uniquement une connexion internet
+D) Des moyens humains compétents
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q8 ---
+L'absence de coordination d'équipe documentée :
+A) Peut constituer une non-conformité
+B) N'a pas d'impact en audit
+C) Fragilise la cohérence pédagogique
+D) Améliore l'autonomie des formateurs
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q9 ---
+Pour un CFA, la mobilité (nationale/internationale) des apprentis doit être :
+A) Proposée et organisée
+B) Strictement interdite
+C) Tracée et accompagnée
+D) Facultative et jamais documentée
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q10 ---
+Les moyens humains mobilisés doivent être :
+A) En adéquation avec les prestations
+B) Compétents et identifiés
+C) Sans aucune qualification requise
+D) Documentés (fiches, organigramme...)
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+>> MESSAGES DE RÉSULTAT — QUESTIONNAIRE 4 (CRITÈRE 4)
+- Score >= 80 % : "Félicitations ! Vous avez bien compris les enjeux du critère 4, je vous invite à passer au module suivant le critère 5."
+- Score 60 % à < 80 % : "C'est pas mal du tout, mais c'est malheureusement insuffisant, je vous invite à reprendre les cours et refaire le test."
+- Score < 60 % : "Oh dommage, vous avez encore quelques lacunes ! Je vous invite à revoir le cours et revenir plus fort pour passer le test, courage !"
+
+
+================================================================================
+QUESTIONNAIRE 5 — CRITÈRE 5 : LA QUALIFICATION ET LE DÉVELOPPEMENT DES COMPÉTENCES
+================================================================================
+
+--- Q1 ---
+La qualification des intervenants doit être :
+A) Documentée (CV, diplômes, expérience)
+B) En adéquation avec les prestations délivrées
+C) Sans importance si le formateur est sympathique
+D) Vérifiable en audit
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q2 ---
+La matrice « qui forme sur quoi » permet de :
+A) Visualiser l'adéquation formateur / prestation
+B) Identifier les compétences disponibles
+C) Calculer la paie des formateurs
+D) Repérer les zones de fragilité (mono-formateur)
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q3 ---
+Le développement des compétences de l'équipe passe par :
+A) Un plan de développement des compétences
+B) Des actions de formation continue
+C) L'absence totale de formation interne
+D) Une veille et une montée en compétences tracées
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q4 ---
+Pour un sous-traitant intervenant sur une prestation financée par fonds publics :
+A) Il doit lui-même être certifié Qualiopi
+B) Aucune exigence ne s'applique à lui
+C) Une exception existe pour le micro-entrepreneur sous seuil de CA
+D) Une convention doit encadrer la prestation
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q5 ---
+Les entretiens professionnels des salariés :
+A) Sont une obligation légale
+B) Contribuent au développement des compétences
+C) Sont facultatifs et sans trace
+D) Doivent être tracés
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q6 ---
+La fiche de compétences d'un formateur doit notamment contenir :
+A) Ses diplômes et certifications
+B) Son expérience professionnelle
+C) Sa situation familiale
+D) Les prestations qu'il est habilité à délivrer
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q7 ---
+Un CV de formateur non daté ou obsolète :
+A) Peut être considéré comme une preuve insuffisante
+B) Est toujours accepté en audit
+C) Doit être actualisé régulièrement
+D) Garantit la conformité
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q8 ---
+La procédure de recrutement / habilitation d'un formateur sert à :
+A) Garantir l'adéquation des compétences
+B) Tracer la sélection et l'habilitation
+C) Fixer le prix de vente des formations
+D) Sécuriser la qualité des intervenants
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q9 ---
+La formation continue des intervenants doit être :
+A) Tracée (attestations, plan, suivi)
+B) En lien avec les prestations délivrées
+C) Interdite pour réduire les coûts
+D) Régulière
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q10 ---
+Le suivi du développement des compétences permet de :
+A) Maintenir la qualité des prestations dans le temps
+B) Anticiper les besoins de montée en compétences
+C) Se passer définitivement de tout recrutement
+D) Documenter l'amélioration continue de l'équipe
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+>> MESSAGES DE RÉSULTAT — QUESTIONNAIRE 5 (CRITÈRE 5)
+- Score >= 80 % : "Félicitations ! Vous avez bien compris les enjeux du critère 5, je vous invite à passer au module suivant le critère 6."
+- Score 60 % à < 80 % : "C'est pas mal du tout, mais c'est malheureusement insuffisant, je vous invite à reprendre les cours et refaire le test."
+- Score < 60 % : "Oh dommage, vous avez encore quelques lacunes ! Je vous invite à revoir le cours et revenir plus fort pour passer le test, courage !"
+
+
+================================================================================
+QUESTIONNAIRE 6 — CRITÈRE 6 : L'INSCRIPTION DANS L'ENVIRONNEMENT PROFESSIONNEL
+================================================================================
+
+--- Q1 ---
+La veille de l'organisme doit porter notamment sur :
+A) Les évolutions légales et réglementaires
+B) Les évolutions des métiers et compétences
+C) Les résultats sportifs nationaux
+D) Les innovations pédagogiques
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q2 ---
+Une veille conforme suppose :
+A) D'identifier des sources fiables et diversifiées
+B) De tracer l'exploitation de la veille
+C) De lire sans jamais rien formaliser
+D) De diffuser l'information à l'équipe
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q3 ---
+Le dispositif d'accueil du handicap exige :
+A) La désignation d'un référent handicap
+B) Un réseau de partenaires mobilisable
+C) Le refus des publics en situation de handicap
+D) Des modalités de recours formalisées
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q4 ---
+Le réseau de partenaires handicap doit être :
+A) Régionalisé / adapté au territoire
+B) Limité à une seule mention générique
+C) Mobilisable concrètement
+D) Tenu à jour
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q5 ---
+L'AFEST (formation en situation de travail) suppose notamment :
+A) Une analyse de l'activité de travail
+B) Des phases réflexives structurées
+C) Une simple mise au travail sans accompagnement
+D) Un protocole signé entre les parties
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q6 ---
+Le recours à un sous-traitant doit être :
+A) Encadré par une convention
+B) Vérifié quant à la certification (si fonds publics)
+C) Systématiquement dissimulé à l'auditeur
+D) Tracé et suivi qualitativement
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q7 ---
+Pour un CFA, l'insertion professionnelle des sortants doit être :
+A) Mesurée (enquêtes à N+6 / N+12)
+B) Publiée
+C) Jamais communiquée
+D) Analysée et donner lieu à des actions si besoin
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q8 ---
+La veille « lue mais jamais formalisée » est :
+A) Suffisante pour l'audit
+B) Insuffisante : l'exploitation doit être tracée
+C) Une preuve solide de conformité
+D) Un piège fréquent en audit
+CORRIGÉ : A [ ] · B [✓] · C [ ] · D [✓]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q9 ---
+Le référent handicap doit être :
+A) Identifié nommément
+B) Joignable
+C) Anonyme et non communiqué
+D) Connu des bénéficiaires
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q10 ---
+Les données InserJeunes (CFA) servent à :
+A) Mesurer et comparer l'insertion des apprentis
+B) Alimenter la démarche d'amélioration
+C) Calculer le prix des prestations
+D) Étayer une analyse des écarts
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+>> MESSAGES DE RÉSULTAT — QUESTIONNAIRE 6 (CRITÈRE 6)
+- Score >= 80 % : "Félicitations ! Vous avez bien compris les enjeux du critère 6, je vous invite à passer au module suivant le critère 7."
+- Score 60 % à < 80 % : "C'est pas mal du tout, mais c'est malheureusement insuffisant, je vous invite à reprendre les cours et refaire le test."
+- Score < 60 % : "Oh dommage, vous avez encore quelques lacunes ! Je vous invite à revoir le cours et revenir plus fort pour passer le test, courage !"
+
+
+================================================================================
+QUESTIONNAIRE 7 — CRITÈRE 7 : LE RECUEIL DES APPRÉCIATIONS ET L'AMÉLIORATION
+================================================================================
+
+--- Q1 ---
+Le recueil des appréciations doit concerner :
+A) Les bénéficiaires
+B) Les formateurs et l'équipe pédagogique
+C) Uniquement le dirigeant
+D) Les entreprises et financeurs
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q2 ---
+Une enquête de satisfaction est plus exploitable lorsqu'elle combine :
+A) Des questions fermées (notes)
+B) Des questions ouvertes (commentaires)
+C) Aucune question
+D) Une échelle de notation claire
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q3 ---
+Le traitement des réclamations exige :
+A) Une procédure accessible et formalisée
+B) Un registre de suivi
+C) Un traitement uniquement oral
+D) Une réponse formelle dans un délai défini
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q4 ---
+Le Plan d'Amélioration de la Qualité (PAQ) :
+A) Consolide les actions correctives et préventives
+B) S'alimente des enquêtes, réclamations, audits
+C) Est un document figé jamais mis à jour
+D) Doit être vivant et suivi
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q5 ---
+La démarche d'amélioration continue suppose un lien entre :
+A) Les retours/feedbacks et les actions menées
+B) Les réclamations et les corrections apportées
+C) Aucun lien n'est nécessaire
+D) Les constats d'audit et les plans d'action
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q6 ---
+L'enquête « à froid » (N+3 / N+6) sert à mesurer :
+A) L'impact réel de la formation dans le temps
+B) La satisfaction immédiate uniquement
+C) Le transfert des acquis en situation
+D) La couleur préférée du bénéficiaire
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q7 ---
+Pour un CFA, le Conseil de Perfectionnement :
+A) Est une instance obligatoire
+B) Doit donner lieu à des comptes-rendus / PV
+C) Est facultatif et sans trace
+D) Participe à l'amélioration continue
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q8 ---
+Un taux de retour faible aux enquêtes doit conduire à :
+A) Des actions de relance documentées
+B) Ignorer le problème
+C) Une analyse du dispositif de recueil
+D) Considérer l'enquête comme réussie
+CORRIGÉ : A [✓] · B [ ] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+--- Q9 ---
+Le versioning des documents qualité permet de :
+A) Prouver les évolutions et améliorations
+B) Tracer les mises à jour dans le temps
+C) Supprimer l'historique des modifications
+D) Sécuriser la démarche en audit
+CORRIGÉ : A [✓] · B [✓] · C [ ] · D [✓]
+(3 bonnes réponses → 0,333 pt chacune)
+
+--- Q10 ---
+L'absence de PAQ formalisé en audit est généralement :
+A) Sans conséquence
+B) Une non-conformité majeure quasi automatique
+C) Un point de vigilance fort
+D) Un gage de qualité
+CORRIGÉ : A [ ] · B [✓] · C [✓] · D [ ]
+(2 bonnes réponses → 0,5 pt chacune)
+
+>> MESSAGES DE RÉSULTAT — QUESTIONNAIRE 7 (CRITÈRE 7) — DERNIER MODULE
+- Score >= 80 % : "Félicitations ! Vous avez bien compris les enjeux du critère 7. Vous avez terminé l'ensemble des modules de la formation, bravo !"
+- Score 60 % à < 80 % : "C'est pas mal du tout, mais c'est malheureusement insuffisant, je vous invite à reprendre les cours et refaire le test."
+- Score < 60 % : "Oh dommage, vous avez encore quelques lacunes ! Je vous invite à revoir le cours et revenir plus fort pour passer le test, courage !"
+
+
+================================================================================
+NOTE POUR LE DÉVELOPPEUR — MESSAGES DE RÉSULTAT
+================================================================================
+- 3 paliers : >= 80 % (réussi) · 60 % à < 80 % · < 60 %.
+- Les messages "réussi" des questionnaires 1 à 6 renvoient vers le critère suivant
+  (critère N -> critère N+1). Le questionnaire 7 est le dernier : son message de
+  réussite annonce la fin de la formation (pas de module suivant).
+- La validation du test n'est PAS obligatoire pour avancer : l'apprenant peut
+  passer au module suivant même sans atteindre 80 %, et revenir refaire le test
+  plus tard. Le score et le message s'affichent à chaque tentative.
+
+================================================================================
+FIN DES 7 QUESTIONNAIRES
+LS Compétences · Easy'Qual · Évaluation des acquis de la formation
+================================================================================

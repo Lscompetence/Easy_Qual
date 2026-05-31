@@ -1,4 +1,5 @@
 import { X, CheckCircle, AlertTriangle, Trash2, Info, AlertCircle } from 'lucide-react'
+import { getCriterionColor } from '../../utils/theme'
 
 export default function StatusModal({ 
     isOpen, 
@@ -9,11 +10,20 @@ export default function StatusModal({
     message, 
     confirmText = 'Confirmer', 
     cancelText = 'Annuler',
-    isLoading = false
+    isLoading = false,
+    criterionId
 }) {
     if (!isOpen) return null
 
     const config = {
+        info: {
+            icon: <Info className="h-10 w-10 text-blue-500" />,
+            bgColor: 'bg-blue-50',
+            ringColor: 'ring-blue-50/50',
+            buttonColor: 'bg-blue-600 hover:bg-blue-700 shadow-blue-200',
+            titleColor: 'text-blue-900',
+            descriptionColor: 'text-blue-600'
+        },
         success: {
             icon: <CheckCircle className="h-10 w-10 text-emerald-500" />,
             bgColor: 'bg-emerald-50',
@@ -58,6 +68,9 @@ export default function StatusModal({
 
     const { icon, bgColor, ringColor, buttonColor, titleColor, descriptionColor } = config[type] || config.info
 
+    const dynamicTheme = criterionId ? getCriterionColor(criterionId) : null;
+    const useDynamicTheme = dynamicTheme && (type === 'success' || type === 'confirm' || type === 'info');
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-in fade-in duration-300">
             <div className="bg-white rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.15)] w-full max-w-[440px] overflow-hidden relative animate-in zoom-in-95 duration-400">
@@ -74,19 +87,21 @@ export default function StatusModal({
                 <div className="pt-12 pb-6 flex justify-center">
                     <div className="relative h-28 w-28 flex items-center justify-center">
                         {/* Outer Glow / Pulse layer */}
-                        <div className={`absolute inset-0 ${bgColor} opacity-40 rounded-full scale-110 blur-sm`}></div>
+                        <div className={`absolute inset-0 ${!useDynamicTheme ? bgColor : ""} opacity-40 rounded-full scale-110 blur-sm`} style={useDynamicTheme ? { backgroundColor: dynamicTheme.primary } : {}}></div>
                         {/* Static layered rings */}
-                        <div className={`absolute inset-0 ${bgColor} rounded-full ring-8 ${ringColor}`}></div>
+                        <div className={`absolute inset-0 rounded-full ring-8 ${!useDynamicTheme ? ringColor : ""} ${!useDynamicTheme ? bgColor : ""}`} style={useDynamicTheme ? { backgroundColor: dynamicTheme.light, "--tw-ring-color": dynamicTheme.light + "80" } : {}}></div>
                         {/* Center Icon Container - White in Screen 4 */}
                         <div className="relative z-10 bg-white p-6 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.05)] border border-slate-50">
-                            {icon}
+                            {useDynamicTheme && type === 'success' ? <CheckCircle className="h-10 w-10" style={{ color: dynamicTheme.primary }} /> : null}
+                            {useDynamicTheme && type === 'confirm' ? <Info className="h-10 w-10" style={{ color: dynamicTheme.primary }} /> : null}
+                            {(!useDynamicTheme || (type !== 'success' && type !== 'confirm')) && icon}
                         </div>
                     </div>
                 </div>
 
                 {/* Content Section */}
                 <div className="px-12 pb-12 text-center">
-                    <h3 className={`text-2xl font-black ${titleColor || 'text-slate-900'} mb-3 tracking-tighter`}>
+                    <h3 className={`text-2xl font-black mb-3 tracking-tighter ${!useDynamicTheme ? (titleColor || "text-slate-900") : ""}`} style={useDynamicTheme ? { color: dynamicTheme.primary } : {}}>
                         {title}
                     </h3>
 
@@ -124,7 +139,7 @@ export default function StatusModal({
                         <button
                             onClick={onConfirm || onClose}
                             disabled={isLoading}
-                            className={`flex-1 py-4 px-6 ${buttonColor} text-white font-black text-sm rounded-2xl shadow-xl transition-all transform active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2`}
+                            className={`flex-1 py-4 px-6 text-white font-black text-sm rounded-2xl shadow-xl transition-all transform active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2 ${!useDynamicTheme ? buttonColor : "hover:opacity-90"}`} style={useDynamicTheme ? { backgroundColor: dynamicTheme.primary, boxShadow: `0 20px 25px -5px ${dynamicTheme.primary}4d` } : {}}
                         >
                             {isLoading ? (
                                 <>

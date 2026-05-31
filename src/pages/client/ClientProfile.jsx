@@ -270,7 +270,7 @@ export default function ClientProfile() {
                     setShowMobileMenu={setShowMobileMenu}
                 />
 
-                <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
+                <main className="flex-1 p-6 lg:p-8 w-full max-w-[1300px] mx-auto">
 
                     {/* Alert message */}
                     {message.content && (

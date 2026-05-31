@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell, Menu, ShieldAlert, Settings } from 'lucide-react'
+import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell, Menu, ShieldAlert, Settings, LifeBuoy, MessageSquare, AlertTriangle, Sparkles, Filter } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Logo from '../../components/Logo'
+import DeleteModal from '../../components/DeleteModal'
 
 const COUNTRY_CODES = [
     { code: '+33', label: 'FR', flag: '🇫🇷' },
@@ -106,10 +107,24 @@ export default function AdminDashboard() {
     const [maintenanceLoading, setMaintenanceLoading] = useState(false)
     const [showMaintenanceConfirmModal, setShowMaintenanceConfirmModal] = useState(false)
 
+    // Reclamations State
+    const [reclamations, setReclamations] = useState([])
+    const [ticketsLoading, setTicketsLoading] = useState(false)
+    const [activeTab, setActiveTab] = useState('consultants')
+    const [ticketFilterType, setTicketFilterType] = useState('all')
+    const [ticketFilterStatus, setTicketFilterStatus] = useState('all')
+    const [ticketSearch, setTicketSearch] = useState('')
+    const [selectedTicketForDetail, setSelectedTicketForDetail] = useState(null)
+    const [showDeleteTicketConfirmModal, setShowDeleteTicketConfirmModal] = useState(false)
+    const [showDeleteTicketSuccessModal, setShowDeleteTicketSuccessModal] = useState(false)
+    const [ticketToDelete, setTicketToDelete] = useState(null)
+    const [isDeletingTicket, setIsDeletingTicket] = useState(false)
+
     useEffect(() => {
         fetchDashboardData()
         fetchNotifications()
         fetchMaintenanceStatus()
+        fetchReclamations()
 
         // Subscribe to real-time notifications
         const channel = supabase
@@ -151,6 +166,95 @@ export default function AdminDashboard() {
 
         if (!error && data) {
             setMaintenanceMode(data.value === true)
+        }
+    }
+
+    const fetchReclamations = async () => {
+        try {
+            setTicketsLoading(true)
+            const { data, error } = await supabase
+                .from('reclamations')
+                .select(`
+                    id,
+                    user_id,
+                    type,
+                    title,
+                    content,
+                    status,
+                    created_at,
+                    profiles (
+                        id,
+                        first_name,
+                        last_name,
+                        email,
+                        role,
+                        commercial_name,
+                        phone
+                    )
+                `)
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+            setReclamations(data || [])
+        } catch (err) {
+            console.error('Error fetching reclamations:', err)
+        } finally {
+            setTicketsLoading(false)
+        }
+    }
+
+    const handleUpdateTicketStatus = async (ticketId, newStatus) => {
+        try {
+            const { error } = await supabase
+                .from('reclamations')
+                .update({ status: newStatus, updated_at: new Date().toISOString() })
+                .eq('id', ticketId)
+
+            if (error) throw error
+
+            setReclamations(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus } : t))
+            if (selectedTicketForDetail && selectedTicketForDetail.id === ticketId) {
+                setSelectedTicketForDetail(prev => prev ? { ...prev, status: newStatus } : null)
+            }
+            setSuccessMsg(`Statut mis à jour en "${newStatus === 'resolved' ? 'Résolu' : 'Ignoré'}"`)
+            setSuccessMsgType('success')
+            setTimeout(() => setSuccessMsg(null), 3000)
+        } catch (err) {
+            console.error('Error updating ticket status:', err)
+            alert('Impossible de modifier le statut de la réclamation')
+        }
+    }
+
+    const handleDeleteTicketClick = (ticketId) => {
+        setTicketToDelete(ticketId)
+        setShowDeleteTicketConfirmModal(true)
+    }
+
+    const confirmDeleteTicket = async () => {
+        if (!ticketToDelete) return
+        
+        setIsDeletingTicket(true)
+        try {
+            const { error } = await supabase
+                .from('reclamations')
+                .delete()
+                .eq('id', ticketToDelete)
+
+            if (error) throw error
+
+            setReclamations(prev => prev.filter(t => t.id !== ticketToDelete))
+            if (selectedTicketForDetail && selectedTicketForDetail.id === ticketToDelete) {
+                setSelectedTicketForDetail(null)
+            }
+            
+            setShowDeleteTicketConfirmModal(false)
+            setShowDeleteTicketSuccessModal(true)
+            setTicketToDelete(null)
+        } catch (err) {
+            console.error('Error deleting ticket:', err)
+            alert('Impossible de supprimer la réclamation')
+        } finally {
+            setIsDeletingTicket(false)
         }
     }
 
@@ -228,7 +332,7 @@ export default function AdminDashboard() {
             }
 
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Timeout')), 8000)
+                setTimeout(() => reject(new Error('Timeout')), 15000)
             )
 
             const { consultantsData, tenantsCount, casesCount } = await Promise.race([
@@ -291,7 +395,7 @@ export default function AdminDashboard() {
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
             const msg = error.message === 'Timeout'
-                ? 'Le chargement prend trop de temps ( > 8s). Veuillez actualiser la page.'
+                ? 'Le chargement prend trop de temps ( > 15s). Veuillez actualiser la page.'
                 : error.message
             setError(msg)
         } finally {
@@ -911,8 +1015,37 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Consultants Section */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                {/* Tab Switcher */}
+                <div className="flex gap-4 mb-6 border-b border-gray-100 pb-px">
+                    <button
+                        onClick={() => setActiveTab('consultants')}
+                        className={`pb-4 px-2 text-sm font-black border-b-2 transition-all relative ${
+                            activeTab === 'consultants'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-400 hover:text-gray-600'
+                        }`}
+                    >
+                        Gestion des Consultants
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('reclamations')}
+                        className={`pb-4 px-2 text-sm font-black border-b-2 transition-all relative flex items-center gap-2 ${
+                            activeTab === 'reclamations'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-400 hover:text-gray-600'
+                        }`}
+                    >
+                        <span>Réclamations & Avis</span>
+                        {reclamations.filter(r => r.status === 'pending').length > 0 && (
+                            <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse">
+                                {reclamations.filter(r => r.status === 'pending').length}
+                            </span>
+                        )}
+                    </button>
+                </div>
+
+                {activeTab === 'consultants' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="p-6 border-b border-gray-100 flex justify-between items-center">
                         <div>
                             <h2 className="text-lg font-bold text-gray-900">Gestion des Consultants</h2>
@@ -1080,6 +1213,209 @@ export default function AdminDashboard() {
                         </table>
                     </div>
                 </div>
+                )}
+
+                {activeTab === 'reclamations' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in duration-200">
+                        {/* Header & Filters */}
+                        <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-900">Réclamations & Avis</h2>
+                                <p className="text-sm text-gray-500">Consultez et traitez les réclamations, bugs et avis soumis.</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3">
+                                {/* Search */}
+                                <input
+                                    type="text"
+                                    placeholder="Rechercher..."
+                                    value={ticketSearch}
+                                    onChange={(e) => setTicketSearch(e.target.value)}
+                                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 placeholder-slate-400"
+                                />
+
+                                {/* Filter Type */}
+                                <select
+                                    value={ticketFilterType}
+                                    onChange={(e) => setTicketFilterType(e.target.value)}
+                                    className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                >
+                                    <option value="all">Tous les types</option>
+                                    <option value="reclamation">Réclamations</option>
+                                    <option value="avis">Avis / Idées</option>
+                                    <option value="bug">Bugs Tech</option>
+                                </select>
+
+                                {/* Filter Status */}
+                                <select
+                                    value={ticketFilterStatus}
+                                    onChange={(e) => setTicketFilterStatus(e.target.value)}
+                                    className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                >
+                                    <option value="all">Tous les statuts</option>
+                                    <option value="pending">En attente</option>
+                                    <option value="resolved">Résolus</option>
+                                    <option value="ignored">Ignorés</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* List/Table of Tickets */}
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Auteur</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nature</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sujet</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {ticketsLoading ? (
+                                        <tr>
+                                            <td colSpan="6" className="px-6 py-12 text-center text-sm text-gray-500">
+                                                Chargement des réclamations...
+                                            </td>
+                                        </tr>
+                                    ) : reclamations.filter(t => {
+                                        const name = (t.profiles?.first_name || t.profiles?.last_name)
+                                            ? `${t.profiles.first_name || ''} ${t.profiles.last_name || ''}`.trim()
+                                            : t.profiles?.commercial_name || 'Utilisateur inconnu'
+                                        const matchesSearch = t.title.toLowerCase().includes(ticketSearch.toLowerCase()) || 
+                                            t.content.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+                                            t.profiles?.email?.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+                                            name.toLowerCase().includes(ticketSearch.toLowerCase());
+                                        const matchesType = ticketFilterType === 'all' || t.type === ticketFilterType;
+                                        const matchesStatus = ticketFilterStatus === 'all' || t.status === ticketFilterStatus;
+                                        return matchesSearch && matchesType && matchesStatus;
+                                    }).length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" className="px-6 py-12 text-center text-sm text-gray-400">
+                                                Aucune réclamation trouvée.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        reclamations.filter(t => {
+                                            const name = (t.profiles?.first_name || t.profiles?.last_name)
+                                                ? `${t.profiles.first_name || ''} ${t.profiles.last_name || ''}`.trim()
+                                                : t.profiles?.commercial_name || 'Utilisateur inconnu'
+                                            const matchesSearch = t.title.toLowerCase().includes(ticketSearch.toLowerCase()) || 
+                                                t.content.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+                                                t.profiles?.email?.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+                                                name.toLowerCase().includes(ticketSearch.toLowerCase());
+                                            const matchesType = ticketFilterType === 'all' || t.type === ticketFilterType;
+                                            const matchesStatus = ticketFilterStatus === 'all' || t.status === ticketFilterStatus;
+                                            return matchesSearch && matchesType && matchesStatus;
+                                        }).map((ticket) => {
+                                            const name = (ticket.profiles?.first_name || ticket.profiles?.last_name)
+                                                ? `${ticket.profiles.first_name || ''} ${ticket.profiles.last_name || ''}`.trim()
+                                                : ticket.profiles?.commercial_name || 'Utilisateur inconnu'
+                                            const role = ticket.profiles?.role === 'of' ? 'Client' : 'Consultant'
+                                            
+                                            const typeColors = {
+                                                reclamation: 'bg-red-50 text-red-700 border-red-100',
+                                                avis: 'bg-amber-50 text-amber-700 border-amber-100',
+                                                bug: 'bg-blue-50 text-blue-700 border-blue-100'
+                                            }
+
+                                            const typeLabels = {
+                                                reclamation: 'Réclamation',
+                                                avis: 'Avis / Idée',
+                                                bug: 'Bug Technique'
+                                            }
+
+                                            const statusColors = {
+                                                pending: 'bg-slate-100 text-slate-700 border-slate-200',
+                                                resolved: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+                                                ignored: 'bg-slate-50 text-slate-400 border-slate-100'
+                                            }
+
+                                            const statusLabels = {
+                                                pending: 'En attente',
+                                                resolved: 'Résolu',
+                                                ignored: 'Ignoré'
+                                            }
+
+                                            return (
+                                                <tr key={ticket.id} className="hover:bg-slate-50/50 transition-colors">
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold text-slate-800">{name}</span>
+                                                            <span className="text-[11px] text-slate-400">{ticket.profiles?.email}</span>
+                                                            <span className={`inline-self-start mt-1 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                                                ticket.profiles?.role === 'of'
+                                                                    ? 'bg-orange-50 text-orange-600 border border-orange-100'
+                                                                    : 'bg-purple-50 text-purple-600 border border-purple-100'
+                                                            }`}>
+                                                                {role}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${typeColors[ticket.type] || ''}`}>
+                                                            {typeLabels[ticket.type] || ticket.type}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 max-w-xs">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold text-slate-700 truncate">{ticket.title}</span>
+                                                            <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">{ticket.content}</p>
+                                                            <button 
+                                                                onClick={() => setSelectedTicketForDetail(ticket)}
+                                                                className="text-left text-[11px] font-black text-blue-600 hover:text-blue-700 mt-1 uppercase tracking-wider"
+                                                            >
+                                                                Voir détails
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
+                                                        {new Date(ticket.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`px-2 py-0.5 text-[11px] font-extrabold rounded-full border ${statusColors[ticket.status] || ''}`}>
+                                                            {statusLabels[ticket.status] || ticket.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                        <div className="flex items-center justify-end space-x-2">
+                                                            {ticket.status === 'pending' && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => handleUpdateTicketStatus(ticket.id, 'resolved')}
+                                                                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100 transition-colors"
+                                                                        title="Marquer comme résolu"
+                                                                    >
+                                                                        <Check className="h-4 w-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleUpdateTicketStatus(ticket.id, 'ignored')}
+                                                                        className="p-1.5 rounded-lg bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100 transition-colors"
+                                                                        title="Ignorer"
+                                                                    >
+                                                                        <X className="h-4 w-4" />
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                            <button
+                                                                onClick={() => handleDeleteTicketClick(ticket.id)}
+                                                                className="p-1.5 rounded-lg bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 transition-colors"
+                                                                title="Supprimer"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </main>
 
             {/* Modal: Create Consultant (Provisioning) */}
@@ -1888,6 +2224,275 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             )}
+
+            {/* Modal Detail Ticket */}
+            {selectedTicketForDetail && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md overflow-y-auto h-full w-full flex items-center justify-center p-4 z-[999] animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200 flex flex-col">
+                        
+                        {/* Modal Header */}
+                        <div className="px-8 py-6 border-b border-slate-100 flex items-start justify-between bg-white relative">
+                            <div className="flex-1 pr-8">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <span className={`px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wider ${
+                                        selectedTicketForDetail.type === 'reclamation' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                        selectedTicketForDetail.type === 'avis' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                                        'bg-blue-50 text-blue-600 border border-blue-100'
+                                    }`}>
+                                        {selectedTicketForDetail.type}
+                                    </span>
+                                    <span className={`px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wider ${
+                                        selectedTicketForDetail.status === 'pending' ? 'bg-slate-100 text-slate-600' :
+                                        selectedTicketForDetail.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' :
+                                        'bg-slate-100 text-slate-400'
+                                    }`}>
+                                        {selectedTicketForDetail.status === 'pending' ? 'En attente' :
+                                         selectedTicketForDetail.status === 'resolved' ? 'Résolu' : 'Ignoré'}
+                                    </span>
+                                </div>
+                                <h3 className="text-2xl font-black text-slate-900 leading-tight">
+                                    {selectedTicketForDetail.title}
+                                </h3>
+                            </div>
+                            <button
+                                onClick={() => setSelectedTicketForDetail(null)}
+                                className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-8 space-y-8 bg-slate-50/50">
+                            
+                            {/* Auteur Info Section */}
+                            <div>
+                                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Users className="h-3.5 w-3.5" />
+                                    Informations Auteur
+                                </h4>
+                                <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-y-5 gap-x-6">
+                                        <div className="flex items-start gap-3">
+                                            <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                <Users className="h-4 w-4 text-blue-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Nom complet</p>
+                                                <p className="text-sm font-extrabold text-slate-800">
+                                                    {selectedTicketForDetail.profiles?.first_name || ''} {selectedTicketForDetail.profiles?.last_name || ''}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-start gap-3">
+                                            <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                <Settings className="h-4 w-4 text-purple-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Rôle</p>
+                                                <p className="text-sm font-extrabold text-slate-800 uppercase">
+                                                    {selectedTicketForDetail.profiles?.role === 'of' ? 'Client' : 'Consultant'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-start gap-3">
+                                            <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                <Mail className="h-4 w-4 text-slate-500" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Email</p>
+                                                <p className="text-sm font-extrabold text-slate-800 truncate" title={selectedTicketForDetail.profiles?.email}>
+                                                    {selectedTicketForDetail.profiles?.email}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {selectedTicketForDetail.profiles?.phone && (
+                                            <div className="flex items-start gap-3">
+                                                <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    <AlertCircle className="h-4 w-4 text-slate-500" /> {/* Fallback icon, could use Phone */}
+                                                </div>
+                                                <div>
+                                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Téléphone</p>
+                                                    <p className="text-sm font-extrabold text-slate-800">
+                                                        {selectedTicketForDetail.profiles?.phone}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {selectedTicketForDetail.profiles?.commercial_name && (
+                                            <div className="col-span-1 md:col-span-2 flex items-start gap-3 border-t border-slate-100 pt-4">
+                                                <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    <Building className="h-4 w-4 text-slate-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Organisme / Nom Commercial</p>
+                                                    <p className="text-sm font-extrabold text-slate-800">
+                                                        {selectedTicketForDetail.profiles?.commercial_name}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Message / Content Section */}
+                            <div>
+                                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <MessageSquare className="h-3.5 w-3.5" />
+                                    Description du signalement
+                                </h4>
+                                <div className="bg-white border border-slate-200/60 rounded-2xl p-6 shadow-sm">
+                                    <p className="text-[15px] text-slate-700 whitespace-pre-wrap leading-relaxed max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
+                                        {selectedTicketForDetail.content}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer / Actions */}
+                        <div className="px-8 py-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4">
+                            
+                            <div className="w-full sm:w-auto">
+                                <button
+                                    onClick={() => handleDeleteTicketClick(selectedTicketForDetail.id)}
+                                    className="w-full sm:w-auto px-5 py-2.5 bg-white border border-red-200 hover:bg-red-50 hover:border-red-300 text-red-600 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Trash2 className="h-4 w-4" /> Supprimer
+                                </button>
+                            </div>
+
+                            <div className="flex gap-3 w-full sm:w-auto">
+                                {selectedTicketForDetail.status === 'pending' && (
+                                    <>
+                                        <button
+                                            onClick={() => handleUpdateTicketStatus(selectedTicketForDetail.id, 'ignored')}
+                                            className="flex-1 sm:flex-none px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <X className="h-4 w-4" /> Ignorer
+                                        </button>
+                                        <button
+                                            onClick={() => handleUpdateTicketStatus(selectedTicketForDetail.id, 'resolved')}
+                                            className="flex-1 sm:flex-none px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <Check className="h-4 w-4" /> Marquer Résolu
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Ticket Delete Confirm Modal */}
+            {
+                showDeleteTicketConfirmModal && ticketToDelete && (
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-300">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-bounce-in border border-red-50">
+                            {/* Header Image/Icon area */}
+                            <div className="bg-red-50 p-8 flex flex-col items-center">
+                                <div className="h-24 w-24 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-red-100 relative">
+                                    <div className="absolute inset-0 bg-red-500/10 rounded-full animate-ping"></div>
+                                    <Trash2 className="h-10 w-10 text-red-600 stroke-[2.5]" />
+                                </div>
+                            </div>
+
+                            <div className="p-8">
+                                <h3 className="text-2xl font-black text-gray-900 text-center mb-2 tracking-tight">Supprimer la réclamation ?</h3>
+                                <p className="text-gray-500 text-center mb-8 leading-relaxed">
+                                    Vous êtes sur le point de retirer définitivement cet élément.
+                                    <br />Cette action ne peut pas être annulée.
+                                </p>
+
+                                <div className="bg-red-50 border-2 border-dashed border-red-200 rounded-2xl p-4 mb-8">
+                                    <div className="flex items-start gap-3">
+                                        <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs font-black text-red-700 uppercase tracking-widest mb-1">Attention Irréversible</p>
+                                            <p className="text-[11px] text-red-600 font-medium leading-normal italic">
+                                                Cette action supprimera également tous les fichiers et échanges liés à cette réclamation.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        onClick={() => {
+                                            setShowDeleteTicketConfirmModal(false)
+                                            setTicketToDelete(null)
+                                        }}
+                                        className="px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl font-black transition-all active:scale-95 text-sm"
+                                        disabled={isDeletingTicket}
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        onClick={confirmDeleteTicket}
+                                        disabled={isDeletingTicket}
+                                        className="px-6 py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black transition-all shadow-xl shadow-red-600/20 active:scale-95 flex items-center justify-center gap-2 text-sm"
+                                    >
+                                        {isDeletingTicket ? (
+                                            <>
+                                                <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                Patientez...
+                                            </>
+                                        ) : (
+                                            'Confirmer'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Ticket Delete Success Modal */}
+            {
+                showDeleteTicketSuccessModal && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-bounce-in">
+                            <div className="bg-red-500 p-6 flex justify-center relative overflow-hidden">
+                                {/* Graphic background circles */}
+                                <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                                <div className="absolute bottom-0 right-0 w-32 h-32 bg-black/5 rounded-full translate-x-1/3 translate-y-1/3"></div>
+
+                                <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-lg relative z-10">
+                                    <Trash2 className="h-10 w-10 text-red-500 stroke-[2.5]" />
+                                </div>
+                            </div>
+                            <div className="p-8 text-center">
+                                <h3 className="text-2xl font-bold text-gray-900 mb-2">Élément Supprimé</h3>
+                                <p className="text-gray-500 mb-6 text-sm">
+                                    La réclamation/avis a été retirée de la plateforme avec succès.
+                                </p>
+
+                                <div className="bg-gray-50 rounded-xl p-4 mb-8 text-left border border-gray-100 flex items-center space-x-3">
+                                    <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <Check className="h-4 w-4 text-green-600" />
+                                    </div>
+                                    <span className="text-xs text-gray-600 font-medium">Toutes les données associées ont été nettoyées.</span>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        setShowDeleteTicketSuccessModal(false)
+                                    }}
+                                    className="w-full py-3.5 px-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-all shadow-lg active:scale-95"
+                                >
+                                    Continuer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
         </div>
     )
 }

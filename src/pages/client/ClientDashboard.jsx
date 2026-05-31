@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { getCriterionColor } from '../../utils/theme'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
@@ -37,6 +38,414 @@ const getAuditRank = (type) => {
 
 const sortAuditTypes = (types) => {
     return [...types].sort((a, b) => getAuditRank(a) - getAuditRank(b));
+};
+
+const getModalContent = (indId) => {
+    const sharedFiles = [
+        { name: "Bilan Annuel des Indicateurs de Résultats", file: "Modele_Bilan_Annuel_Indicateurs.xlsx" },
+        { name: "Checklist Site Internet & Communication", file: "Modele_Checklist_Site_Communication.xlsx" },
+        { name: "Correspondance RNCP & Indicateurs Certifiants", file: "Modele_Correspondance_RNCP.xlsx" },
+        { name: "Fiche de Certification Qualiopi (Partie Pédagogique)", file: "Modele_Fiche_Certification__Pedagogique.docx" },
+        { name: "Fiche de Certification Qualiopi (Partie Signature)", file: "Modele_Fiche_Certification__Signature.docx" },
+        { name: "Fiche de Prestation Web / Catalogue (Partie Pédagogique)", file: "Modele_Fiche_Prestation_Web__Pedagogique.docx" },
+        { name: "Fiche de Prestation Web / Catalogue (Partie Signature)", file: "Modele_Fiche_Prestation_Web__Signature.docx" },
+        { name: "Page internet \"Nos Résultats\" (Partie Pédagogique)", file: "Modele_Page_Nos_Resultats__Pedagogique.docx" },
+        { name: "Page internet \"Nos Résultats\" (Partie Signature/Mentions)", file: "Modele_Page_Nos_Resultats__Signature.docx" },
+        { name: "Programme de Formation Standard (Partie Pédagogique)", file: "Modele_Programme_Formation__Pedagogique.docx" },
+        { name: "Programme de Formation Standard (Partie Signature)", file: "Modele_Programme_Formation__Signature.docx" }
+    ];
+
+    if (indId === 2) {
+        return {
+            title: "Indicateurs de Résultats",
+            desc: "Indicateur 2 : Téléchargez le modèle type adapté à vos besoins pour diffuser les résultats de vos prestations.",
+            pathPrefix: "/ressources/Indicateur 2 et 3/",
+            files: sharedFiles
+        };
+    }
+    if (indId === 3) {
+        return {
+            title: "Information sur les Certifications",
+            desc: "Indicateur 3 : Téléchargez les modèles types pour informer vos publics sur les taux d'obtention et détails des certifications.",
+            pathPrefix: "/ressources/Indicateur 2 et 3/",
+            files: sharedFiles
+        };
+    }
+    if (indId === 4) {
+        return {
+            title: "Objectifs & Analyse des Besoins",
+            desc: "Indicateur 4 : Téléchargez les modèles types pour l'analyse des besoins et les chartes d'engagement.",
+            pathPrefix: "/ressources/Base Doc - Critère 2/Indicateur 4/",
+            files: [
+                { name: "Accord de Confidentialité BC (Partie Pédagogique)", file: "Modele_Accord_Confidentialite_BC__Pedagogique.docx" },
+                { name: "Accord de Confidentialité BC (Partie Signature)", file: "Modele_Accord_Confidentialite_BC__Signature.docx" },
+                { name: "Grille d'Analyse des Besoins (AF / CFA)", file: "Modele_Analyse_Besoin_AF_CFA.xlsx" },
+                { name: "Analyse des Besoins BC (Partie Pédagogique)", file: "Modele_Analyse_Besoin_BC__Pedagogique.docx" },
+                { name: "Analyse des Besoins BC (Partie Signature)", file: "Modele_Analyse_Besoin_BC__Signature.docx" },
+                { name: "Charte de Déontologie BC (Partie Pédagogique)", file: "Modele_Charte_Deontologie_BC__Pedagogique.docx" },
+                { name: "Charte de Déontologie BC (Partie Signature)", file: "Modele_Charte_Deontologie_BC__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 5) {
+        return {
+            title: "Définition des Objectifs Pédagogiques",
+            desc: "Indicateur 5 : Téléchargez les modèles types pour définir les objectifs opérationnels et pédagogiques.",
+            pathPrefix: "/ressources/Base Doc - Critère 2/Indicateur 5/",
+            files: [
+                { name: "Objectifs Pédagogiques & Contenus (Partie Pédagogique)", file: "Modele_Objectifs_Pedagogiques__Pedagogique.docx" },
+                { name: "Objectifs Pédagogiques & Contenus (Partie Signature)", file: "Modele_Objectifs_Pedagogiques__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 6) {
+        return {
+            title: "Adaptation des Profils & Parcours",
+            desc: "Indicateur 6 : Téléchargez la grille d'adaptation pour personnaliser les parcours de formation.",
+            pathPrefix: "/ressources/Base Doc - Critère 2/Indicateur 6/",
+            files: [
+                { name: "Grille d'Adaptation des Profils & Parcours", file: "Modele_Grille_Adaptation_Profil.xlsx" }
+            ]
+        };
+    }
+    if (indId === 7) {
+        return {
+            title: "Note de Conception Pédagogique",
+            desc: "Indicateur 7 : Téléchargez la note de conception pour formaliser l'ingénierie de vos formations.",
+            pathPrefix: "/ressources/Base Doc - Critère 2/Indicateur 7/",
+            files: [
+                { name: "Note de Conception Pédagogique (Partie Pédagogique)", file: "Modele_Note_Conception_Pedagogique__Pedagogique.docx" },
+                { name: "Note de Conception Pédagogique (Partie Signature)", file: "Modele_Note_Conception_Pedagogique__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 8) {
+        return {
+            title: "Tests & Synthèse de Positionnement",
+            desc: "Indicateur 8 : Téléchargez les modèles types pour évaluer et positionner les apprenants à l'entrée.",
+            pathPrefix: "/ressources/Base Doc - Critère 2/Indicateur 8/",
+            files: [
+                { name: "Synthèse de Positionnement (Partie Pédagogique)", file: "Modele_Synthese_Positionnement__Pedagogique.docx" },
+                { name: "Synthèse de Positionnement (Partie Signature)", file: "Modele_Synthese_Positionnement__Signature.docx" },
+                { name: "Test de Positionnement Standard (Partie Pédagogique)", file: "Modele_Test_Positionnement__Pedagogique.docx" },
+                { name: "Test de Positionnement Standard (Partie Signature)", file: "Modele_Test_Positionnement__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 9) {
+        return {
+            title: "Accès aux Prestations & Besoins Particuliers",
+            desc: "Indicateur 9 : Téléchargez les modèles types pour l'accès aux prestations, l'analyse des besoins et l'adaptation des locaux.",
+            pathPrefix: "/ressources/Base Doc - Critère 3/Indicateur 9 (17-19-26)/",
+            files: [
+                { name: "Checklist Session de Formation", file: "Modele_Checklist_Session.xlsx" },
+                { name: "Fiche Locaux & Moyens Techniques (Partie Pédagogique)", file: "Modele_Fiche_Locaux_Moyens__Pedagogique.docx" },
+                { name: "Fiche Locaux & Moyens Techniques (Partie Signature)", file: "Modele_Fiche_Locaux_Moyens__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 10) {
+        return {
+            title: "Adaptation de la Prestation et Suivi",
+            desc: "Indicateur 10 : Téléchargez les modèles types pour le suivi individuel et la personnalisation des prestations.",
+            pathPrefix: "/ressources/Base Doc - Critère 3/Indicateur 10 (11-6)/",
+            files: [
+                { name: "Suivi Individuel & Personnalisation (Partie Pédagogique)", file: "Modele_Suivi_Individuel__Pedagogique.docx" },
+                { name: "Suivi Individuel & Personnalisation (Partie Signature)", file: "Modele_Suivi_Individuel__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 11) {
+        return {
+            title: "Évaluation et Taux de Réussite",
+            desc: "Indicateur 11 : Téléchargez les modèles types pour l'évaluation des acquis, attestation de fin de formation et PV de jury.",
+            pathPrefix: "/ressources/Base Doc - Critère 3/Indicateur 11 (3)/",
+            files: [
+                { name: "Attestation de Fin de Formation (Partie Pédagogique)", file: "Modele_Attestation_Fin_Formation__Pedagogique.docx" },
+                { name: "Attestation de Fin de Formation (Partie Signature)", file: "Modele_Attestation_Fin_Formation__Signature.docx" },
+                { name: "Grille d'Évaluation des Acquis", file: "Modele_Grille_Evaluation_Acquis.xlsx" },
+                { name: "Procès-Verbal de Jury (Partie Pédagogique)", file: "Modele_PV_Jury__Pedagogique.docx" },
+                { name: "Procès-Verbal de Jury (Partie Signature)", file: "Modele_PV_Jury__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 12) {
+        return {
+            title: "Suivi de l'Assiduité et de l'Engagement",
+            desc: "Indicateur 12 : Téléchargez les modèles types pour le suivi d'assiduité, feuille d'émargement et certificat de réalisation.",
+            pathPrefix: "/ressources/Base Doc - Critère 3/Indicateur 12 (19)/",
+            files: [
+                { name: "Certificat de Réalisation (Partie Pédagogique)", file: "Modele_Certificat_Realisation__Pedagogique.docx" },
+                { name: "Certificat de Réalisation (Partie Signature)", file: "Modele_Certificat_Realisation__Signature.docx" },
+                { name: "Feuille d'Émargement (Partie Pédagogique)", file: "Modele_Feuille_Emargement__Pedagogique.docx" },
+                { name: "Feuille d'Émargement (Partie Signature)", file: "Modele_Feuille_Emargement__Signature.docx" },
+                { name: "Suivi de l'Assiduité et Gestion des Abandons", file: "Modele_Suivi_Assiduite_Abandon.xlsx" }
+            ]
+        };
+    }
+    if (indId === 13) {
+        return {
+            title: "Articulation CFA et Entreprise (Apprentis)",
+            desc: "Indicateur 13 : Téléchargez les modèles types pour la coordination entre le CFA et l'entreprise.",
+            pathPrefix: "/ressources/Indicateur manquant/Indicateur 13/",
+            files: [
+                { name: "Fiche Navette Mensuelle (Partie Pédagogique)", file: "Fiche_Navette_Mensuelle__Pedagogique.docx" },
+                { name: "Fiche Navette Mensuelle (Partie Signature)", file: "Fiche_Navette_Mensuelle__Signature.docx" },
+                { name: "Fiche Visite Entreprise (Partie Pédagogique)", file: "Fiche_Visite_Entreprise__Pedagogique.docx" },
+                { name: "Fiche Visite Entreprise (Partie Signature)", file: "Fiche_Visite_Entreprise__Signature.docx" },
+                { name: "Livret Suivi Apprenti (Partie Pédagogique)", file: "Livret_Suivi_Apprenti__Pedagogique.docx" },
+                { name: "Livret Suivi Apprenti (Partie Signature)", file: "Livret_Suivi_Apprenti__Signature.docx" },
+                { name: "Articulation CFA Entreprise (Partie Pédagogique)", file: "Modele_Articulation_CFA_Entreprise__Pedagogique.docx" },
+                { name: "Articulation CFA Entreprise (Partie Signature)", file: "Modele_Articulation_CFA_Entreprise__Signature.docx" },
+                { name: "Outils Articulation CFA", file: "Modele_Articulation_CFA_Outils.xlsx" }
+            ]
+        };
+    }
+    if (indId === 14) {
+        return {
+            title: "Accompagnement Social des Apprentis",
+            desc: "Indicateur 14 : Téléchargez les modèles types pour l'accompagnement social, éducatif et psychologique.",
+            pathPrefix: "/ressources/Indicateur manquant/Indicateur 14/",
+            files: [
+                { name: "Accompagnement Social Apprentis (Partie Pédagogique)", file: "Modele_Accompagnement_Social_Apprentis__Pedagogique.docx" },
+                { name: "Accompagnement Social Apprentis (Partie Signature)", file: "Modele_Accompagnement_Social_Apprentis__Signature.docx" },
+                { name: "Annuaire Accompagnement Apprentis", file: "Modele_Annuaire_Accompagnement_Apprentis.xlsx" }
+            ]
+        };
+    }
+    if (indId === 15) {
+        return {
+            title: "Droits, Devoirs et Citoyenneté (Apprentis)",
+            desc: "Indicateur 15 : Téléchargez les modèles types pour le module sur les droits et devoirs et l'engagement citoyen.",
+            pathPrefix: "/ressources/Indicateur manquant/Indicateur 15/",
+            files: [
+                { name: "Grille Émargement Module Citoyenneté (Partie Pédagogique)", file: "Grille_Emargement_Module_Citoyennete__Pedagogique.docx" },
+                { name: "Grille Émargement Module Citoyenneté (Partie Signature)", file: "Grille_Emargement_Module_Citoyennete__Signature.docx" },
+                { name: "Livret Apprenti Citoyenneté (Partie Pédagogique)", file: "Livret_Apprenti_Citoyennete__Pedagogique.docx" },
+                { name: "Livret Apprenti Citoyenneté (Partie Signature)", file: "Livret_Apprenti_Citoyennete__Signature.docx" },
+                { name: "Module Droits et Devoirs Citoyenneté (Partie Pédagogique)", file: "Modele_Module_Droits_Devoirs_Citoyennete__Pedagogique.docx" },
+                { name: "Module Droits et Devoirs Citoyenneté (Partie Signature)", file: "Modele_Module_Droits_Devoirs_Citoyennete__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 16) {
+        return {
+            title: "Conditions de Présentation aux Examens",
+            desc: "Indicateur 16 : Téléchargez les modèles types pour la procédure et l'organisation des examens de certification.",
+            pathPrefix: "/ressources/Indicateur manquant/Indicateur 16/",
+            files: [
+                { name: "Checklist Examen de Certification", file: "Modele_Checklist_Examen_Certification.xlsx" },
+                { name: "Procédure Examen Certification (Partie Pédagogique)", file: "Modele_Procedure_Examen_Certification__Pedagogique.docx" },
+                { name: "Procédure Examen Certification (Partie Signature)", file: "Modele_Procedure_Examen_Certification__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 17) {
+        return {
+            title: "Moyens Humains et Techniques",
+            desc: "Indicateur 17 : Téléchargez les modèles types pour l'inventaire du matériel, des équipements et des ressources techniques.",
+            pathPrefix: "/ressources/Base Doc - Critère 4/Indicateur 17/",
+            files: [
+                { name: "Inventaire du Matériel et des Équipements", file: "Modele_Inventaire_Materiel_Equipements.xlsx" }
+            ]
+        };
+    }
+    if (indId === 18) {
+        return {
+            title: "Coordination et Animation d'Équipe",
+            desc: "Indicateur 18 : Téléchargez les modèles types pour la note de coordination, l'animation d'équipe et le registre des comptes-rendus.",
+            pathPrefix: "/ressources/Base Doc - Critère 4/Indicateur 18/",
+            files: [
+                { name: "Note de Coordination d'Équipe (Partie Pédagogique)", file: "Modele_Note_Coordination_Equipe__Pedagogique.docx" },
+                { name: "Note de Coordination d'Équipe (Partie Signature)", file: "Modele_Note_Coordination_Equipe__Signature.docx" },
+                { name: "Registre et Comptes-Rendus de Réunions", file: "Modele_Registre_CR_Reunions.xlsx" }
+            ]
+        };
+    }
+    if (indId === 19) {
+        return {
+            title: "Supports et Ressources FOAD / Présentiel",
+            desc: "Indicateur 19 : Téléchargez les modèles types pour la charte et les ressources d'accompagnement FOAD et présentiel.",
+            pathPrefix: "/ressources/Base Doc - Critère 4/Indicateur 19/",
+            files: [
+                { name: "Charte FOAD & Présentiel (Partie Pédagogique)", file: "Modele_Charte_FOAD_Presentiel__Pedagogique.docx" },
+                { name: "Charte FOAD & Présentiel (Partie Signature)", file: "Modele_Charte_FOAD_Presentiel__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 20) {
+        return {
+            title: "Dispositif et Registre de Mobilité (CFA)",
+            desc: "Indicateur 20 : Téléchargez les modèles types pour le dispositif et le registre des mobilités nationales et internationales.",
+            pathPrefix: "/ressources/Base Doc - Critère 4/Indicateur 20/",
+            files: [
+                { name: "Dispositif de Mobilité CFA (Partie Pédagogique)", file: "Modele_Dispositif_Mobilite_CFA__Pedagogique.docx" },
+                { name: "Dispositif de Mobilité CFA (Partie Signature)", file: "Modele_Dispositif_Mobilite_CFA__Signature.docx" },
+                { name: "Registre des Mobilités (CFA)", file: "Modele_Registre_Mobilites_CFA.xlsx" }
+            ]
+        };
+    }
+    if (indId === 21) {
+        return {
+            title: "Qualification des Formateurs et Recrutement",
+            desc: "Indicateur 21 : Téléchargez les modèles types pour la sélection, le recrutement et l'évaluation des compétences des formateurs.",
+            pathPrefix: "/ressources/Base Doc - Critère 5/Indicateur 21 (27)/",
+            files: [
+                { name: "Convention de Prestation Formateur (Partie Pédagogique)", file: "Modele_Convention_Prestation_Formateur__Pedagogique.docx" },
+                { name: "Convention de Prestation Formateur (Partie Signature)", file: "Modele_Convention_Prestation_Formateur__Signature.docx" },
+                { name: "Fiche de Compétences Formateur (Partie Pédagogique)", file: "Modele_Fiche_Competences_Formateur__Pedagogique.docx" },
+                { name: "Fiche de Compétences Formateur (Partie Signature)", file: "Modele_Fiche_Competences_Formateur__Signature.docx" },
+                { name: "Matrice des Compétences de l'Équipe", file: "Modele_Matrice_Competences_Equipe.xlsx" },
+                { name: "Procédure de Recrutement Formateur (Partie Pédagogique)", file: "Modele_Procedure_Recrutement_Formateur__Pedagogique.docx" },
+                { name: "Procédure de Recrutement Formateur (Partie Signature)", file: "Modele_Procedure_Recrutement_Formateur__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 22) {
+        return {
+            title: "Plan de Développement des Compétences",
+            desc: "Indicateur 22 : Téléchargez le modèle de plan de développement des compétences et de suivi des entretiens professionnels.",
+            pathPrefix: "/ressources/Base Doc - Critère 5/Indicateur 22/",
+            files: [
+                { name: "Plan de Développement des Compétences & Entretiens Professionnels", file: "Modele_PDC_Entretiens_Professionnels.xlsx" }
+            ]
+        };
+    }
+    if (indId === 23) {
+        return {
+            title: "Veille Réglementaire",
+            desc: "Indicateur 23 : Téléchargez les modèles types pour la procédure de veille réglementaire et légale du secteur.",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 23-24-25/",
+            files: [
+                { name: "Procédure de Veille (Partie Pédagogique)", file: "Modele_Procedure_Veille__Pedagogique.docx" },
+                { name: "Procédure de Veille (Partie Signature)", file: "Modele_Procedure_Veille__Signature.docx" },
+                { name: "Tableau de Bord et Suivi de la Veille", file: "Modele_Tableau_Veille.xlsx" }
+            ]
+        };
+    }
+    if (indId === 24) {
+        return {
+            title: "Veille Métier et Innovations",
+            desc: "Indicateur 24 : Téléchargez les modèles types pour la procédure de veille sur les évolutions des compétences et des métiers.",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 23-24-25/",
+            files: [
+                { name: "Procédure de Veille (Partie Pédagogique)", file: "Modele_Procedure_Veille__Pedagogique.docx" },
+                { name: "Procédure de Veille (Partie Signature)", file: "Modele_Procedure_Veille__Signature.docx" },
+                { name: "Tableau de Bord et Suivi de la Veille", file: "Modele_Tableau_Veille.xlsx" }
+            ]
+        };
+    }
+    if (indId === 25) {
+        return {
+            title: "Veille Pédagogique et Technologique",
+            desc: "Indicateur 25 : Téléchargez les modèles types pour la procédure de veille sur les innovations pédagogiques et technologiques.",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 23-24-25/",
+            files: [
+                { name: "Procédure de Veille (Partie Pédagogique)", file: "Modele_Procedure_Veille__Pedagogique.docx" },
+                { name: "Procédure de Veille (Partie Signature)", file: "Modele_Procedure_Veille__Signature.docx" },
+                { name: "Tableau de Bord et Suivi de la Veille", file: "Modele_Tableau_Veille.xlsx" }
+            ]
+        };
+    }
+    if (indId === 26) {
+        return {
+            title: "Dispositif d'Accueil et d'Orientation Handicap",
+            desc: "Indicateur 26 : Téléchargez les modèles types pour l'accueil, l'accompagnement et l'orientation des publics en situation de handicap.",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 26/",
+            files: [
+                { name: "Annuaire du Réseau de Partenaires Handicap", file: "Modele_Annuaire_Reseau_Handicap.xlsx" },
+                { name: "Note d'Organisation du Dispositif Handicap (Partie Pédagogique)", file: "Modele_Note_Dispositif_Handicap__Pedagogique.docx" },
+                { name: "Note d'Organisation du Dispositif Handicap (Partie Signature)", file: "Modele_Note_Dispositif_Handicap__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 27) {
+        return {
+            title: "Recours à la Sous-Traitance",
+            desc: "Indicateur 27 : Téléchargez les modèles types pour la sous-traitance et le recrutement (identiques à l'indicateur 21).",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 27 (21)/",
+            files: [
+                { name: "Convention de Prestation Formateur (Partie Pédagogique)", file: "Modele_Convention_Prestation_Formateur__Pedagogique.docx" },
+                { name: "Convention de Prestation Formateur (Partie Signature)", file: "Modele_Convention_Prestation_Formateur__Signature.docx" },
+                { name: "Fiche de Compétences Formateur (Partie Pédagogique)", file: "Modele_Fiche_Competences_Formateur__Pedagogique.docx" },
+                { name: "Fiche de Compétences Formateur (Partie Signature)", file: "Modele_Fiche_Competences_Formateur__Signature.docx" },
+                { name: "Matrice des Compétences de l'Équipe", file: "Modele_Matrice_Competences_Equipe.xlsx" },
+                { name: "Procédure de Recrutement Formateur (Partie Pédagogique)", file: "Modele_Procedure_Recrutement_Formateur__Pedagogique.docx" },
+                { name: "Procédure de Recrutement Formateur (Partie Signature)", file: "Modele_Procedure_Recrutement_Formateur__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 28) {
+        return {
+            title: "Action de Formation en Situation de Travail (AFEST)",
+            desc: "Indicateur 28 : Téléchargez les modèles types pour la mise en œuvre de l'Action de Formation en Situation de Travail (AFEST).",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 28/",
+            files: [
+                { name: "Procédure AFEST (Partie Pédagogique)", file: "Modele_Procedure_AFEST__Pedagogique.docx" },
+                { name: "Procédure AFEST (Partie Signature)", file: "Modele_Procedure_AFEST__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 29) {
+        return {
+            title: "Insertion Professionnelle et Débouchés (CFA)",
+            desc: "Indicateur 29 : Téléchargez les modèles types pour le suivi des insertions professionnelles et les enquêtes de débouchés.",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 29/",
+            files: [
+                { name: "Enquête d'Insertion CFA (Partie Pédagogique)", file: "Modele_Enquete_Insertion_CFA__Pedagogique.docx" },
+                { name: "Enquête d'Insertion CFA (Partie Signature)", file: "Modele_Enquete_Insertion_CFA__Signature.docx" },
+                { name: "Registre de Suivi des Insertions Professionnelles", file: "Modele_Registre_Suivi_Insertions.xlsx" }
+            ]
+        };
+    }
+    if (indId === 30) {
+        return {
+            title: "Recueil des Appréciations",
+            desc: "Indicateur 30 : Téléchargez le modèle d'enquête et le cockpit d'analyse des appréciations des parties prenantes.",
+            pathPrefix: "/ressources/Base Doc - Critère 7/",
+            files: [
+                { name: "Cockpit de Suivi et Analyse des Appréciations", file: "Cockpit_Critere_7.xlsx" }
+            ]
+        };
+    }
+    if (indId === 31) {
+        return {
+            title: "Traitement des Réclamations et Dysfonctionnements",
+            desc: "Indicateur 31 : Téléchargez les modèles types pour la gestion et le traitement des réclamations et des dysfonctionnements.",
+            pathPrefix: "/ressources/Base Doc - Critère 7/",
+            files: [
+                { name: "Procédure de Réclamation (Partie Pédagogique)", file: "Modele_Procedure_Reclamations__Pedagogique.docx" },
+                { name: "Procédure de Réclamation (Partie Signature)", file: "Modele_Procedure_Reclamations__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 32) {
+        return {
+            title: "Conseil de Perfectionnement et Amélioration Continue",
+            desc: "Indicateur 32 : Téléchargez les modèles types pour le conseil de perfectionnement et les plans d'action d'amélioration continue.",
+            pathPrefix: "/ressources/Base Doc - Critère 7/",
+            files: [
+                { name: "Note du Conseil de Perfectionnement (Partie Pédagogique)", file: "Modele_Note_Conseil_Perfectionnement__Pedagogique.docx" },
+                { name: "Note du Conseil de Perfectionnement (Partie Signature)", file: "Modele_Note_Conseil_Perfectionnement__Signature.docx" },
+                { name: "Cockpit et Plan d'Actions d'Amélioration Continue", file: "Cockpit_Critere_7.xlsx" }
+            ]
+        };
+    }
+    return {
+        title: "Contrats & Conventions de Formation",
+        desc: "Indicateur 1 : Téléchargez le modèle type adapté à vos besoins pour le remplir, puis déposez-le comme preuve documentaire.",
+        pathPrefix: "/ressources/Indicateur 1 Contrat et convention de formation/",
+        files: [
+            { name: "Contrat de Formation Professionnelle FOAD (Partie Pédagogique)", file: "Modele_Contrat_Formation_Pro_FOAD__Pedagogique.docx" },
+            { name: "Contrat de Formation Professionnelle FOAD (Partie Signature)", file: "Modele_Contrat_Formation_Pro_FOAD__Signature.docx" },
+            { name: "Contrat de Formation Professionnelle Classique (Partie Pédagogique)", file: "Modele_Contrat_Formation_Pro__Pedagogique.docx" },
+            { name: "Contrat de Formation Professionnelle Classique (Partie Signature)", file: "Modele_Contrat_Formation_Pro__Signature.docx" },
+            { name: "Convention de Formation Professionnelle (Partie Pédagogique)", file: "Modele_Convention_Formation__Pedagogique.docx" },
+            { name: "Convention de Formation Professionnelle (Partie Signature)", file: "Modele_Convention_Formation__Signature.docx" },
+            { name: "Convention Tripartite CFA (Partie Pédagogique)", file: "Modele_Convention_Tripartite_CFA__Pedagogique.docx" },
+            { name: "Convention Tripartite CFA (Partie Signature)", file: "Modele_Convention_Tripartite_CFA__Signature.docx" }
+        ]
+    };
 };
 
 export default function ClientDashboard() {
@@ -92,6 +501,7 @@ export default function ClientDashboard() {
     const [caseEvents, setCaseEvents] = useState([])
     const [isQuizOpen, setIsQuizOpen] = useState(false)
     const [templateModalOpen, setTemplateModalOpen] = useState(false)
+    const [selectedTemplateIndicator, setSelectedTemplateIndicator] = useState(1)
 
     // Status Modal State
     const [statusModal, setStatusModal] = useState({
@@ -978,57 +1388,33 @@ export default function ClientDashboard() {
                                 </div>
                                 <h2 className="text-3xl font-black text-gray-900 mb-3">Vos Rendez-vous</h2>
                                 <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
-                                    Retrouvez ici le lien visio pour votre prochain point de mentoring avec <span className="text-[#cc6d3e] font-bold">{consultantName || 'votre consultant'}</span>.
+                                    Votre salle de réunion permanente avec <span className="text-[#cc6d3e] font-bold">{consultantName || 'votre consultant'}</span> est toujours prête.
                                 </p>
                             </div>
 
                             <div className="px-10 pb-10 space-y-4">
-                                {caseEvents.length === 0 ? (
-                                    <div className="bg-gray-50 rounded-2xl p-8 border border-dashed border-gray-200 text-center">
-                                        <p className="text-sm text-gray-400 italic">Aucun rendez-vous planifié pour le moment.</p>
-                                    </div>
-                                ) : (
-                                    caseEvents.map((event) => (
-                                        <div key={event.id} className="bg-[#faf1ec]/30 rounded-2xl p-6 border border-[#f5e2d6] flex flex-col sm:flex-row items-start sm:items-center justify-between group hover:bg-white hover:shadow-lg transition-all duration-300 gap-4">
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <p className="text-[10px] font-black text-[#cc6d3e] uppercase tracking-widest bg-white/80 px-2 py-0.5 rounded-full border border-[#f5e2d6]/40">
-                                                        {new Date(event.event_date) > new Date() ? 'Prochain RDV' : 'Passé'}
-                                                    </p>
-                                                    {event.event_type && (
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{event.event_type}</span>
-                                                    )}
-                                                </div>
-                                                <h3 className="text-lg font-black text-gray-900">{event.title || 'Session de suivi'}</h3>
-                                                <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
-                                                    <div className={`h-2 w-2 rounded-full ${new Date(event.event_date) > new Date() ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
-                                                    <span>
-                                                        {new Date(event.event_date).toLocaleString('fr-FR', {
-                                                            weekday: 'long',
-                                                            day: 'numeric',
-                                                            month: 'long',
-                                                            year: 'numeric',
-                                                            hour: '2-digit',
-                                                            minute: '2-digit'
-                                                        })}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            
-                                            {event.visio_link ? (
-                                                <button
-                                                    onClick={() => window.open(event.visio_link, '_blank')}
-                                                    className="h-12 px-8 bg-[#cc6d3e] text-white rounded-xl text-sm font-bold shadow-lg shadow-[#cc6d3e]/20 hover:bg-[#b55d32] hover:scale-105 active:scale-95 transition-all w-full sm:w-auto flex items-center justify-center gap-2"
-                                                >
-                                                    <Video className="h-4 w-4" />
-                                                    Rejoindre
-                                                </button>
-                                            ) : (
-                                                <span className="text-xs font-bold text-gray-400 italic">Lien non disponible</span>
-                                            )}
+                                <div className="bg-[#faf1ec]/30 rounded-2xl p-6 border border-[#f5e2d6] flex flex-col sm:flex-row items-center justify-between group hover:bg-white hover:shadow-lg transition-all duration-300 gap-4">
+                                    <div className="space-y-1 text-center sm:text-left">
+                                        <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
+                                            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 flex items-center gap-1.5">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                En ligne
+                                            </span>
                                         </div>
-                                    ))
-                                )}
+                                        <h3 className="text-lg font-black text-gray-900">Salle de Réunion Privée</h3>
+                                        <p className="text-sm text-gray-500 font-medium">
+                                            Rejoignez l'appel instantanément en un clic.
+                                        </p>
+                                    </div>
+                                    
+                                    <button
+                                        onClick={() => window.open(`https://meet.jit.si/EasyQual-Visio-${myCase.id}`, '_blank')}
+                                        className="h-14 px-8 bg-[#cc6d3e] text-white rounded-xl text-base font-bold shadow-lg shadow-[#cc6d3e]/20 hover:bg-[#b55d32] hover:scale-105 active:scale-95 transition-all w-full sm:w-auto flex items-center justify-center gap-3"
+                                    >
+                                        <Video className="h-5 w-5" />
+                                        Rejoindre l'appel
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="p-6 text-center border-t border-gray-50">
@@ -1079,10 +1465,10 @@ export default function ClientDashboard() {
                              </div>
                         </div>
                     )}
-                    <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
+                    <main className="flex-1 p-6 lg:p-8 w-full max-w-[1300px] mx-auto">
                         {/* Phase Selector in Detail View */}
                         {/* Audit Selection Tabs (Consistent with Dashboard) */}
-                        <div className="flex flex-wrap gap-3 mb-10">
+                        <div className="flex flex-wrap justify-center gap-3 mb-10">
                             {casesData?.flatMap((c) => {
                                 const rawTypes = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
                                 const types = sortAuditTypes(rawTypes);
@@ -1093,21 +1479,21 @@ export default function ClientDashboard() {
                                     const getColors = (t) => {
                                         const typeStr = t.toLowerCase();
                                         if (typeStr.includes('initial')) return { 
-                                            active: 'bg-[#cc6d3e] text-white border-[#cc6d3e] shadow-[#cc6d3e]/30', 
-                                            inactive: 'hover:border-[#cc6d3e]/30 hover:bg-[#cc6d3e]/5 text-slate-400',
+                                            active: 'bg-[#fdf6f0] text-[#cc6d3e] border-[#cc6d3e] shadow-[#cc6d3e]/10', 
+                                            inactive: 'hover:border-[#cc6d3e]/30 hover:bg-[#cc6d3e]/5 text-slate-600 border-slate-200/80',
                                             dot: 'bg-[#cc6d3e]' 
                                         };
                                         if (typeStr.includes('surveillance')) return { 
-                                            active: 'bg-blue-600 text-white border-blue-600 shadow-blue-600/30', 
-                                            inactive: 'hover:border-blue-600/30 hover:bg-blue-600/5 text-slate-400',
-                                            dot: 'bg-blue-600' 
+                                            active: 'bg-[#f0f7ff] text-[#2563eb] border-[#2563eb] shadow-blue-600/10', 
+                                            inactive: 'hover:border-blue-600/30 hover:bg-blue-600/5 text-slate-600 border-slate-200/80',
+                                            dot: 'bg-[#2563eb]' 
                                         };
                                         if (typeStr.includes('renouvellement')) return { 
-                                            active: 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-600/30', 
-                                            inactive: 'hover:border-emerald-600/30 hover:bg-emerald-600/5 text-slate-400',
-                                            dot: 'bg-emerald-600' 
+                                            active: 'bg-[#f0fdf4] text-[#16a34a] border-[#16a34a] shadow-emerald-600/10', 
+                                            inactive: 'hover:border-emerald-600/30 hover:bg-emerald-600/5 text-slate-600 border-slate-200/80',
+                                            dot: 'bg-[#16a34a]' 
                                         };
-                                        return { active: 'bg-slate-800 text-white', inactive: 'text-slate-400', dot: 'bg-slate-400' };
+                                        return { active: 'bg-slate-50 text-slate-700 border-slate-300', inactive: 'text-slate-600 border-slate-200/80', dot: 'bg-slate-400' };
                                     };
                                     
                                     const colors = getColors(type);
@@ -1120,13 +1506,13 @@ export default function ClientDashboard() {
                                                 setSelectedAudit(type);
                                                 localStorage.setItem('clientSelectedAudit', type);
                                             }}
-                                            className={`flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
+                                            className={`font-poppins flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-bold uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
                                                 isActive 
-                                                    ? `${colors.active} shadow-[0_10px_30px_-10px_rgba(0,0,0,0.3)] scale-105 z-10` 
-                                                    : `bg-white border-slate-50 ${colors.inactive} shadow-sm translate-y-0`
+                                                    ? `${colors.active} scale-105 z-10` 
+                                                    : `bg-white ${colors.inactive} shadow-sm translate-y-0`
                                             } hover:-translate-y-1 active:scale-95`}
                                         >
-                                            <div className={`h-2.5 w-2.5 rounded-full shadow-inner ${isActive ? 'bg-white animate-pulse' : colors.dot} transition-colors duration-500`} />
+                                            <div className={`h-2.5 w-2.5 rounded-full shadow-inner ${colors.dot} ${isActive ? 'animate-pulse scale-110' : ''} transition-all duration-500`} />
                                             AUDIT {cleanType}
                                         </button>
                                     );
@@ -1136,14 +1522,20 @@ export default function ClientDashboard() {
                         {/* Criterion Header */}
                         <div className="mb-6">
                             <div className="flex items-center gap-3 mb-1">
-                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                                <p className="text-xs font-black uppercase tracking-widest" style={{ color: getCriterionColor(currentCriterion.id).primary }}>
                                     CRITÈRE {criterionIndex + 1}
                                 </p>
                                 <span className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-gray-100 text-gray-400">ID: {myCase?.id?.substring(0,8)}</span>
                             </div>
                             <h1 className="text-2xl font-black text-gray-900 flex items-center gap-3">
                                 {currentCriterion.label}
-                                <span className="px-3 py-1 bg-[#cc6d3e]/10 text-[#cc6d3e] border border-[#cc6d3e]/20 rounded-full text-[10px] font-black uppercase tracking-widest translate-y-[1px]">
+                                <span className={`font-poppins px-3 py-1 border rounded-full text-[10px] font-bold uppercase tracking-widest translate-y-[1px] ${
+                                    (selectedAudit || 'Initial').toLowerCase().includes('initial')
+                                        ? 'bg-[#fdf6f0] text-[#cc6d3e] border-[#cc6d3e]/20'
+                                        : (selectedAudit || 'Initial').toLowerCase().includes('surveillance')
+                                        ? 'bg-[#f0f7ff] text-[#2563eb] border-[#2563eb]/20'
+                                        : 'bg-[#f0fdf4] text-[#16a34a] border-[#16a34a]/20'
+                                }`}>
                                     {selectedAudit || 'Initial'}
                                 </span>
                             </h1>
@@ -1183,8 +1575,8 @@ export default function ClientDashboard() {
                                         
                                         return (
                                             <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl hover:bg-[#faf1ec] transition-all cursor-pointer group">
-                                                <div className="h-8 w-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
-                                                    <FileText className="h-4 w-4 text-red-500" />
+                                                <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform" style={{ backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary }}>
+                                                    <FileText className="h-4 w-4" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-xs font-bold text-gray-800 truncate" title={fileName}>{fileName}</p>
@@ -1231,7 +1623,8 @@ export default function ClientDashboard() {
                                                     <div className="flex justify-between items-center px-1">
                                                         <button
                                                             onClick={() => { setPendingCriterionId('crit_' + currentCriterion.id); fileInputRef.current?.click() }}
-                                                            className="text-[10px] font-bold text-[#cc6d3e] hover:underline"
+                                                            className="text-[10px] font-bold hover:underline"
+                                                            style={{ color: getCriterionColor(currentCriterion.id).primary }}
                                                         >
                                                             Remplacer
                                                         </button>
@@ -1259,7 +1652,8 @@ export default function ClientDashboard() {
                                                 <button
                                                     onClick={() => setIsQuizOpen(true)}
                                                     disabled={uploadingFor === 'crit_' + currentCriterion.id}
-                                                    className="w-full py-2.5 bg-[#cc6d3e] text-white rounded-xl text-xs font-bold hover:bg-[#b35d32] transition-all shadow-md shadow-[#cc6d3e]/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                                                    className="w-full py-2.5 text-white rounded-xl text-xs font-bold hover:opacity-90 transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                                                    style={{ backgroundColor: getCriterionColor(currentCriterion.id).primary }}
                                                 >
                                                     <PlayCircle className="h-4 w-4" />
                                                     {failedScore !== undefined ? "Retenter le Quiz" : "Lancer le Quiz"}
@@ -1297,12 +1691,12 @@ export default function ClientDashboard() {
                                     doc.text(`Critère : ${currentCriterion.id} - ${currentCriterion.label}`, 20, 49);
                                     
                                     doc.setFontSize(14);
-                                    if (score >= 70) {
+                                    if (score >= 80) {
                                         doc.setTextColor(16, 185, 129); // Emerald
                                     } else {
                                         doc.setTextColor(225, 29, 72); // Rose
                                     }
-                                    doc.text(`Score Final : ${score}% - ${score >= 70 ? 'RÉUSSI' : 'ÉCHEC'}`, 20, 60);
+                                    doc.text(`Score Final : ${score}% - ${score >= 80 ? 'RÉUSSI' : 'ÉCHEC'}`, 20, 60);
                                     
                                     doc.setFontSize(12);
                                     doc.setTextColor(30, 41, 59);
@@ -1316,8 +1710,12 @@ export default function ClientDashboard() {
                                             doc.addPage();
                                             yPos = 20;
                                         }
-                                        const userAnswerIdx = details.answers[idx];
-                                        const isCorrect = userAnswerIdx === q.correct;
+                                        const userAnswers = details.answers[idx] || [];
+                                        const correctAnswers = q.correct;
+                                        
+                                        const isFullyCorrect = 
+                                            userAnswers.length === correctAnswers.length &&
+                                            userAnswers.every(a => correctAnswers.includes(a));
                                         
                                         doc.setFont("helvetica", "bold");
                                         doc.setTextColor(30, 41, 59);
@@ -1326,10 +1724,15 @@ export default function ClientDashboard() {
                                         yPos += splitTitle.length * 5 + 2;
                                         
                                         doc.setFont("helvetica", "normal");
-                                        doc.text(`Réponse donnée : ${q.options[userAnswerIdx] || 'Aucune'}`, 25, yPos);
-                                        yPos += 6;
+                                        const givenAnswersText = userAnswers.length > 0 
+                                            ? userAnswers.map(a => q.options[a]).join(", ") 
+                                            : "Aucune réponse";
                                         
-                                        if (isCorrect) {
+                                        const splitGiven = doc.splitTextToSize(`Réponse(s) donnée(s) : ${givenAnswersText}`, 160);
+                                        doc.text(splitGiven, 25, yPos);
+                                        yPos += splitGiven.length * 5 + 1;
+                                        
+                                        if (isFullyCorrect) {
                                             doc.setTextColor(16, 185, 129);
                                             doc.text(`Résultat : CORRECT`, 25, yPos);
                                         } else {
@@ -1338,10 +1741,12 @@ export default function ClientDashboard() {
                                         }
                                         yPos += 6;
                                         
-                                        if (!isCorrect) {
+                                        if (!isFullyCorrect) {
                                             doc.setTextColor(71, 85, 105);
-                                            doc.text(`Réponse attendue : ${q.options[q.correct]}`, 25, yPos);
-                                            yPos += 6;
+                                            const expectedAnswersText = correctAnswers.map(a => q.options[a]).join(", ");
+                                            const splitExpected = doc.splitTextToSize(`Réponse(s) attendue(s) : ${expectedAnswersText}`, 160);
+                                            doc.text(splitExpected, 25, yPos);
+                                            yPos += splitExpected.length * 5 + 1;
                                         }
                                         
                                         yPos += 4;
@@ -1351,6 +1756,14 @@ export default function ClientDashboard() {
                                     const fileName = `Rapport_Quiz_C${currentCriterion.id}_SCORE_${score}_${Date.now()}.pdf`;
                                     const blob = doc.output('blob');
                                     const file = new File([blob], fileName, { type: 'application/pdf' });
+
+                                    // Trigger download for client
+                                    const pdfUrl = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = pdfUrl;
+                                    a.download = fileName;
+                                    a.click();
+                                    URL.revokeObjectURL(pdfUrl);
 
                                     // 3. Upload to Storage
                                     const path = `${myCase.id}/${fileName}`;
@@ -1453,19 +1866,19 @@ export default function ClientDashboard() {
                                             {/* Indicator header */}
                                             <div className="flex items-start gap-4 mb-4">
                                                 <div className={`mt-3 h-[28px] w-[28px] rounded-full border-2 flex items-center justify-center flex-shrink-0 text-[11px] font-black shadow-sm transition-all ${isDone ? 'bg-[#10b981] border-[#10b981] text-white' :
-                                                    isNonApplicable ? 'bg-slate-400 border-slate-400 text-white' :
-                                                        'bg-white border-gray-200 text-gray-400'
-                                                    }`}>
+                                                    isNonApplicable ? 'bg-slate-400 border-slate-400 text-white' : ''
+                                                    }`} style={(!isDone && !isNonApplicable) ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary, borderColor: getCriterionColor(currentCriterion.id).primary } : {}}>
                                                     {isDone ? <Check className="h-3.5 w-3.5" /> : (isNonApplicable ? '–' : idx + 1)}
                                                 </div>
                                                 <div className="flex-1 min-w-0 bg-slate-50/50 rounded-[20px] px-6 py-4 border border-slate-100/50 group-hover:bg-slate-50 transition-colors">
                                                     <div className="flex items-center gap-3">
                                                         <h3 className="text-base font-black text-slate-900">Indicateur {idx + 1}</h3>
                                                             <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${status === 'not_applicable' || status === 'non_applicable' ? 'text-slate-500 bg-slate-50' :
-                                                                 status === 'to_do' || status === 'doing' ? 'text-blue-600 bg-blue-50' :
                                                                  status === 'done' ? 'text-emerald-600 bg-emerald-50' :
-                                                                     'text-blue-600 bg-blue-50'
-                                                                 }`}>
+                                                                     ''
+                                                                 }`}
+                                                                style={status !== 'done' && status !== 'not_applicable' && status !== 'non_applicable' ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary } : {}}
+                                                             >
                                                                 {status === 'done' ? 'FAIT' : (status === 'not_applicable' || status === 'non_applicable' ? 'NA' : (status === 'to_do' || status === 'doing' ? 'EN COURS' : 'À DÉCLARER'))}
                                                             </span>
                                                             <button 
@@ -1474,11 +1887,12 @@ export default function ClientDashboard() {
                                                                     setSelectedVideoIndicator(ind.id);
                                                                     window.scrollTo({ top: 0, behavior: 'smooth' });
                                                                 }}
-                                                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border ${
+                                                                className={`font-poppins flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${
                                                                     selectedVideoIndicator === ind.id 
-                                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-100' 
-                                                                        : 'bg-white text-indigo-600 border-indigo-100 hover:bg-indigo-50'
+                                                                        ? 'shadow-sm' 
+                                                                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'
                                                                 }`}
+                                                                style={selectedVideoIndicator === ind.id ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary, borderColor: getCriterionColor(currentCriterion.id).border } : {}}
                                                             >
                                                                 <PlayCircle className="h-3 w-3" />
                                                                 {selectedVideoIndicator === ind.id ? 'Vidéo en cours' : 'Voir la vidéo'}
@@ -1502,11 +1916,15 @@ export default function ClientDashboard() {
                                             <div className="ml-[14px] pl-8">
                                                 <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_4px_24px_rgba(0,0,0,0.04)] p-8 relative transition-all">
                                                     {/* Top Right Model Button */}
-                                                    {status !== 'non_applicable' && (ind.id === 1 || String(ind.id) === '1') && (
+                                                    {status !== 'non_applicable' && [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32].includes(Number(ind.id)) && (
                                                         <div className="absolute top-6 right-8">
                                                             <button 
-                                                                onClick={() => setTemplateModalOpen(true)}
-                                                                className="flex items-center gap-2 px-4 py-2 bg-[#f5f0ff] text-[#7c3aed] rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-[#ede5ff] transition-all"
+                                                                onClick={() => {
+                                                                    setSelectedTemplateIndicator(Number(ind.id));
+                                                                    setTemplateModalOpen(true);
+                                                                }}
+                                                                className="font-poppins flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all hover:opacity-80"
+                                                                style={{ backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary }}
                                                             >
                                                                 <Download className="h-3.5 w-3.5" /> Télécharger le modèle type
                                                             </button>
@@ -1519,21 +1937,22 @@ export default function ClientDashboard() {
                                                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-5">Déclarez votre statut</p>
                                                             <div className="space-y-2.5">
                                                                 {[
-                                                                    { val: 'to_do', label: 'En cours', icon: Sun, color: 'text-blue-600', active: 'border-blue-200 bg-blue-50 text-blue-700' },
-                                                                    { val: 'done', label: 'Fait', icon: Flag, color: 'text-emerald-500', active: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
-                                                                    { val: 'not_applicable', label: 'Non applicable', icon: Ban, color: 'text-orange-500', active: 'border-orange-500 bg-orange-50 text-orange-700' },
+                                                                    { val: 'to_do', label: 'En cours', icon: Sun },
+                                                                    { val: 'done', label: 'Fait', icon: Flag, active: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
+                                                                    { val: 'not_applicable', label: 'Non applicable', icon: Ban, active: 'border-orange-500 bg-orange-50 text-orange-700' },
                                                                 ].map(opt => (
                                                                     <button
                                                                         key={opt.val}
                                                                         onClick={() => handleStatusChange(ind.id, opt.val)}
                                                                         disabled={!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null}
                                                                         className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 text-[13px] font-bold transition-all ${status === opt.val
-                                                                            ? opt.active
+                                                                            ? (opt.active || 'shadow-sm')
                                                                             : 'border-transparent bg-gray-50/50 text-gray-400 hover:bg-gray-50'
                                                                             } ${(!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null) ? 'opacity-50 cursor-not-allowed' : 'opacity-100 cursor-pointer'}`}
+                                                                        style={status === opt.val && opt.val === 'to_do' ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary, borderColor: getCriterionColor(currentCriterion.id).border } : {}}
                                                                     >
                                                                         <div className="flex items-center gap-3">
-                                                                            <opt.icon className={`h-4 w-4 ${status === opt.val ? '' : 'text-gray-300'}`} />
+                                                                            <opt.icon className={`h-4 w-4 ${status === opt.val ? '' : 'text-gray-300'}`} style={status === opt.val && opt.val === 'to_do' ? { color: getCriterionColor(currentCriterion.id).primary } : {}} />
                                                                             {opt.label}
                                                                         </div>
                                                                         {status === opt.val && <CheckCircle className={`h-4 w-4`} />}
@@ -1591,10 +2010,10 @@ export default function ClientDashboard() {
                                                                     <button
                                                                         onClick={() => { setPendingCriterionId(ind.id); fileInputRef.current?.click() }}
                                                                         disabled={uploadingFor === 'ind_' + ind.id || savingIndicator === ind.id}
-                                                                        className="w-full h-[154px] flex flex-col items-center justify-center gap-3 rounded-[24px] border-2 border-dashed border-gray-100 text-gray-500 hover:border-[#7c3aed]/30 hover:bg-[#fbf9ff] transition-all group"
+                                                                        className="w-full h-[154px] flex flex-col items-center justify-center gap-3 rounded-[24px] border-2 border-dashed border-gray-100 text-gray-500 transition-all group"
                                                                     >
                                                                         <div className="h-12 w-12 bg-white rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-gray-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                                            <Upload className="h-6 w-6 text-[#7c3aed]" />
+                                                                            <Upload className="h-6 w-6" style={{ color: getCriterionColor(currentCriterion.id).primary }} />
                                                                         </div>
                                                                         <div className="text-center">
                                                                             <p className="text-sm font-black text-gray-800">Cliquez pour ajouter un document</p>
@@ -1629,9 +2048,10 @@ export default function ClientDashboard() {
                                                                          savingIndicator === ind.id 
                                                                              ? 'bg-gray-100 text-gray-400 cursor-progress'
                                                                              : (dirtyIndicators.has(ind.id) || pendingFiles[ind.id] || status === null)
-                                                                                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700 hover:scale-[1.02] active:scale-95'
+                                                                                 ? 'text-white shadow-lg hover:scale-[1.02] active:scale-95'
                                                                                  : 'bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100'
                                                                      }`}
+                                                                     style={(dirtyIndicators.has(ind.id) || pendingFiles[ind.id] || status === null) && savingIndicator !== ind.id ? { backgroundColor: getCriterionColor(currentCriterion.id).primary } : {}}
                                                                  >
                                                                      {savingIndicator === ind.id ? (
                                                                          'Enregistrement...'
@@ -1681,6 +2101,7 @@ export default function ClientDashboard() {
                     confirmText={statusModal.confirmText}
                     cancelText={statusModal.cancelText}
                     isLoading={statusModal.isLoading}
+                    criterionId={currentCriterion?.id}
                 />
 
                 {templateModalOpen && (
@@ -1696,29 +2117,22 @@ export default function ClientDashboard() {
 
                             {/* Header */}
                             <div className="mb-4 pr-8">
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-50 text-[#7c3aed] mb-2">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-2"
+                                      style={{ backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary }}>
                                     Modèles Types
                                 </span>
-                                <h3 className="text-xl font-black text-slate-900">Contrats & Conventions de Formation</h3>
+                                <h3 className="text-xl font-black text-slate-900">{getModalContent(selectedTemplateIndicator).title}</h3>
                                 <p className="text-xs text-slate-400 font-medium mt-1">
-                                    Indicateur 1 : Téléchargez le modèle type adapté à vos besoins pour le remplir, puis déposez-le comme preuve documentaire.
+                                    {getModalContent(selectedTemplateIndicator).desc}
                                 </p>
                             </div>
 
                             {/* Scrollable File List */}
                             <div className="overflow-y-auto space-y-3 my-2 pr-1 flex-1">
-                                {[
-                                    { name: "Contrat de Formation Professionnelle FOAD (Partie Pédagogique)", file: "Modele_Contrat_Formation_Pro_FOAD__Pedagogique.docx" },
-                                    { name: "Contrat de Formation Professionnelle FOAD (Partie Signature)", file: "Modele_Contrat_Formation_Pro_FOAD__Signature.docx" },
-                                    { name: "Contrat de Formation Professionnelle Classique (Partie Pédagogique)", file: "Modele_Contrat_Formation_Pro__Pedagogique.docx" },
-                                    { name: "Contrat de Formation Professionnelle Classique (Partie Signature)", file: "Modele_Contrat_Formation_Pro__Signature.docx" },
-                                    { name: "Convention de Formation Professionnelle (Partie Pédagogique)", file: "Modele_Convention_Formation__Pedagogique.docx" },
-                                    { name: "Convention de Formation Professionnelle (Partie Signature)", file: "Modele_Convention_Formation__Signature.docx" },
-                                    { name: "Convention Tripartite CFA (Partie Pédagogique)", file: "Modele_Convention_Tripartite_CFA__Pedagogique.docx" },
-                                    { name: "Convention Tripartite CFA (Partie Signature)", file: "Modele_Convention_Tripartite_CFA__Signature.docx" }
-                                ].map((item, idx) => (
-                                    <div key={idx} className="flex items-center gap-4 p-4 bg-slate-50/50 hover:bg-[#ede5ff]/30 border border-slate-100/50 hover:border-[#7c3aed]/20 rounded-2xl transition-all group">
-                                        <div className="h-10 w-10 bg-indigo-50 text-[#7c3aed] rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                                {getModalContent(selectedTemplateIndicator).files.map((item, idx) => (
+                                    <div key={idx} className="flex items-center gap-4 p-4 bg-slate-50/50 hover:bg-slate-50 border border-slate-100/50 rounded-2xl transition-all group">
+                                        <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform"
+                                             style={{ backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary }}>
                                             <FileText className="h-5 w-5" />
                                         </div>
                                         <div className="flex-1 min-w-0">
@@ -1726,9 +2140,10 @@ export default function ClientDashboard() {
                                             <p className="text-[10px] text-slate-400 font-medium mt-0.5 truncate">{item.file}</p>
                                         </div>
                                         <a 
-                                            href={`/ressources/Indicateur 1 Contrat et convention de formation/${item.file}`} 
+                                            href={`${getModalContent(selectedTemplateIndicator).pathPrefix}${item.file}`} 
                                             download 
-                                            className="flex items-center gap-2 px-4 py-2 bg-[#7c3aed] text-white hover:bg-[#6d28d9] rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md shadow-[#7c3aed]/10 hover:shadow-[#7c3aed]/20 active:scale-95 flex-shrink-0"
+                                            className="flex items-center gap-2 px-4 py-2 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md active:scale-95 flex-shrink-0 hover:opacity-90"
+                                            style={{ backgroundColor: getCriterionColor(currentCriterion.id).primary }}
                                         >
                                             <Download className="h-3.5 w-3.5" /> Télécharger
                                         </a>
@@ -1783,9 +2198,9 @@ export default function ClientDashboard() {
                     </div>
                 )}
 
-                <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
+                <main className="flex-1 p-6 lg:p-8 w-full max-w-[1300px] mx-auto">
                     {/* Audit Selection Tabs (Horizontal Badges) */}
-                    <div className="flex flex-wrap gap-3 mb-10">
+                    <div className="flex flex-wrap justify-center gap-3 mb-10">
                         {casesData?.flatMap((c) => {
                             const rawTypes = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
                             const types = sortAuditTypes(rawTypes);
@@ -1793,21 +2208,21 @@ export default function ClientDashboard() {
                                 const getColors = (t) => {
                                     const typeStr = t.toLowerCase();
                                     if (typeStr.includes('initial')) return { 
-                                        active: 'bg-[#cc6d3e] text-white border-[#cc6d3e] shadow-[#cc6d3e]/30', 
-                                        inactive: 'hover:border-[#cc6d3e]/30 hover:bg-[#cc6d3e]/5 text-slate-400',
+                                        active: 'bg-[#fdf6f0] text-[#cc6d3e] border-[#cc6d3e] shadow-[#cc6d3e]/10', 
+                                        inactive: 'hover:border-[#cc6d3e]/30 hover:bg-[#cc6d3e]/5 text-slate-600 border-slate-200/80',
                                         dot: 'bg-[#cc6d3e]' 
                                     };
                                     if (typeStr.includes('surveillance')) return { 
-                                        active: 'bg-blue-600 text-white border-blue-600 shadow-blue-600/30', 
-                                        inactive: 'hover:border-blue-600/30 hover:bg-blue-600/5 text-slate-400',
-                                        dot: 'bg-blue-600' 
+                                        active: 'bg-[#f0f7ff] text-[#2563eb] border-[#2563eb] shadow-blue-600/10', 
+                                        inactive: 'hover:border-blue-600/30 hover:bg-blue-600/5 text-slate-600 border-slate-200/80',
+                                        dot: 'bg-[#2563eb]' 
                                     };
                                     if (typeStr.includes('renouvellement')) return { 
-                                        active: 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-600/30', 
-                                        inactive: 'hover:border-emerald-600/30 hover:bg-emerald-600/5 text-slate-400',
-                                        dot: 'bg-emerald-600' 
+                                        active: 'bg-[#f0fdf4] text-[#16a34a] border-[#16a34a] shadow-emerald-600/10', 
+                                        inactive: 'hover:border-emerald-600/30 hover:bg-emerald-600/5 text-slate-600 border-slate-200/80',
+                                        dot: 'bg-[#16a34a]' 
                                     };
-                                    return { active: 'bg-slate-800 text-white', inactive: 'text-slate-400', dot: 'bg-slate-400' };
+                                    return { active: 'bg-slate-50 text-slate-700 border-slate-300', inactive: 'text-slate-600 border-slate-200/80', dot: 'bg-slate-400' };
                                 };
                                 
                                 const colors = getColors(type);
@@ -1822,13 +2237,13 @@ export default function ClientDashboard() {
                                             setSelectedAudit(type);
                                             localStorage.setItem('clientSelectedAudit', type);
                                         }}
-                                        className={`flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
+                                        className={`font-poppins flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-bold uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
                                             isSelected 
-                                                ? `${colors.active} shadow-[0_10px_30px_-10px_rgba(0,0,0,0.3)] scale-105 z-10` 
-                                                : `bg-white border-slate-50 ${colors.inactive} shadow-sm translate-y-0`
+                                                ? `${colors.active} scale-105 z-10` 
+                                                : `bg-white ${colors.inactive} shadow-sm translate-y-0`
                                         } hover:-translate-y-1 active:scale-95`}
                                     >
-                                        <div className={`h-2.5 w-2.5 rounded-full shadow-inner ${isSelected ? 'bg-white animate-pulse' : colors.dot} transition-colors duration-500`} />
+                                        <div className={`h-2.5 w-2.5 rounded-full shadow-inner ${colors.dot} ${isSelected ? 'animate-pulse scale-110' : ''} transition-colors duration-500`} />
                                         AUDIT {cleanType}
                                     </button>
                                 );
@@ -1837,11 +2252,11 @@ export default function ClientDashboard() {
                     </div>
 
                     {/* Welcome card */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-                        <h2 className="text-base font-black text-gray-900 mb-1">
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-6 text-center">
+                        <h2 className="text-xl font-black text-gray-900 mb-2 justify-center flex items-center gap-2">
                             Bienvenue dans votre espace d'accompagnement Qualiopi 👋
                         </h2>
-                        <p className="text-sm text-gray-500 mb-5">
+                        <p className="text-sm text-gray-500 mb-6 leading-relaxed max-w-3xl mx-auto">
                             Cette plateforme est conçue pour vous guider pas à pas vers votre certification. Pour chaque critère du référentiel,{' '}
                             <span className="text-[#cc6d3e] font-semibold">vous retrouverez des ressources pédagogiques</span>{' '}
                             et un espace pour déposer vos éléments. Voici le déroulé de votre préparation :
@@ -1853,15 +2268,39 @@ export default function ClientDashboard() {
                                 { n: 3, title: 'Soumettez le dossier', desc: "Une fois les indicateurs 'Faits', envoyez le dossier complet au consultant." },
                                 { n: 4, title: 'Audit blanc', desc: 'Le consultant révise vos preuves et vous prépare à l\'audit final.' },
                             ].map(step => (
-                                <div key={step.n} className="flex flex-col gap-2 p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                                    <div className="h-7 w-7 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs font-black text-gray-400 shadow-sm">
+                                <div key={step.n} className="flex flex-col items-center text-center gap-3 p-4 bg-gray-50/80 rounded-2xl border border-gray-100 hover:bg-white hover:shadow-md hover:border-[#cc6d3e]/20 transition-all duration-300">
+                                    <div className="h-8 w-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs font-black text-gray-400 shadow-sm">
                                         {step.n}
                                     </div>
                                     <p className="text-xs font-black text-gray-800">{step.title}</p>
-                                    <p className="text-[11px] text-gray-400 leading-relaxed">{step.desc}</p>
+                                    <p className="text-[11px] text-gray-400 leading-relaxed max-w-[160px]">{step.desc}</p>
                                 </div>
                             ))}
                         </div>
+                    </div>
+
+                    {/* Guide Base Documentaire Banner */}
+                    <div className="bg-gradient-to-r from-[#faf1ec] to-[#f5e2d6]/30 rounded-2xl border border-[#f5e2d6] shadow-sm p-6 mb-6 flex flex-col sm:flex-row items-center justify-between gap-6 group hover:shadow-md transition-all">
+                        <div className="flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-xl bg-white flex items-center justify-center shadow-sm border border-[#f5e2d6] group-hover:scale-110 transition-transform">
+                                <FileText className="h-6 w-6 text-[#cc6d3e]" />
+                            </div>
+                            <div className="text-left">
+                                <h3 className="text-base font-black text-gray-900 mb-1">Guide de Base Documentaire</h3>
+                                <p className="text-xs text-gray-500 font-medium">
+                                    Consultez et téléchargez le guide complet pour vous aider à structurer vos documents et preuves.
+                                </p>
+                            </div>
+                        </div>
+                        <a 
+                            href="/ressources/Guide_Base_Documentaire_EasyQual.pdf" 
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 flex items-center gap-2 px-6 py-3 bg-[#cc6d3e] text-white text-sm font-bold rounded-xl hover:bg-[#b55d32] shadow-lg shadow-[#cc6d3e]/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                        >
+                            <Download className="h-4 w-4" />
+                            Télécharger le Guide
+                        </a>
                     </div>
 
                     {/* Progress Bar with criteria */}

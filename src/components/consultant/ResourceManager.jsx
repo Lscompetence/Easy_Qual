@@ -3,6 +3,7 @@ import { supabase } from '../../supabaseClient';
 import { Video, Upload, Link as LinkIcon, Save, CheckCircle, Trash2, X, AlertCircle, Loader2, PlayCircle, FileText, ChevronRight, Eye } from 'lucide-react';
 import StatusModal from '../shared/StatusModal';
 import UniversalPlayer from '../shared/UniversalPlayer';
+import { getCriterionColor } from '../../utils/theme';
 
 export default function ResourceManager() {
     const getUrlParam = (key) => new URLSearchParams(window.location.search).get(key);
@@ -226,7 +227,7 @@ export default function ResourceManager() {
 
     if (loading && indicators.length === 0) return (
         <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm p-12 text-center">
-            <Loader2 className="h-8 w-8 text-indigo-500 animate-spin mx-auto mb-4" />
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" style={{ color: getCriterionColor(activeCriterion?.id).primary }} />
             <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Chargement...</p>
         </div>
     );
@@ -247,7 +248,7 @@ export default function ResourceManager() {
         <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 max-w-5xl mx-auto">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-10">
                 <div className="flex items-center gap-5">
-                    <div className="h-14 w-14 bg-indigo-50 text-indigo-600 rounded-[20px] flex items-center justify-center shadow-sm border border-indigo-100/50">
+                    <div className="h-14 w-14 rounded-[20px] flex items-center justify-center shadow-sm border" style={{ backgroundColor: getCriterionColor(activeCriterion?.id).light, color: getCriterionColor(activeCriterion?.id).primary, borderColor: getCriterionColor(activeCriterion?.id).border }}>
                         <Video className="h-7 w-7" />
                     </div>
                     <div>
@@ -274,7 +275,7 @@ export default function ResourceManager() {
                             }}
                             className={`flex-1 sm:flex-none whitespace-nowrap px-4 py-2.5 rounded-[14px] text-[10px] font-black tracking-widest transition-all ${
                                 auditType === type.id 
-                                    ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100' 
+                                    ? 'bg-white shadow-sm border' 
                                     : 'text-gray-400 hover:text-gray-600'
                             }`}
                         >
@@ -285,7 +286,7 @@ export default function ResourceManager() {
             </div>
 
             {activeCriterion && (
-                <div className="mb-10 bg-indigo-50/40 border border-indigo-100/50 rounded-[28px] p-8 relative animate-in slide-in-from-top-4 duration-300">
+                <div className="mb-10 rounded-[28px] p-8 relative animate-in slide-in-from-top-4 duration-300" style={{ backgroundColor: getCriterionColor(activeCriterion?.id).light + "66", borderColor: getCriterionColor(activeCriterion?.id).border + "80", borderWidth: "1px" }}>
                     <button 
                         onClick={() => { 
                             setActiveCriterion(null); 
@@ -298,16 +299,16 @@ export default function ResourceManager() {
                     </button>
                     
                     <div className="flex items-center gap-3 mb-6">
-                        <span className="px-3 py-1 bg-indigo-600 text-white text-[9px] font-black rounded-full uppercase tracking-tighter shadow-sm">
+                        <span className="px-3 py-1 text-white text-[9px] font-black rounded-full uppercase tracking-tighter shadow-sm" style={{ backgroundColor: getCriterionColor(activeCriterion.id).primary }}>
                             {auditType.toUpperCase()}
                         </span>
-                        <h3 className="text-sm font-black text-indigo-400 uppercase tracking-widest flex items-center gap-3">
+                        <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-3" style={{ color: getCriterionColor(activeCriterion.id).primary }}>
                             <PlayCircle className="h-4 w-4" />
-                            Critère {activeCriterion.id} : <span className="text-indigo-900 font-black">{activeCriterion.label}</span>
+                            Critère {activeCriterion.id} : <span className="font-black" style={{ color: getCriterionColor(activeCriterion.id).primary }}>{activeCriterion.label}</span>
                         </h3>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 mb-8 bg-white/40 p-2 rounded-[20px] border border-indigo-100/50">
+                    <div className="flex flex-wrap gap-2 mb-8 bg-white/40 p-2 rounded-[20px] border" style={{ borderColor: getCriterionColor(activeCriterion?.id).border + "80" }}>
                         {activeCriterion.indicators.map(ind => {
                             const res = resources[ind.id];
                             const hasCustom = res && res.source_type !== 'default';
@@ -319,9 +320,10 @@ export default function ResourceManager() {
                                     onClick={() => handleEditIndicator(ind)}
                                     className={`px-4 py-2 rounded-xl text-[11px] font-black transition-all flex items-center gap-2 ${
                                         isCurrent 
-                                            ? 'bg-indigo-600 text-white shadow-lg' 
-                                            : 'bg-transparent text-gray-400 hover:text-indigo-600'
+                                            ? 'text-white shadow-lg' 
+                                            : 'bg-transparent text-gray-400'
                                     }`}
+                                    style={isCurrent ? { backgroundColor: getCriterionColor(activeCriterion.id).primary } : {}}
                                 >
                                     {ind.code}
                                     {hasCustom && <div className={`h-1.5 w-1.5 rounded-full ${isCurrent ? 'bg-white' : 'bg-emerald-500'}`} />}
@@ -337,7 +339,7 @@ export default function ResourceManager() {
                                 {resources[activeIndicator.id] && !showPreview && (
                                     <button 
                                         onClick={() => setShowPreview(true)}
-                                        className="flex items-center gap-2 px-4 py-2 bg-white text-indigo-600 rounded-xl text-[11px] font-black border border-indigo-100 shadow-sm hover:bg-indigo-50 transition-all"
+                                        className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl text-[11px] font-black border shadow-sm transition-all hover:opacity-80" style={{ color: getCriterionColor(activeCriterion?.id).primary, borderColor: getCriterionColor(activeCriterion?.id).border }}
                                     >
                                         <Eye className="h-3.5 w-3.5" /> VOIR LA VIDÉO ACTUELLE
                                     </button>
@@ -369,12 +371,12 @@ export default function ResourceManager() {
                                         { id: 'upload', label: 'Fichier natif (.mp4)', icon: <Upload className="h-4 w-4" /> },
                                         { id: 'default', label: 'Revenir par défaut', icon: <Trash2 className="h-4 w-4" /> }
                                     ].map(type => (
-                                        <label key={type.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all cursor-pointer ${sourceType === type.id ? 'bg-white border-indigo-500 text-indigo-700 shadow-sm' : 'bg-indigo-50/20 border-transparent text-gray-500 hover:bg-white/50'}`}>
+                                        <label key={type.id} className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all cursor-pointer ${sourceType === type.id ? "bg-white shadow-sm" : "border-transparent text-gray-500 hover:bg-white/50"}`} style={sourceType === type.id ? { borderColor: getCriterionColor(activeCriterion?.id).primary, color: getCriterionColor(activeCriterion?.id).primary } : { backgroundColor: getCriterionColor(activeCriterion?.id).light + "33" }}>
                                             <input type="radio" checked={sourceType === type.id} onChange={() => setSourceType(type.id)} className="hidden" />
-                                            <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${sourceType === type.id ? 'border-indigo-500' : 'border-gray-300'}`}>
-                                                {sourceType === type.id && <div className="h-2.5 w-2.5 bg-indigo-500 rounded-full" />}
+                                            <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${sourceType === type.id ? "" : "border-gray-300"}`} style={sourceType === type.id ? { borderColor: getCriterionColor(activeCriterion?.id).primary } : {}}>
+                                                {sourceType === type.id && <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: getCriterionColor(activeCriterion?.id).primary }} />}
                                             </div>
-                                            <span className={`text-[13px] font-bold ${sourceType === type.id ? 'text-indigo-900' : 'text-gray-500'}`}>{type.label}</span>
+                                            <span className={`text-[13px] font-bold ${sourceType === type.id ? "" : "text-gray-500"}`} style={sourceType === type.id ? { color: getCriterionColor(activeCriterion?.id).primary } : {}}>{type.label}</span>
                                         </label>
                                     ))}
                                 </div>
@@ -382,21 +384,21 @@ export default function ResourceManager() {
 
                             {!showPreview && (sourceType === 'youtube' || sourceType === 'vimeo') && (
                                 <div className="mb-8 group">
-                                    <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 block ml-1">Lien {sourceType === 'youtube' ? 'Youtube' : 'Vimeo'}</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest mb-2 block ml-1" style={{ color: getCriterionColor(activeCriterion?.id).primary, opacity: 0.7 }}>Lien {sourceType === "youtube" ? "Youtube" : "Vimeo"}</label>
                                     <div className="relative">
-                                        <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
-                                        <input type="url" placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-white border border-indigo-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none transition-all font-medium text-gray-900" />
+                                        <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 transition-colors" />
+                                        <input type="url" placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-white border rounded-2xl focus:ring-4 outline-none transition-all font-medium text-gray-900" style={{ borderColor: getCriterionColor(activeCriterion?.id).border }} />
                                     </div>
                                 </div>
                             )}
 
                             {!showPreview && sourceType === 'upload' && (
                                 <div className="mb-8">
-                                    <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 block ml-1">Fichier .mp4</label>
+                                    <label className="text-[10px] font-black uppercase tracking-widest mb-2 block ml-1" style={{ color: getCriterionColor(activeCriterion?.id).primary, opacity: 0.7 }}>Fichier .mp4</label>
                                     <input type="file" accept='video/mp4' ref={fileInputRef} onChange={e => setFile(e.target.files[0])} className="hidden" />
-                                    <div onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-between px-6 py-5 bg-white border border-indigo-100 text-indigo-700 font-bold rounded-2xl hover:shadow-md transition-all cursor-pointer group">
+                                    <div onClick={() => fileInputRef.current?.click()} className="w-full flex items-center justify-between px-6 py-5 bg-white border font-bold rounded-2xl hover:shadow-md transition-all cursor-pointer group" style={{ borderColor: getCriterionColor(activeCriterion?.id).border, color: getCriterionColor(activeCriterion?.id).primary }}>
                                         <div className="flex items-center gap-4">
-                                            <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600 group-hover:scale-110 transition-transform">
+                                            <div className="p-3 rounded-xl group-hover:scale-110 transition-transform" style={{ backgroundColor: getCriterionColor(activeCriterion?.id).light, color: getCriterionColor(activeCriterion?.id).primary }}>
                                                 <Upload className="h-5 w-5" />
                                             </div>
                                             <div className="flex flex-col">
@@ -406,11 +408,11 @@ export default function ResourceManager() {
                                                 <span className="text-[9px] text-gray-400 font-bold">Limite : 200 Mo</span>
                                             </div>
                                         </div>
-                                        <span className="text-[10px] font-black text-indigo-400 uppercase">Parcourir</span>
+                                        <span className="text-[10px] font-black uppercase" style={{ color: getCriterionColor(activeCriterion?.id).primary, opacity: 0.7 }}>Parcourir</span>
                                     </div>
                                     {uploadProgress > 0 && uploadProgress < 100 && (
-                                        <div className="mt-4 bg-white/50 rounded-full h-3 p-0.5 border border-indigo-100 overflow-hidden">
-                                          <div className="bg-indigo-600 h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                                        <div className="mt-4 bg-white/50 rounded-full h-3 p-0.5 border overflow-hidden" style={{ borderColor: getCriterionColor(activeCriterion?.id).border }}>
+                                          <div className="h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%`, backgroundColor: getCriterionColor(activeCriterion?.id).primary }}></div>
                                         </div>
                                     )}
                                 </div>
@@ -418,7 +420,7 @@ export default function ResourceManager() {
 
                             {!showPreview && (
                                 <div className="flex justify-end pt-2">
-                                    <button onClick={handleSave} disabled={isSaving} className={`flex items-center gap-3 px-10 py-4 font-black text-sm rounded-2xl transition-all shadow-xl disabled:opacity-50 ${isSaving ? 'bg-gray-100 text-gray-400' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'}`}>
+                                    <button onClick={handleSave} disabled={isSaving} className={`flex items-center gap-3 px-10 py-4 font-black text-sm rounded-2xl transition-all shadow-xl disabled:opacity-50 ${isSaving ? "bg-gray-100 text-gray-400" : "text-white hover:opacity-90"}`} style={!isSaving ? { backgroundColor: getCriterionColor(activeCriterion?.id).primary } : {}}>
                                         {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-4" />}
                                         Sauvegarder pour {activeIndicator.code}
                                     </button>
@@ -435,9 +437,9 @@ export default function ResourceManager() {
                     const isActive = activeIndicator?.criterion_id === crit.id;
                     
                     return (
-                        <div key={crit.id} className={`flex justify-between items-center p-6 rounded-[28px] border transition-all duration-300 ${isActive ? 'bg-indigo-600 border-indigo-600 shadow-xl ring-4 ring-indigo-50' : 'bg-white border-gray-100 hover:border-indigo-100 hover:shadow-lg'}`}>
+                        <div key={crit.id} className={`flex justify-between items-center p-6 rounded-[28px] border transition-all duration-300 ${!isActive ? 'bg-white border-gray-100 hover:shadow-lg' : 'shadow-xl ring-4 ring-opacity-50'}`} style={isActive ? { backgroundColor: getCriterionColor(crit.id).primary, borderColor: getCriterionColor(crit.id).primary, '--tw-ring-color': getCriterionColor(crit.id).light } : {}}>
                             <div className="flex items-center gap-6 overflow-hidden text-left">
-                                <div className={`h-14 w-14 rounded-2xl flex items-center justify-center font-black text-sm flex-shrink-0 ${isActive ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-600'}`}>
+                                <div className={`h-14 w-14 rounded-2xl flex items-center justify-center font-black text-sm flex-shrink-0 ${isActive ? 'bg-white/20 text-white' : ''}`} style={!isActive ? { backgroundColor: getCriterionColor(crit.id).light, color: getCriterionColor(crit.id).primary } : {}}>
                                     C{crit.id}
                                 </div>
                                 <div className="min-w-0">
@@ -448,15 +450,15 @@ export default function ResourceManager() {
                                         )}
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <p className={`text-[12px] font-medium ${isActive ? 'text-indigo-100 opacity-90' : 'text-gray-400'}`}>{crit.indicators.length} indicateurs</p>
+                                        <p className={`text-[12px] font-medium ${isActive ? "opacity-90 text-white" : "text-gray-400"}`}>{crit.indicators.length} indicateurs</p>
                                         <span className={`h-1 w-1 rounded-full ${isActive ? 'bg-white/40' : 'bg-gray-200'}`} />
-                                        <p className={`text-[12px] font-bold ${isActive ? 'text-white/80' : 'text-indigo-500'}`}>{auditType.toUpperCase()}</p>
+                                        <p className={`text-[12px] font-bold ${isActive ? "text-white/80" : ""}`} style={!isActive ? { color: getCriterionColor(crit.id).primary } : {}}>{auditType.toUpperCase()}</p>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="flex items-center gap-4 flex-shrink-0">
-                                <button onClick={() => handleEditCriterion(crit)} className={`px-8 py-3 text-xs font-black rounded-2xl border uppercase tracking-wider ${isActive ? 'bg-white text-indigo-600 border-transparent shadow-md' : 'bg-indigo-50/50 text-indigo-600 border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm'}`}>
+                                <button onClick={() => handleEditCriterion(crit)} className={`px-8 py-3 text-xs font-black rounded-2xl border uppercase tracking-wider transition-all shadow-sm ${isActive ? 'bg-white border-transparent shadow-md' : 'hover:text-white'}`} style={isActive ? { color: getCriterionColor(crit.id).primary } : { backgroundColor: getCriterionColor(crit.id).light, color: getCriterionColor(crit.id).primary, borderColor: getCriterionColor(crit.id).border }}>
                                     {isActive ? 'Configuration' : 'Gérer'}
                                 </button>
                             </div>
@@ -465,7 +467,7 @@ export default function ResourceManager() {
                 })}
             </div>
 
-            <StatusModal {...statusModal} onClose={() => setStatusModal(prev => ({ ...prev, isOpen: false }))} />
+            <StatusModal {...statusModal} criterionId={activeCriterion?.id} onClose={() => setStatusModal(prev => ({ ...prev, isOpen: false }))} />
         </div>
     );
 }

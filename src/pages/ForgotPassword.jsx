@@ -54,11 +54,11 @@ export default function ForgotPassword() {
                     title: 'Espace Client',
                     welcome: 'Réinitialisation Mot de Passe',
                     color: 'client',
-                    buttonClass: 'bg-[#cc6d3e] hover:bg-[#b35d32] focus:ring-purple-500 shadow-purple-600/20',
-                    inputClass: 'focus:border-purple-500 focus:ring-purple-500/20',
+                    buttonClass: 'bg-[#cc6d3e] hover:bg-[#b35d32] focus:ring-[#cc6d3e] shadow-[#cc6d3e]/20',
+                    inputClass: 'focus:border-[#cc6d3e] focus:ring-[#cc6d3e]/20',
                     iconClass: 'text-[#cc6d3e]',
                     iconBgClass: 'bg-[#f5e2d6]',
-                    linkClass: 'text-[#cc6d3e] hover:text-[#cc6d3e]',
+                    linkClass: 'text-[#cc6d3e] hover:text-[#e08c50]',
                     badgeClass: 'bg-[#faf1ec] text-[#cc6d3e] border-[#f5e2d6]'
                 }
             default:
@@ -86,7 +86,20 @@ export default function ForgotPassword() {
             setSuccess(true)
         } catch (err) {
             console.error(err)
-            setError(err.message || 'Impossible d\'envoyer l\'email. Vérifiez que l\'adresse est correcte.')
+            
+            // Traduction des erreurs techniques complexes en messages simples
+            let errorMessage = err.message || 'Impossible d\'envoyer l\'email.'
+            const errStr = errorMessage.toLowerCase()
+            
+            if (errStr.includes('rate limit')) {
+                errorMessage = "Un email vient déjà d'être envoyé. Veuillez patienter 1 minute avant de recommencer."
+            } else if (errStr.includes('not found')) {
+                errorMessage = "Aucun compte n'est associé à cette adresse email."
+            } else if (errStr.includes('error sending recovery email')) {
+                errorMessage = "Le serveur d'envoi d'email (SMTP) a refusé l'envoi. Veuillez vérifier les paramètres SMTP dans Supabase."
+            }
+
+            setError(errorMessage)
         } finally {
             setLoading(false)
         }

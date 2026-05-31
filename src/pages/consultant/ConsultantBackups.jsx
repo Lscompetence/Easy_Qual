@@ -29,7 +29,7 @@ export default function ConsultantBackups() {
                     showSearch={false}
                 />
 
-                <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
+                <main className="flex-1 p-6 lg:p-8 w-full max-w-[1300px] mx-auto">
                     {/* Header */}
                     <div className="mb-10">
                         <div className="flex items-center gap-4 mb-4">

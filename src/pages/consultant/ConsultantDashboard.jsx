@@ -672,10 +672,12 @@ export default function ConsultantDashboard() {
                 onClose={() => setShowCreateModal(false)}
                 user={user}
                 walletBalance={wallet.balance}
-                onSuccess={() => {
+                onSuccess={(msg) => {
                     fetchConsultantData()
                     setRefreshKey(k => k + 1)
                     setHasNotifications(true)
+                    setSuccessMsg(msg || "Nouveau dossier client créé avec succès !")
+                    setTimeout(() => setSuccessMsg(null), 6000)
                 }}
             />
 

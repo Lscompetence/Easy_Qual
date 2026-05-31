@@ -29,33 +29,13 @@ export default function AgendaVisios() {
 
             if (casesError) throw casesError
 
-            const caseIds = casesData.map(c => c.id)
-
-            // 2. Fetch ALL Audit Blanc events across cases
-            let auditBlancEvents = []
-            if (caseIds.length > 0) {
-                const { data: eventsData, error: eventsError } = await supabase
-                    .from('case_events')
-                    .select('id, case_id, event_date, title, visio_link, event_type, status')
-                    .in('case_id', caseIds)
-                    .or('event_type.eq.audit,title.ilike.%audit blanc%')
-                    .order('event_date', { ascending: true })
-
-                if (eventsError) throw eventsError
-                auditBlancEvents = eventsData || []
-            }
-
-            // 3. Merge: for each case, attach its Audit Blanc event (if any)
-            const rows = casesData.map(c => {
-                const auditEvent = auditBlancEvents.find(e => e.case_id === c.id)
-                return {
-                    caseId: c.id,
-                    clientName: c.tenants?.name || 'Client Inconnu',
-                    category: c.category,
-                    status: c.status,
-                    auditEvent: auditEvent || null
-                }
-            })
+            // Merely map the cases, no event fetching needed anymore
+            const rows = casesData.map(c => ({
+                caseId: c.id,
+                clientName: c.tenants?.name || 'Client Inconnu',
+                category: c.category,
+                status: c.status
+            }))
 
             setClientRows(rows)
         } catch (error) {
@@ -68,9 +48,9 @@ export default function AgendaVisios() {
     // Stats
     const stats = {
         total: clientRows.length,
-        scheduled: clientRows.filter(r => r.auditEvent).length,
-        missingLink: clientRows.filter(r => r.auditEvent && !r.auditEvent.visio_link).length,
-        notScheduled: clientRows.filter(r => !r.auditEvent).length
+        scheduled: clientRows.length, // All clients have a room now
+        missingLink: 0,
+        notScheduled: 0
     }
 
     return (
@@ -87,7 +67,7 @@ export default function AgendaVisios() {
                     {/* Header */}
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Agenda Visios</h1>
-                        <p className="mt-1 text-sm text-gray-500">Gérez vos sessions d'Audit Blanc et liens visio.</p>
+                        <p className="mt-1 text-sm text-gray-500">Gérez vos salles de réunion visio pour chaque client.</p>
                     </div>
 
                     {/* KPI Cards */}
@@ -114,7 +94,7 @@ export default function AgendaVisios() {
                             </div>
                             <div>
                                 <h3 className="text-3xl font-bold text-gray-900">{stats.scheduled}</h3>
-                                <p className="text-xs font-medium text-gray-500 mt-1">Audits Blancs planifiés</p>
+                                <p className="text-xs font-medium text-gray-500 mt-1">Salles de réunion créées</p>
                             </div>
                         </div>
 
@@ -154,7 +134,7 @@ export default function AgendaVisios() {
                     {/* Table */}
                     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
                         <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-base font-bold text-gray-900">Audits Blancs — Tous les clients</h3>
+                            <h3 className="text-base font-bold text-gray-900">Réunions & Visios — Tous les clients</h3>
                         </div>
 
                         <div className="overflow-x-auto">
@@ -173,11 +153,7 @@ export default function AgendaVisios() {
                                     ) : clientRows.length === 0 ? (
                                         <tr><td colSpan="4" className="text-center py-10 text-sm text-gray-400">Aucun dossier client.</td></tr>
                                     ) : (
-                                        clientRows.map((row) => {
-                                            const hasEvent = !!row.auditEvent
-                                            const hasLink = hasEvent && !!row.auditEvent.visio_link
-
-                                            return (
+                                        clientRows.map((row) => (
                                                 <tr
                                                     key={row.caseId}
                                                     onClick={() => navigate(`/consultant/case/${row.caseId}`)}
@@ -204,72 +180,32 @@ export default function AgendaVisios() {
 
                                                     {/* Date */}
                                                     <td className="py-5">
-                                                        {hasEvent ? (
-                                                            <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
-                                                                <CalendarIcon className="h-4 w-4 text-gray-400" />
-                                                                {new Date(row.auditEvent.event_date).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-sm text-gray-300 italic">Non planifié</span>
-                                                        )}
+                                                        <span className="text-sm text-gray-500 font-medium italic">
+                                                            Salle permanente
+                                                        </span>
                                                     </td>
 
                                                     {/* Statut Lien */}
                                                     <td className="py-5">
-                                                        {hasEvent ? (
-                                                            hasLink ? (
-                                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
-                                                                    ● Lien Ajouté
-                                                                </span>
-                                                            ) : (
-                                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700">
-                                                                    ● Lien Manquant
-                                                                </span>
-                                                            )
-                                                        ) : (
-                                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-400">
-                                                                — Pas d'audit
-                                                            </span>
-                                                        )}
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                                                            ● Prêt à l'emploi
+                                                        </span>
                                                     </td>
 
                                                     {/* Action */}
                                                     <td className="py-5 text-right pr-2">
-                                                        {hasLink ? (
-                                                            <a
-                                                                href={row.auditEvent.visio_link}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                                                            >
-                                                                <Video className="h-3 w-3" /> Lancer Visio
-                                                            </a>
-                                                        ) : hasEvent ? (
-                                                            <div 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    navigate(`/consultant/case/${row.caseId}?tab=planification`)
-                                                                }}
-                                                                className="text-xs font-bold text-blue-600 flex items-center justify-end gap-1 hover:underline underline-offset-4"
-                                                            >
-                                                                Modifier planification <ArrowRight className="h-3 w-3" />
-                                                            </div>
-                                                        ) : (
-                                                            <div 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    navigate(`/consultant/case/${row.caseId}?tab=planification`)
-                                                                }}
-                                                                className="text-xs font-bold text-amber-600 flex items-center justify-end gap-1 hover:underline underline-offset-4"
-                                                            >
-                                                                <Plus className="h-3 w-3" /> Planifier
-                                                            </div>
-                                                        )}
+                                                        <a
+                                                            href={`https://meet.jit.si/EasyQual-Visio-${row.caseId}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                                                        >
+                                                            <Video className="h-3 w-3" /> Lancer Visio
+                                                        </a>
                                                     </td>
                                                 </tr>
-                                            )
-                                        })
+                                            ))
                                     )}
                                 </tbody>
                             </table>

@@ -2,13 +2,16 @@ import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../supabaseClient'
-import { LogOut, ChevronDown, ChevronRight, CheckCircle, Circle, Video, MessageSquare, LayoutDashboard, GraduationCap, X } from 'lucide-react'
+import { LogOut, ChevronDown, ChevronRight, CheckCircle, Circle, Video, MessageSquare, LayoutDashboard, GraduationCap, X, LifeBuoy, Archive } from 'lucide-react'
+import FeedbackModal from '../shared/FeedbackModal'
+import { getCriterionColor } from '../../utils/theme'
 
 export default function ClientSidebar({ caseData, indicators, indicatorStates, consultantName = '', unreadCount = 0, upcomingCount = 0, isOpen, onClose }) {
     const { user, profile, logout } = useAuth()
     const location = useLocation()
     const navigate = useNavigate()
     const [formationOpen, setFormationOpen] = useState(true)
+    const [feedbackOpen, setFeedbackOpen] = useState(false)
 
     // Group indicators by criterion
     const criteriaMap = {}
@@ -136,22 +139,20 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
                                         <Link
                                             key={criterion.id}
                                             to={`/client/criterion/${criterion.id}`}
-                                            className={`group flex items-center gap-3 px-3 py-2 rounded-xl transition-all relative ${isActive ? 'bg-[#faf1ec]/60 text-[#cc6d3e] border border-[#f5e2d6]/40' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                                                }`}
+                                            className={`group flex items-center gap-3 px-3 py-2 rounded-xl transition-all relative ${!isActive ? 'text-gray-500 hover:text-gray-900 hover:bg-gray-50' : ''}`}
+                                            style={isActive ? { backgroundColor: getCriterionColor(criterion.id).light, color: getCriterionColor(criterion.id).primary, borderColor: getCriterionColor(criterion.id).border, borderWidth: '1px' } : {}}
                                         >
                                             {/* Dot on line */}
                                             <div className={`absolute -left-[17.5px] h-2.5 w-2.5 rounded-full border-2 bg-white z-10 transition-colors ${allDone ? 'border-emerald-500' :
-                                                isActive ? 'border-[#cc6d3e]' : 'border-gray-200 group-hover:border-gray-300'
-                                                }`} />
+                                                (!isActive ? 'border-gray-200 group-hover:border-gray-300' : '')
+                                                }`} style={isActive && !allDone ? { borderColor: getCriterionColor(criterion.id).primary } : {}} />
 
                                             {allDone ? (
                                                 <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
                                             ) : (
-                                                <Circle className={`h-4 w-4 flex-shrink-0 ${isActive ? 'text-[#cc6d3e]' : 'text-gray-300 group-hover:text-gray-400'}`} />
+                                                <Circle className={`h-4 w-4 flex-shrink-0 ${!isActive ? 'text-gray-300 group-hover:text-gray-400' : ''}`} style={isActive ? { color: getCriterionColor(criterion.id).primary } : {}} />
                                             )}
-                                            <span className={`truncate text-xs font-bold ${allDone ? 'text-emerald-600' :
-                                                isActive ? 'text-[#cc6d3e]' : 'text-gray-500'
-                                                }`}>
+                                            <span className={`truncate text-xs font-bold ${allDone ? 'text-emerald-600' : (!isActive ? 'text-gray-500' : '')}`} style={isActive && !allDone ? { color: getCriterionColor(criterion.id).primary } : {}}>
                                                 C{criterion.id} : {criterion.label}
                                             </span>
                                         </Link>
@@ -193,6 +194,17 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
                                     </span>
                                 )}
                             </Link>
+
+                            <Link
+                                to="/client/reclamations"
+                                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-bold transition-all relative ${location.pathname === '/client/reclamations'
+                                    ? 'bg-[#faf1ec] text-[#cc6d3e] border border-[#f5e2d6]'
+                                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                                    }`}
+                            >
+                                <Archive className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/reclamations' ? 'text-[#cc6d3e]' : 'text-gray-400'}`} />
+                                <span className="flex-1">Mes Réclamations</span>
+                            </Link>
                         </div>
                     </div>
                 </div>
@@ -230,6 +242,7 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
                     </div>
                 </div>
             </aside>
+            <FeedbackModal isOpen={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
         </>
     )
 }
