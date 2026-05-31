@@ -37,7 +37,8 @@ export default function SignatureModal({ isOpen, onClose, onConfirm, eventDetail
                 return;
             }
 
-            const dataURL = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+            // Use getCanvas() instead of getTrimmedCanvas() because getTrimmedCanvas() causes 'import_trim_canvas.default is not a function' in Vite
+            const dataURL = sigCanvas.current.getCanvas().toDataURL('image/png');
             
             onConfirm({
                 name,
