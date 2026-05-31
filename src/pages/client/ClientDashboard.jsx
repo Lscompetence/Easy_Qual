@@ -3,13 +3,10 @@ import { getCriterionColor } from '../../utils/theme'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import {
-    CheckCircle, Clock, XCircle, CircleOff, AlertTriangle,
-    Upload, Download, FileText, ChevronDown, ChevronUp, Send, MessageSquare,
-    ArrowRight, CheckSquare, Check, Trash2, Video, Sun, Flag, Ban, PlayCircle, GraduationCap
-} from 'lucide-react'
+import { Info, PlayCircle, FileText, CheckCircle, XCircle, ArrowRight, BookOpen, Clock, Play, Download, Search, AlertCircle, RefreshCw, Send, Image as ImageIcon, Link as LinkIcon, Paperclip, MoreVertical, ThumbsUp, MapPin, Building, Phone, Mail, Award, Users, Plus, Target, CheckSquare, Smile, MessageSquare, Menu, FileImage, Video, HelpCircle, FileCheck, CircleOff, Eye } from 'lucide-react'
 import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
+import SignatureModal from '../../components/shared/SignatureModal'
 import UniversalPlayer from '../../components/shared/UniversalPlayer'
 import StatusModal from '../../components/shared/StatusModal'
 import QuizModal from '../../components/shared/QuizModal'
@@ -479,6 +476,10 @@ export default function ClientDashboard() {
     const fileInputRef = useRef(null)
     const [pendingCriterionId, setPendingCriterionId] = useState(null)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
+
+    // Signature State
+    const [showSignatureModal, setShowSignatureModal] = useState(false)
+    const [signatureEventId, setSignatureEventId] = useState(null)
     const [selectedVideoIndicator, setSelectedVideoIndicator] = useState(() => {
         const saved = localStorage.getItem('clientSelectedVideo')
         return saved ? JSON.parse(saved) : null
@@ -1161,6 +1162,35 @@ export default function ClientDashboard() {
         }
     }
 
+    const handleConfirmSignature = async (sigData) => {
+        try {
+            const updateData = {
+                client_signature: sigData.signatureData,
+                client_signature_date: new Date().toISOString(),
+                client_signature_name: sigData.name,
+                actual_start_time: sigData.startTime,
+                actual_end_time: sigData.endTime
+            };
+
+            const { error } = await supabase
+                .from('case_events')
+                .update(updateData)
+                .eq('id', signatureEventId);
+
+            if (error) throw error;
+
+            // Update local state
+            setCaseEvents(prev => prev.map(e => e.id === signatureEventId ? { ...e, ...updateData } : e));
+
+            setShowSignatureModal(false);
+            setSignatureEventId(null);
+            showStatus('success', 'Succès', 'Votre émargement a été enregistré avec succès.');
+        } catch (err) {
+            console.error(err);
+            showStatus('error', 'Erreur', err.message || "Erreur lors de l'enregistrement.");
+        }
+    };
+
     // Stats
     const totalIndicators = indicators.length
     const validatedCount = Object.values(indicatorStates).filter(s => s?.status === 'done' || s?.status === 'not_applicable' || s?.status === 'non_applicable').length
@@ -1381,43 +1411,99 @@ export default function ClientDashboard() {
                         </div>
                     )}
                     <main className="flex-1 flex items-center justify-center p-8">
-                        <div className="w-full max-w-xl bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all">
-                            <div className="p-10 text-center">
+                        <div className="w-full max-w-4xl bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all">
+                            <div className="p-10 text-center border-b border-gray-50">
                                 <div className="h-20 w-20 rounded-3xl bg-[#faf1ec] flex items-center justify-center mx-auto mb-6 transform -rotate-3 hover:rotate-0 transition-transform duration-300 shadow-md">
                                     <Video className="h-10 w-10 text-[#cc6d3e]" />
                                 </div>
-                                <h2 className="text-3xl font-black text-gray-900 mb-3">Vos Rendez-vous</h2>
+                                <h2 className="text-3xl font-black text-gray-900 mb-3">Vos Séances Programmées</h2>
                                 <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
-                                    Votre salle de réunion permanente avec <span className="text-[#cc6d3e] font-bold">{consultantName || 'votre consultant'}</span> est toujours prête.
+                                    Retrouvez ici toutes vos visios prévues avec <span className="text-[#cc6d3e] font-bold">{consultantName || 'votre consultant'}</span> et confirmez votre présence.
                                 </p>
                             </div>
 
-                            <div className="px-10 pb-10 space-y-4">
-                                <div className="bg-[#faf1ec]/30 rounded-2xl p-6 border border-[#f5e2d6] flex flex-col sm:flex-row items-center justify-between group hover:bg-white hover:shadow-lg transition-all duration-300 gap-4">
-                                    <div className="space-y-1 text-center sm:text-left">
-                                        <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
-                                            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 flex items-center gap-1.5">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                                En ligne
-                                            </span>
-                                        </div>
-                                        <h3 className="text-lg font-black text-gray-900">Salle de Réunion Privée</h3>
-                                        <p className="text-sm text-gray-500 font-medium">
-                                            Rejoignez l'appel instantanément en un clic.
-                                        </p>
+                            <div className="p-10 bg-gray-50 min-h-[300px]">
+                                {caseEvents && caseEvents.filter(e => e.event_type === 'meeting' || e.visio_link).length > 0 ? (
+                                    <div className="space-y-6">
+                                        {caseEvents.filter(e => e.event_type === 'meeting' || e.visio_link).map(event => (
+                                            <div key={event.id} className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm flex flex-col xl:flex-row gap-6">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 flex items-center gap-1.5">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                            Planifié
+                                                        </span>
+                                                        <span className="text-xs text-gray-500 font-bold">
+                                                            {new Date(event.event_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                                        </span>
+                                                    </div>
+                                                    <h3 className="text-lg font-black text-gray-900 mb-2">{event.title}</h3>
+                                                    {event.visio_link && (
+                                                        <button
+                                                            onClick={() => window.open(event.visio_link, '_blank')}
+                                                            className="inline-flex items-center gap-2 px-4 py-2 mt-2 bg-indigo-50 text-indigo-700 text-sm font-bold border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-colors"
+                                                        >
+                                                            <Video className="h-4 w-4" /> Rejoindre la visio
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {/* Emargement Block */}
+                                                <div className="flex-1 flex flex-col md:flex-row gap-4 border-t xl:border-t-0 xl:border-l border-gray-100 pt-4 xl:pt-0 xl:pl-6">
+                                                    {/* Consultant Signature (Read-only for Client) */}
+                                                    <div className="flex-1">
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Émargement Consultant</p>
+                                                        {event.consultant_signature ? (
+                                                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                                                                <div className="flex items-center gap-2 text-gray-600 font-bold mb-2 text-xs">
+                                                                    <CheckCircle className="h-3 w-3" /> Émargé
+                                                                </div>
+                                                                <div className="bg-white rounded-lg p-2 border border-gray-100 inline-block">
+                                                                    <img src={event.consultant_signature} alt="Signature" className="h-8 object-contain" />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-center text-center h-full min-h-[80px] border-dashed">
+                                                                <p className="text-[10px] text-gray-400 font-medium">En attente du consultant</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Client Signature (Actionable) */}
+                                                    <div className="flex-1">
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Émargement Bénéficiaire</p>
+                                                        {event.client_signature ? (
+                                                            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                                                                <div className="flex items-center gap-2 text-emerald-700 font-bold mb-2 text-xs">
+                                                                    <CheckCircle className="h-3 w-3" /> Émargé
+                                                                </div>
+                                                                <div className="bg-white rounded-lg p-2 border border-emerald-100 inline-block">
+                                                                    <img src={event.client_signature} alt="Signature" className="h-8 object-contain" />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col items-center justify-center text-center h-full min-h-[80px]">
+                                                                <button 
+                                                                    onClick={() => { setSignatureEventId(event.id); setShowSignatureModal(true); }}
+                                                                    className="px-3 py-1.5 bg-slate-900 text-white text-[10px] uppercase font-bold rounded-lg shadow-sm hover:bg-slate-800 transition-colors w-full"
+                                                                >
+                                                                    Émarger ma présence
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                    
-                                    <button
-                                        onClick={() => window.open(`https://meet.jit.si/EasyQual-Visio-${myCase.id}`, '_blank')}
-                                        className="h-14 px-8 bg-[#cc6d3e] text-white rounded-xl text-base font-bold shadow-lg shadow-[#cc6d3e]/20 hover:bg-[#b55d32] hover:scale-105 active:scale-95 transition-all w-full sm:w-auto flex items-center justify-center gap-3"
-                                    >
-                                        <Video className="h-5 w-5" />
-                                        Rejoindre l'appel
-                                    </button>
-                                </div>
+                                ) : (
+                                    <div className="text-center py-10">
+                                        <p className="text-gray-400 font-medium text-sm">Aucune séance ou visio planifiée pour le moment.</p>
+                                    </div>
+                                )}
                             </div>
 
-                            <div className="p-6 text-center border-t border-gray-50">
+                            <div className="p-6 text-center border-t border-gray-50 bg-white">
                                 <button
                                     onClick={() => navigate('/client/dashboard')}
                                     className="text-sm text-gray-400 hover:text-gray-900 font-bold transition-colors py-2 px-4"
@@ -1427,6 +1513,30 @@ export default function ClientDashboard() {
                             </div>
                         </div>
                     </main>
+
+                    <SignatureModal 
+                        isOpen={showSignatureModal}
+                        onClose={() => {
+                            setShowSignatureModal(false);
+                            setSignatureEventId(null);
+                        }}
+                        onConfirm={handleConfirmSignature}
+                        eventDetails={caseEvents?.find(e => e.id === signatureEventId)}
+                        role="client"
+                    />
+
+                    {/* MODALS */}
+                    <StatusModal
+                        isOpen={statusModal.isOpen}
+                        type={statusModal.type}
+                        title={statusModal.title}
+                        message={statusModal.message}
+                        onClose={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
+                        onConfirm={statusModal.onConfirm}
+                        confirmText={statusModal.confirmText}
+                        cancelText={statusModal.cancelText}
+                        isLoading={statusModal.isLoading}
+                    />
                 </div>
             </div>
         )

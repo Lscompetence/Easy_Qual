@@ -5,6 +5,7 @@ import autoTable from 'jspdf-autotable'
 
 import NewCaseModal from '../../components/consultant/NewCaseModal'
 import EventModal from '../../components/consultant/EventModal'
+import SignatureModal from '../../components/shared/SignatureModal'
 import { supabase } from '../../supabaseClient'
 import { getCriterionColor } from '../../utils/theme'
 import { useAuth } from '../../contexts/AuthContext'
@@ -128,6 +129,8 @@ export default function CaseDetails() {
     // Planning State
     const [events, setEvents] = useState([])
     const [showEventModal, setShowEventModal] = useState(false)
+    const [showSignatureModal, setShowSignatureModal] = useState(false)
+    const [signatureEventId, setSignatureEventId] = useState(null)
     const [editingEvent, setEditingEvent] = useState(null)
     const [savingEvent, setSavingEvent] = useState(false)
 
@@ -1255,6 +1258,39 @@ export default function CaseDetails() {
         }
     }
 
+    const handleConfirmSignature = async (sigData) => {
+        try {
+            const updateData = {
+                actual_start_time: sigData.startTime,
+                actual_end_time: sigData.endTime
+            };
+            if (sigData.role === 'consultant') {
+                updateData.consultant_signature = sigData.signatureData;
+                updateData.consultant_signature_date = new Date().toISOString();
+                updateData.consultant_signature_name = sigData.name;
+            } else {
+                updateData.client_signature = sigData.signatureData;
+                updateData.client_signature_date = new Date().toISOString();
+                updateData.client_signature_name = sigData.name;
+            }
+
+            const { error } = await supabase
+                .from('case_events')
+                .update(updateData)
+                .eq('id', signatureEventId);
+
+            if (error) throw error;
+
+            fetchCaseDetails();
+            setShowSignatureModal(false);
+            setSignatureEventId(null);
+            showStatus('success', 'Succès', 'Émargement enregistré avec succès.');
+        } catch (err) {
+            console.error(err);
+            showStatus('error', 'Erreur', err.message || "Erreur lors de l'enregistrement.");
+        }
+    };
+
     if (!caseData) return <div className="p-8 text-center text-gray-500">Dossier introuvable (Data is null)</div>
 
     // Global Progress based on dynamic calculation using weighted scores
@@ -1950,10 +1986,67 @@ export default function CaseDetails() {
 
                                                     {event.visio_link && (
                                                         <div className="mt-3">
-                                                            <a href={event.visio_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-blue-600 font-bold hover:text-blue-700 hover:underline">
+                                                            <a href={event.visio_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-white text-sm text-indigo-600 font-bold border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors shadow-sm">
                                                                 <Video className="h-4 w-4" />
-                                                                Rejoindre la visioconférence
+                                                                Rejoindre la visio
                                                             </a>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Emargement Block */}
+                                                    {(event.event_type === 'meeting' || event.visio_link) && (
+                                                        <div className="mt-6 flex flex-col md:flex-row gap-4 border-t border-gray-100 pt-4">
+                                                            {/* Consultant Signature */}
+                                                            <div className="flex-1">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Émargement Consultant</p>
+                                                                {event.consultant_signature ? (
+                                                                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                                                                        <div className="flex items-center gap-2 text-emerald-700 font-bold mb-3">
+                                                                            <CheckCircle className="h-4 w-4" /> Émargé
+                                                                        </div>
+                                                                        <div className="text-xs text-emerald-900 space-y-1 mb-3">
+                                                                            <p><span className="font-semibold">Nom :</span> {event.consultant_signature_name || 'Consultant'}</p>
+                                                                            <p><span className="font-semibold">Date :</span> {new Date(event.consultant_signature_date || event.event_date).toLocaleDateString('fr-FR')}</p>
+                                                                            <p><span className="font-semibold">Horaires :</span> {event.actual_start_time || 'N/A'} - {event.actual_end_time || 'N/A'}</p>
+                                                                        </div>
+                                                                        <div className="bg-white rounded-lg p-2 border border-emerald-100 inline-block">
+                                                                            <img src={event.consultant_signature} alt="Signature" className="h-12 object-contain" />
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center text-center h-full min-h-[140px]">
+                                                                        <button 
+                                                                            onClick={() => { setSignatureEventId(event.id); setShowSignatureModal(true); }}
+                                                                            className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-slate-800 transition-colors"
+                                                                        >
+                                                                            Émarger ma présence
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            {/* Client Signature */}
+                                                            <div className="flex-1">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Émargement Bénéficiaire</p>
+                                                                {event.client_signature ? (
+                                                                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                                                                        <div className="flex items-center gap-2 text-emerald-700 font-bold mb-3">
+                                                                            <CheckCircle className="h-4 w-4" /> Émargé
+                                                                        </div>
+                                                                        <div className="text-xs text-emerald-900 space-y-1 mb-3">
+                                                                            <p><span className="font-semibold">Nom :</span> {event.client_signature_name || 'Bénéficiaire'}</p>
+                                                                            <p><span className="font-semibold">Date :</span> {new Date(event.client_signature_date || event.event_date).toLocaleDateString('fr-FR')}</p>
+                                                                            <p><span className="font-semibold">Horaires :</span> {event.actual_start_time || 'N/A'} - {event.actual_end_time || 'N/A'}</p>
+                                                                        </div>
+                                                                        <div className="bg-white rounded-lg p-2 border border-emerald-100 inline-block">
+                                                                            <img src={event.client_signature} alt="Signature" className="h-12 object-contain" />
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center text-center h-full min-h-[140px] border-dashed">
+                                                                        <p className="text-xs text-slate-500 font-medium">En attente de l'émargement du bénéficiaire</p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
@@ -2059,6 +2152,17 @@ export default function CaseDetails() {
                             eventToEdit={editingEvent}
                         />
                     )}
+
+                    <SignatureModal 
+                        isOpen={showSignatureModal}
+                        onClose={() => {
+                            setShowSignatureModal(false);
+                            setSignatureEventId(null);
+                        }}
+                        onConfirm={handleConfirmSignature}
+                        eventDetails={events?.find(e => e.id === signatureEventId)}
+                        role="consultant"
+                    />
 
                 </div >
             </div >

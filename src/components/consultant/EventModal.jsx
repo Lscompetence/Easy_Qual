@@ -39,7 +39,10 @@ export default function EventModal({ isOpen, onClose, onSave, eventToEdit, isSav
         const fullDate = new Date(`${formData.date}T${formData.time || '00:00'}`)
 
         onSave({
-            ...formData,
+            title: formData.title,
+            description: formData.description,
+            event_type: formData.type,
+            visio_link: formData.visio_link,
             event_date: fullDate.toISOString()
         })
     }
