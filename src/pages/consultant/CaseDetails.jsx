@@ -530,7 +530,7 @@ export default function CaseDetails() {
             // Fetch events
             const { data: eventData } = await supabase
                 .from('case_events')
-                .select('id, case_id, event_date, title, visio_link, event_type, status, description')
+                .select('id, case_id, event_date, title, visio_link, event_type, status, description, consultant_signature, consultant_signature_date, consultant_signature_name, client_signature, client_signature_date, client_signature_name, actual_start_time, actual_end_time')
                 .eq('case_id', id)
                 .order('event_date', { ascending: true })
 

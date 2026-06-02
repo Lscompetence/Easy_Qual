@@ -22,6 +22,8 @@ import Profile from './pages/Profile'
 import Unauthorized from './pages/Unauthorized'
 import MaquetteDemo from './pages/MaquetteDemo'
 import Maintenance from './pages/Maintenance'
+import AuditQualiopi from './pages/consultant/AuditQualiopi'
+import AuditPrototype from './pages/AuditPrototype/AuditQualiopi'
 
 function App() {
   return (
@@ -35,6 +37,7 @@ function App() {
           <Route path="/unauthorized" element={<Unauthorized />} />
           <Route path="/maquette" element={<MaquetteDemo />} />
           <Route path="/maintenance" element={<Maintenance />} />
+          <Route path="/audit-prototype" element={<AuditPrototype />} />
 
           {/* Shared Protected Routes */}
           <Route element={<ProtectedRoute />}>
@@ -57,6 +60,8 @@ function App() {
             <Route path="/consultant/messages" element={<ConsultantMessages />} />
             <Route path="/consultant/backups" element={<ConsultantBackups />} />
             <Route path="/consultant/reclamations" element={<ConsultantReclamations />} />
+            <Route path="/consultant/audit/:id" element={<AuditQualiopi />} />
+            <Route path="/consultant/audit" element={<AuditQualiopi />} />
           </Route>
 
           {/* Client (OF) Routes - All point to Dashboard tabs */}

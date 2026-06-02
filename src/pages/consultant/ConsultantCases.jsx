@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, Filter, Plus, FileText, CheckCircle, AlertTriangle, MoreVertical, Building, Mail, Lock, RefreshCw } from 'lucide-react'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
@@ -12,10 +12,14 @@ import DeleteModal from '../../components/DeleteModal'
 export default function ConsultantCases() {
     const { user } = useAuth()
     const navigate = useNavigate()
+    const location = useLocation()
 
     const [cases, setCases] = useState([])
     const [loading, setLoading] = useState(true)
-    const [searchQuery, setSearchQuery] = useState('')
+    const [searchQuery, setSearchQuery] = useState(() => {
+        const params = new URLSearchParams(location.search)
+        return params.get('search') || ''
+    })
     const [filterStatus, setFilterStatus] = useState('all')
     const [showMobileMenu, setShowMobileMenu] = useState(false)
 

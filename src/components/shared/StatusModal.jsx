@@ -11,7 +11,8 @@ export default function StatusModal({
     confirmText = 'Confirmer', 
     cancelText = 'Annuler',
     isLoading = false,
-    criterionId
+    criterionId,
+    customTheme
 }) {
     if (!isOpen) return null
 
@@ -68,7 +69,7 @@ export default function StatusModal({
 
     const { icon, bgColor, ringColor, buttonColor, titleColor, descriptionColor } = config[type] || config.info
 
-    const dynamicTheme = criterionId ? getCriterionColor(criterionId) : null;
+    const dynamicTheme = customTheme || (criterionId ? getCriterionColor(criterionId) : null);
     const useDynamicTheme = dynamicTheme && (type === 'success' || type === 'confirm' || type === 'info');
 
     return (

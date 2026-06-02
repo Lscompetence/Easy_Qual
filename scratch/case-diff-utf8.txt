@@ -1,0 +1,465 @@
+﻿diff --git a/src/pages/consultant/CaseDetails.jsx b/src/pages/consultant/CaseDetails.jsx
+index 42aa87e..0ad992d 100644
+--- a/src/pages/consultant/CaseDetails.jsx
++++ b/src/pages/consultant/CaseDetails.jsx
+@@ -6,6 +6,7 @@ import autoTable from 'jspdf-autotable'
+ import NewCaseModal from '../../components/consultant/NewCaseModal'
+ import EventModal from '../../components/consultant/EventModal'
+ import { supabase } from '../../supabaseClient'
++import { getCriterionColor } from '../../utils/theme'
+ import { useAuth } from '../../contexts/AuthContext'
+ import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
+ import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
+@@ -108,6 +109,7 @@ export default function CaseDetails() {
+ 
+     // NEW TABS STATE
+     const [activeTab, setActiveTab] = useState(() => localStorage.getItem(`consultantActiveTab_${id}`) || 'suivi_rno')
++    const [permanentLink, setPermanentLink] = useState('')
+     const [selectedAudit, setSelectedAudit] = useState(() => localStorage.getItem(`consultantSelectedAudit_${id}`) || 'initial') // 'initial' | 'surveillance 1' | ...
+     const [activeCriterion, setActiveCriterion] = useState(() => {
+         const saved = localStorage.getItem(`consultantActiveCriterion_${id}`)
+@@ -148,7 +150,7 @@ export default function CaseDetails() {
+         isLoading: false
+     })
+ 
+-    const showStatus = (type, title, message, onConfirm = null, confirmText = 'OK', cancelText = 'Annuler') => {
++    const showStatus = (type, title, message, onConfirm = null, confirmText = 'OK', cancelText = 'Annuler', criterionId = null) => {
+         setStatusModal({
+             isOpen: true,
+             type,
+@@ -157,6 +159,7 @@ export default function CaseDetails() {
+             onConfirm,
+             confirmText,
+             cancelText,
++            criterionId,
+             isLoading: false
+         })
+     }
+@@ -349,8 +352,25 @@ export default function CaseDetails() {
+     }, [indicatorStatesMap, criteriaData, caseData])
+ 
+     useEffect(() => {
+-        if (id && user) {
++        if (id) {
+             fetchCaseDetails()
++            // Reset active tab on case change
++            setActiveTab('suivi_rno')
++        }
++    }, [id])
++
++    useEffect(() => {
++        if (events && events.length > 0) {
++            const meeting = events.find(e => e.visio_link) || events[0]
++            if (meeting?.visio_link) {
++                setPermanentLink(meeting.visio_link)
++            }
++        }
++    }, [events])
++
++    useEffect(() => {
++        if (id && user) {
++            // ... (original fetch logic called by id change)
+         } else if (!id) {
+             setError("ID manquant dans l'URL")
+             setLoading(false)
+@@ -800,143 +820,8 @@ export default function CaseDetails() {
+         }
+     }
+ 
+-    const handleInitializeEvents = async () => {
+-        setSavingEvent(true)
+-        try {
+-            const startDate = new Date()
+-            const standardEvents = [
+-                {
+-                    case_id: id,
+-                    title: "Rendez-vous de lancement",
+-                    description: "Cadrage de la mission et analyse initiale.",
+-                    event_date: new Date(startDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(), // +2 days
+-                    event_type: 'meeting',
+-                    visio_link: 'https://meet.google.com/abc-defg-hij',
+-                    status: 'done'
+-                },
+-                {
+-                    case_id: id,
+-                    title: "Mentorat : Suivi Mi-Parcours",
+-                    description: "Revue des indicateurs bloquants (C2, C3).",
+-                    event_date: new Date(startDate.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString(), // +15 days
+-                    event_type: 'meeting',
+-                    visio_link: '',
+-                    status: 'in_progress'
+-                },
+-                {
+-                    case_id: id,
+-                    title: "Audit Blanc",
+-                    description: "Simulation compl├¿te de l'audit de surveillance.",
+-                    event_date: new Date(startDate.getTime() + 45 * 24 * 60 * 60 * 1000).toISOString(), // +45 days (1.5 months)
+-                    event_type: 'audit',
+-                    visio_link: '',
+-                    status: 'pending'
+-                },
+-                {
+-                    case_id: id,
+-                    title: "Audit de Surveillance",
+-                    description: "Date pr├®visionnelle : Mars 2026",
+-                    event_date: new Date(startDate.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString(), // +60 days (2 months)
+-                    event_type: 'audit',
+-                    visio_link: '',
+-                    status: 'pending'
+-                }
+-            ]
+-
+-            const { data, error } = await supabase
+-                .from('case_events')
+-                .insert(standardEvents)
+-                .select()
+-
+-            if (error) throw error
+-            setEvents(data.sort((a, b) => new Date(a.event_date) - new Date(b.event_date)))
+-        } catch (err) {
+-            console.error('Error initializing events:', err)
+-        } finally {
+-            setSavingEvent(false)
+-        }
+-    }
+-
+-    // Planning Actions
+-    const handleSaveEvent = async (eventData) => {
+-        setSavingEvent(true)
+-        try {
+-            if (editingEvent) {
+-                // Update
+-                const { error } = await supabase
+-                    .from('case_events')
+-                    .update({
+-                        title: eventData.title,
+-                        description: eventData.description,
+-                        event_date: eventData.event_date, // Changed from date to event_date to match DB
+-                        event_type: eventData.type,
+-                        visio_link: eventData.visio_link
+-                    })
+-                    .eq('id', editingEvent.id)
+-
+-                if (error) throw error
+-                setEvents(prev => prev.map(e => e.id === editingEvent.id ? { ...e, ...eventData, event_date: eventData.event_date, event_type: eventData.type } : e).sort((a, b) => new Date(a.event_date) - new Date(b.event_date)))
+-            } else {
+-                // Create
+-                const { data, error } = await supabase
+-                    .from('case_events')
+-                    .insert({
+-                        case_id: id,
+-                        title: eventData.title,
+-                        description: eventData.description,
+-                        event_date: eventData.event_date,
+-                        event_type: eventData.type,
+-                        visio_link: eventData.visio_link,
+-                        status: 'pending'
+-                    })
+-                    .select()
+-                    .single()
+-
+-                if (error) throw error
+-                setEvents([...events, data].sort((a, b) => new Date(a.event_date) - new Date(b.event_date)))
+-            }
+-            setShowEventModal(false)
+-            setEditingEvent(null)
+-        } catch (err) {
+-            console.error('Error saving event:', err)
+-        } finally {
+-            setSavingEvent(false)
+-        }
+-    }
+-
+-    const handleDeleteEvent = async (eventId) => {
+-        showStatus(
+-            'delete',
+-            'Supprimer cette ├®tape ?',
+-            '├ètes-vous s├╗r de vouloir retirer cette ├®tape du parcours ? Cette action est irr├®versible.',
+-            async () => {
+-                setStatusModal(prev => ({ ...prev, isLoading: true }))
+-                try {
+-                    const { error } = await supabase.from('case_events').delete().eq('id', eventId)
+-                    if (error) throw error
+-                    setEvents(prev => prev.filter(e => e.id !== eventId))
+-                    setStatusModal(prev => ({ ...prev, isOpen: false, isLoading: false }))
+-                    showStatus('success', '├ëtape supprim├®e', 'L\'├®tape a ├®t├® retir├®e du parcours avec succ├¿s.')
+-                } catch (err) {
+-                    console.error('Error deleting event:', err)
+-                    setStatusModal(prev => ({ ...prev, isLoading: false }))
+-                    showStatus('error', 'Erreur', 'Impossible de supprimer cette ├®tape : ' + err.message)
+-                }
+-            },
+-            'Confirmer',
+-            'Annuler'
+-        )
+-    }
+-
+-    const handleUpdateEventStatus = async (eventId, newStatus) => {
+-        // Optimistic update
+-        setEvents(prev => prev.map(e => e.id === eventId ? { ...e, status: newStatus } : e))
+-        try {
+-            await supabase.from('case_events').update({ status: newStatus }).eq('id', eventId)
+-        } catch (err) {
+-            console.error('Error updating status:', err)
+-        }
+-    }
++    // Permanent link logic removed, replaced with dynamic Jitsi link
++    // Planning Actions removed
+ 
+     const handleGenerateReport = async () => {
+         const doc = new jsPDF()
+@@ -1601,7 +1486,7 @@ export default function CaseDetails() {
+                                             {/* ÔöÇÔöÇ Criterion Header ÔöÇÔöÇ */}
+                                             <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100">
+                                                 <div className="flex items-center gap-4">
+-                                                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-black shadow-md shadow-indigo-200">
++                                                    <div className="h-10 w-10 rounded-xl flex items-center justify-center text-white text-sm font-black shadow-md" style={{ backgroundColor: getCriterionColor(crit.id).primary }}>
+                                                         C{crit.id}
+                                                     </div>
+                                                     <div>
+@@ -1613,7 +1498,7 @@ export default function CaseDetails() {
+                                                     {/* Progress pill */}
+                                                     <div className="hidden sm:flex items-center gap-2">
+                                                         <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+-                                                            <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all" style={{ width: `${percent}%` }} />
++                                                            <div className="h-full rounded-full transition-all" style={{ width: `${percent}%`, backgroundColor: getCriterionColor(crit.id).primary }} />
+                                                         </div>
+                                                         <span className="text-xs font-bold text-gray-400">{percent}%</span>
+                                                     </div>
+@@ -1648,8 +1533,8 @@ export default function CaseDetails() {
+                                                             {/* Row ÔÇö click to expand */}
+                                                             <button
+                                                                 onClick={() => setSelectedIndicatorId(isOpen ? null : ind.id)}
+-                                                                className={`w-full flex items-center justify-between px-6 py-3.5 text-left transition-all group ${isOpen ? 'bg-indigo-50' : 'hover:bg-gray-50'
+-                                                                    }`}
++                                                                className={`w-full flex items-center justify-between px-6 py-3.5 text-left transition-all group hover:bg-gray-50`}
++                                                                style={isOpen ? { backgroundColor: getCriterionColor(crit.id).light } : {}}
+                                                             >
+                                                                 <div className="flex items-center gap-3 min-w-0">
+                                                                     {/* Number */}
+@@ -1688,7 +1573,7 @@ export default function CaseDetails() {
+ 
+                                                             {/* Expanded verdict panel */}
+                                                             {isOpen && (
+-                                                                <div className="px-6 pb-5 pt-3 bg-indigo-50 border-t border-indigo-100 space-y-4">
++                                                                <div className="px-6 pb-5 pt-3 border-t space-y-4" style={{ backgroundColor: getCriterionColor(crit.id).light, borderColor: getCriterionColor(crit.id).border }}>
+                                                                     
+                                                                     {/* Document Proof from Client */}
+                                                                     {(() => {
+@@ -1747,7 +1632,7 @@ export default function CaseDetails() {
+ 
+                                                                     {/* Consultant verdict */}
+                                                                     <div>
+-                                                                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-2">Votre d├®cision finale</p>
++                                                                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: getCriterionColor(crit.id).primary }}>Votre d├®cision finale</p>
+                                                                         <div className="flex gap-3">
+                                                                             <button
+                                                                                 onClick={() => handleVerdict(ind.id, 'validated')}
+@@ -1796,16 +1681,17 @@ export default function CaseDetails() {
+                                                             href={quiz.file_url}
+                                                             target="_blank"
+                                                             rel="noopener noreferrer"
+-                                                            className="inline-flex items-center gap-3 px-4 py-3 bg-white border border-indigo-200 rounded-xl hover:bg-indigo-50 transition-colors group shadow-sm"
++                                                            className="inline-flex items-center gap-3 px-4 py-3 bg-white border rounded-xl hover:opacity-90 transition-all group shadow-sm"
++                                                            style={{ borderColor: getCriterionColor(crit.id).border }}
+                                                         >
+-                                                            <div className="h-9 w-9 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
++                                                            <div className="h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: getCriterionColor(crit.id).primary }}>
+                                                                 <FileText className="h-4 w-4 text-white" />
+                                                             </div>
+                                                             <div className="min-w-0">
+-                                                                <p className="text-sm font-bold text-indigo-900 truncate">{quiz.file_name || 'Quiz.pdf'}</p>
+-                                                                <p className="text-xs text-indigo-400">Soumis le {new Date(quiz.uploaded_at || Date.now()).toLocaleDateString('fr-FR')}</p>
++                                                                <p className="text-sm font-bold truncate" style={{ color: getCriterionColor(crit.id).primary }}>{quiz.file_name || 'Quiz.pdf'}</p>
++                                                                <p className="text-xs opacity-70" style={{ color: getCriterionColor(crit.id).primary }}>Soumis le {new Date(quiz.uploaded_at || Date.now()).toLocaleDateString('fr-FR')}</p>
+                                                             </div>
+-                                                            <MessageSquare className="h-4 w-4 text-indigo-400 group-hover:text-indigo-600 ml-auto" />
++                                                            <MessageSquare className="h-4 w-4 ml-auto" style={{ color: getCriterionColor(crit.id).primary }} />
+                                                         </a>
+                                                     ) : (
+                                                         <div className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-gray-200 rounded-xl text-gray-400">
+@@ -1836,9 +1722,10 @@ export default function CaseDetails() {
+                                                                         onClick={() => handleSendCommentToChat(crit.id)}
+                                                                         disabled={savingComment === crit.id || !criterionComments[crit.id]?.trim()}
+                                                                         className={`px-6 py-2 text-white text-xs font-bold rounded-lg shadow-lg transition-all flex items-center gap-2 ${savingComment === crit.id
+-                                                                            ? 'bg-indigo-400 cursor-wait'
+-                                                                            : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-md hover:scale-105 active:scale-95'
++                                                                            ? 'opacity-50 cursor-wait'
++                                                                            : 'hover:shadow-md hover:scale-105 active:scale-95 hover:opacity-90'
+                                                                             }`}
++                                                                        style={{ backgroundColor: getCriterionColor(crit.id).primary }}
+                                                                     >
+                                                                         <Send className="h-3 w-3" />
+                                                                         {savingComment === crit.id ? 'Envoi...' : 'Envoyer'}
+@@ -1856,145 +1743,34 @@ export default function CaseDetails() {
+ 
+ 
+ 
+-                    {/* VUE PLANIFICATION (Timeline Mockup) */}
++                    {/* VUE PLANIFICATION (Permanent Meeting Mockup) */}
+                     {
+                         activeTab === 'planification' && (
+-                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-fadeIn max-w-4xl mx-auto">
+-                                <div className="flex justify-between items-center mb-10">
+-                                    <h2 className="text-xl font-bold text-gray-900">Parcours d'Accompagnement</h2>
++                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-fadeIn max-w-xl mx-auto">
++                                <div className="text-center mb-8">
++                                    <div className="h-16 w-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-blue-100">
++                                        <Video className="h-8 w-8 text-blue-500" />
++                                    </div>
++                                    <h2 className="text-xl font-bold text-gray-900 mb-2">Salle de R├®union Permanente</h2>
++                                    <p className="text-sm text-gray-500 mb-6">
++                                        La salle de r├®union est pr├¬te et toujours disponible. Le client peut la rejoindre en un clic depuis son espace.
++                                    </p>
++                                </div>
++                                
++                                <div className="space-y-4">
+                                     <button
+-                                        onClick={() => { setEditingEvent(null); setShowEventModal(true) }}
+-                                        className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wide"
++                                        onClick={() => window.open(`https://meet.jit.si/EasyQual-Visio-${id}`, '_blank')}
++                                        className="w-full px-5 py-4 bg-blue-600 text-white rounded-xl text-lg font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3"
+                                     >
+-                                        <Plus className="h-4 w-4" /> Ajouter une ├®tape
++                                        <Video className="h-6 w-6" />
++                                        Lancer l'appel avec le client
+                                     </button>
+                                 </div>
+-
+-                                {events.length === 0 ? (
+-                                    <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl bg-gray-50/50">
+-                                        <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+-                                            <Calendar className="h-8 w-8" />
+-                                        </div>
+-                                        <h3 className="text-lg font-bold text-gray-900 mb-2">Aucune ├®tape planifi├®e</h3>
+-                                        <p className="text-sm text-gray-500 max-w-sm mx-auto mb-6">
+-                                            Le parcours est vide. Vous pouvez commencer par g├®n├®rer les ├®tapes standards d'accompagnement.
+-                                        </p>
+-                                        <button
+-                                            onClick={handleInitializeEvents}
+-                                            disabled={savingEvent}
+-                                            className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all disabled:opacity-50"
+-                                        >
+-                                            {savingEvent ? 'G├®n├®ration...' : 'G├®n├®rer le Parcours Type'}
+-                                        </button>
+-                                    </div>
+-                                ) : (
+-                                    <div className="relative border-l-2 border-dashed border-gray-200 ml-6 space-y-10 py-2">
+-                                        {events.map((event) => {
+-                                            const isDone = event.status === 'done' || event.status === 'realise'
+-                                            const isToday = new Date(event.event_date).toDateString() === new Date().toDateString()
+-
+-                                            let connectorColor = 'bg-gray-50 border-gray-200'
+-                                            let dotColor = 'bg-gray-300'
+-                                            if (isDone) {
+-                                                connectorColor = 'bg-green-100 border-green-500'
+-                                                dotColor = 'text-green-600' // Check icon
+-                                            } else if (event.status === 'in_progress' || isToday) {
+-                                                connectorColor = 'bg-blue-100 border-blue-500'
+-                                                dotColor = 'bg-blue-500'
+-                                            } else if (event.event_type === 'audit') {
+-                                                connectorColor = 'bg-purple-50 border-purple-200'
+-                                                dotColor = 'bg-purple-300'
+-                                            }
+-
+-                                            return (
+-                                                <div key={event.id} className="relative pl-10">
+-                                                    {/* Connector Dot */}
+-                                                    <div className={`absolute -left-[9px] top-0 h-5 w-5 rounded-full border-2 flex items-center justify-center ${connectorColor} ${event.status === 'in_progress' ? 'animate-pulse' : ''}`}>
+-                                                        {isDone ? (
+-                                                            <CheckCircle className="h-3 w-3 text-green-600" />
+-                                                        ) : (
+-                                                            <span className={`h-2 w-2 rounded-full ${dotColor}`}></span>
+-                                                        )}
+-                                                    </div>
+-
+-                                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
+-                                                        <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+-                                                            {event.title}
+-                                                            <button
+-                                                                onClick={() => { setEditingEvent(event); setShowEventModal(true) }}
+-                                                                className="text-gray-300 hover:text-blue-600 transition-colors"
+-                                                            >
+-                                                                <Edit2 className="h-3 w-3" />
+-                                                            </button>
+-                                                            <button
+-                                                                onClick={() => handleDeleteEvent(event.id)}
+-                                                                className="text-gray-300 hover:text-red-600 transition-colors"
+-                                                            >
+-                                                                <Trash2 className="h-3 w-3" />
+-                                                            </button>
+-                                                        </h3>
+-
+-                                                        <div className="flex items-center gap-2 mt-2 sm:mt-0">
+-                                                            {/* Status Toggle - "Bien r├®alis├®" Logic */}
+-                                                            {!isDone && (
+-                                                                <button
+-                                                                    onClick={() => handleUpdateEventStatus(event.id, 'done')}
+-                                                                    className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-green-50 hover:border-green-200 hover:text-green-700 transition-all shadow-sm"
+-                                                                >
+-                                                                    <div className="h-4 w-4 rounded border border-gray-300 group-hover:border-green-500 flex items-center justify-center transition-colors">
+-                                                                        <CheckCircle className="h-3 w-3 text-white group-hover:text-green-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+-                                                                    </div>
+-                                                                    <span className="text-xs font-bold uppercase tracking-wide">Marquer r├®alis├®</span>
+-                                                                </button>
+-                                                            )}
+-                                                            {isDone && (
+-                                                                <span className="flex items-center gap-1 text-[10px] font-bold bg-green-100 text-green-700 px-2 py-1 rounded-lg uppercase border border-green-200 shadow-sm">
+-                                                                    <CheckCircle className="h-3 w-3" /> R├®alis├®
+-                                                                </span>
+-                                                            )}
+-
+-                                                            {/* Visio Link - Special Logic for Audit Blanc ONLY */}
+-                                                            {isDone && event.title.toLowerCase().includes('audit blanc') && (
+-                                                                <a
+-                                                                    href={event.visio_link || '#'}
+-                                                                    target="_blank"
+-                                                                    rel="noopener noreferrer"
+-                                                                    onClick={(e) => {
+-                                                                        if (!event.visio_link) {
+-                                                                            e.preventDefault()
+-                                                                            setEditingEvent(event)
+-                                                                            setShowEventModal(true)
+-                                                                        }
+-                                                                    }}
+-                                                                    className="text-xs font-bold bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 flex items-center gap-1.5"
+-                                                                >
+-                                                                    <Video className="h-3.5 w-3.5" />
+-                                                                    {event.visio_link ? 'Lancer Visio' : 'Planifier Visio'}
+-                                                                </a>
+-                                                            )}
+-                                                        </div>
+-                                                    </div>
+-                                                    {event.description && <p className="text-sm text-gray-500 mb-2">{event.description}</p>}
+-                                                    <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50 inline-block px-2 py-1 rounded border border-blue-100">
+-                                                        <Calendar className="h-3 w-3" /> {new Date(event.event_date).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}
+-                                                    </div>
+-                                                </div>
+-                                            )
+-                                        })}
+-                                    </div>
+-                                )}
+                             </div>
+                         )
+                     }
+ 
+-                    {/* EVENT MODAL */}
+-                    <EventModal
+-                        isOpen={showEventModal}
+-                        onClose={() => { setShowEventModal(false); setEditingEvent(null) }}
+-                        onSave={handleSaveEvent}
+-                        eventToEdit={editingEvent}
+-                        isSaving={savingEvent}
+-                    />
++                    {/* EVENT MODAL REMOVED */}
+ 
+ 
+ 
+@@ -2013,6 +1789,7 @@ export default function CaseDetails() {
+                 isOpen={statusModal.isOpen}
+                 onClose={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
+                 onConfirm={statusModal.onConfirm}
++                criterionId={statusModal.criterionId}
+                 type={statusModal.type}
+                 title={statusModal.title}
+                 message={statusModal.message}

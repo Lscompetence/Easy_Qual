@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell, Menu, ShieldAlert, Settings, LifeBuoy, MessageSquare, AlertTriangle, Sparkles, Filter } from 'lucide-react'
+import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell, Menu, ShieldAlert, Settings, LifeBuoy, MessageSquare, AlertTriangle, Sparkles, Filter, Search, ChevronRight } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Logo from '../../components/Logo'
 import DeleteModal from '../../components/DeleteModal'
@@ -113,6 +113,7 @@ export default function AdminDashboard() {
     const [activeTab, setActiveTab] = useState('consultants')
     const [ticketFilterType, setTicketFilterType] = useState('all')
     const [ticketFilterStatus, setTicketFilterStatus] = useState('all')
+    const [ticketFilterRole, setTicketFilterRole] = useState('all')
     const [ticketSearch, setTicketSearch] = useState('')
     const [selectedTicketForDetail, setSelectedTicketForDetail] = useState(null)
     const [showDeleteTicketConfirmModal, setShowDeleteTicketConfirmModal] = useState(false)
@@ -1035,7 +1036,7 @@ export default function AdminDashboard() {
                                 : 'border-transparent text-gray-400 hover:text-gray-600'
                         }`}
                     >
-                        <span>Réclamations & Avis</span>
+                        <span>Panier des réclamations</span>
                         {reclamations.filter(r => r.status === 'pending').length > 0 && (
                             <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse">
                                 {reclamations.filter(r => r.status === 'pending').length}
@@ -1218,44 +1219,69 @@ export default function AdminDashboard() {
                 {activeTab === 'reclamations' && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in duration-200">
                         {/* Header & Filters */}
-                        <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                            <div>
-                                <h2 className="text-lg font-bold text-gray-900">Réclamations & Avis</h2>
-                                <p className="text-sm text-gray-500">Consultez et traitez les réclamations, bugs et avis soumis.</p>
+                        <div className="p-6 border-b border-gray-100 bg-slate-50/50 flex flex-col xl:flex-row xl:items-end justify-between gap-6">
+                            <div className="flex-1">
+                                <h2 className="text-xl font-black text-slate-900 tracking-tight">Panier des réclamations</h2>
+                                <p className="text-sm text-slate-500 mt-1">Consultez, filtrez et traitez les réclamations, bugs et avis soumis.</p>
                             </div>
-                            <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
                                 {/* Search */}
-                                <input
-                                    type="text"
-                                    placeholder="Rechercher..."
-                                    value={ticketSearch}
-                                    onChange={(e) => setTicketSearch(e.target.value)}
-                                    className="px-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 placeholder-slate-400"
-                                />
+                                <div className="relative flex-1 min-w-[200px] xl:max-w-[240px]">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Rechercher un ticket..."
+                                        value={ticketSearch}
+                                        onChange={(e) => setTicketSearch(e.target.value)}
+                                        className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all placeholder-slate-400 shadow-sm"
+                                    />
+                                </div>
+                                
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {/* Filter Type */}
+                                    <div className="relative">
+                                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                        <select
+                                            value={ticketFilterType}
+                                            onChange={(e) => setTicketFilterType(e.target.value)}
+                                            className="pl-8 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm appearance-none cursor-pointer"
+                                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1em' }}
+                                        >
+                                            <option value="all">Tous les types</option>
+                                            <option value="reclamation_insatisfaction">Réclamation (insatisfaction)</option>
+                                            <option value="dysfonctionnement">Dysfonctionnement technique</option>
+                                            <option value="alea">Aléa perturbant la prestation</option>
+                                            <option value="non_conformite">Non-conformité réglementaire</option>
+                                            <option value="suggestion">Suggestion d'amélioration</option>
+                                            <option value="autre">Autre signalement</option>
+                                        </select>
+                                    </div>
 
-                                {/* Filter Type */}
-                                <select
-                                    value={ticketFilterType}
-                                    onChange={(e) => setTicketFilterType(e.target.value)}
-                                    className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                                >
-                                    <option value="all">Tous les types</option>
-                                    <option value="reclamation">Réclamations</option>
-                                    <option value="avis">Avis / Idées</option>
-                                    <option value="bug">Bugs Tech</option>
-                                </select>
+                                    {/* Filter Status */}
+                                    <select
+                                        value={ticketFilterStatus}
+                                        onChange={(e) => setTicketFilterStatus(e.target.value)}
+                                        className="px-3 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm appearance-none cursor-pointer"
+                                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1em' }}
+                                    >
+                                        <option value="all">Tous les statuts</option>
+                                        <option value="pending">En attente</option>
+                                        <option value="resolved">Résolus</option>
+                                        <option value="ignored">Ignorés</option>
+                                    </select>
 
-                                {/* Filter Status */}
-                                <select
-                                    value={ticketFilterStatus}
-                                    onChange={(e) => setTicketFilterStatus(e.target.value)}
-                                    className="px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                                >
-                                    <option value="all">Tous les statuts</option>
-                                    <option value="pending">En attente</option>
-                                    <option value="resolved">Résolus</option>
-                                    <option value="ignored">Ignorés</option>
-                                </select>
+                                    {/* Filter Role */}
+                                    <select
+                                        value={ticketFilterRole}
+                                        onChange={(e) => setTicketFilterRole(e.target.value)}
+                                        className="px-3 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm appearance-none cursor-pointer"
+                                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1em' }}
+                                    >
+                                        <option value="all">Tous les auteurs</option>
+                                        <option value="client">Client</option>
+                                        <option value="consultant">Consultant</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -1289,7 +1315,8 @@ export default function AdminDashboard() {
                                             name.toLowerCase().includes(ticketSearch.toLowerCase());
                                         const matchesType = ticketFilterType === 'all' || t.type === ticketFilterType;
                                         const matchesStatus = ticketFilterStatus === 'all' || t.status === ticketFilterStatus;
-                                        return matchesSearch && matchesType && matchesStatus;
+                                        const roleFilter = ticketFilterRole === 'all' || (ticketFilterRole === 'client' && t.profiles?.role === 'of') || (ticketFilterRole === 'consultant' && t.profiles?.role !== 'of');
+                                        return matchesSearch && matchesType && matchesStatus && roleFilter;
                                     }).length === 0 ? (
                                         <tr>
                                             <td colSpan="6" className="px-6 py-12 text-center text-sm text-gray-400">
@@ -1307,7 +1334,8 @@ export default function AdminDashboard() {
                                                 name.toLowerCase().includes(ticketSearch.toLowerCase());
                                             const matchesType = ticketFilterType === 'all' || t.type === ticketFilterType;
                                             const matchesStatus = ticketFilterStatus === 'all' || t.status === ticketFilterStatus;
-                                            return matchesSearch && matchesType && matchesStatus;
+                                            const roleFilter = ticketFilterRole === 'all' || (ticketFilterRole === 'client' && t.profiles?.role === 'of') || (ticketFilterRole === 'consultant' && t.profiles?.role !== 'of');
+                                            return matchesSearch && matchesType && matchesStatus && roleFilter;
                                         }).map((ticket) => {
                                             const name = (ticket.profiles?.first_name || ticket.profiles?.last_name)
                                                 ? `${ticket.profiles.first_name || ''} ${ticket.profiles.last_name || ''}`.trim()
@@ -1317,13 +1345,25 @@ export default function AdminDashboard() {
                                             const typeColors = {
                                                 reclamation: 'bg-red-50 text-red-700 border-red-100',
                                                 avis: 'bg-amber-50 text-amber-700 border-amber-100',
-                                                bug: 'bg-blue-50 text-blue-700 border-blue-100'
+                                                bug: 'bg-blue-50 text-blue-700 border-blue-100',
+                                                reclamation_insatisfaction: 'bg-red-50 text-red-700 border-red-100',
+                                                dysfonctionnement: 'bg-blue-50 text-blue-700 border-blue-100',
+                                                alea: 'bg-orange-50 text-orange-700 border-orange-100',
+                                                non_conformite: 'bg-purple-50 text-purple-700 border-purple-100',
+                                                suggestion: 'bg-amber-50 text-amber-700 border-amber-100',
+                                                autre: 'bg-slate-50 text-slate-700 border-slate-100'
                                             }
 
                                             const typeLabels = {
                                                 reclamation: 'Réclamation',
                                                 avis: 'Avis / Idée',
-                                                bug: 'Bug Technique'
+                                                bug: 'Bug Technique',
+                                                reclamation_insatisfaction: 'Réclamation',
+                                                dysfonctionnement: 'Dysfonctionnement',
+                                                alea: 'Aléa',
+                                                non_conformite: 'Non-conformité',
+                                                suggestion: 'Suggestion',
+                                                autre: 'Autre'
                                             }
 
                                             const statusColors = {
@@ -1344,10 +1384,10 @@ export default function AdminDashboard() {
                                                         <div className="flex flex-col">
                                                             <span className="text-sm font-bold text-slate-800">{name}</span>
                                                             <span className="text-[11px] text-slate-400">{ticket.profiles?.email}</span>
-                                                            <span className={`inline-self-start mt-1 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                                            <span className={`inline-flex w-fit items-center mt-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide uppercase ${
                                                                 ticket.profiles?.role === 'of'
-                                                                    ? 'bg-orange-50 text-orange-600 border border-orange-100'
-                                                                    : 'bg-purple-50 text-purple-600 border border-purple-100'
+                                                                    ? 'bg-orange-100 text-orange-700'
+                                                                    : 'bg-purple-100 text-purple-700'
                                                             }`}>
                                                                 {role}
                                                             </span>
@@ -1362,36 +1402,39 @@ export default function AdminDashboard() {
                                                         <div className="flex flex-col">
                                                             <span className="text-sm font-bold text-slate-700 truncate">{ticket.title}</span>
                                                             <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">{ticket.content}</p>
-                                                            <button 
-                                                                onClick={() => setSelectedTicketForDetail(ticket)}
-                                                                className="text-left text-[11px] font-black text-blue-600 hover:text-blue-700 mt-1 uppercase tracking-wider"
-                                                            >
-                                                                Voir détails
-                                                            </button>
+                                                            <div className="mt-2">
+                                                                <button 
+                                                                    onClick={() => setSelectedTicketForDetail(ticket)}
+                                                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold rounded-lg transition-colors group uppercase tracking-wider"
+                                                                >
+                                                                    Voir détails
+                                                                    <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
                                                         {new Date(ticket.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                        <span className={`px-2 py-0.5 text-[11px] font-extrabold rounded-full border ${statusColors[ticket.status] || ''}`}>
+                                                        <span className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border ${statusColors[ticket.status] || ''}`}>
                                                             {statusLabels[ticket.status] || ticket.status}
                                                         </span>
                                                     </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                    <td className="px-6 py-4 whitespace-nowrap text-right">
                                                         <div className="flex items-center justify-end space-x-2">
                                                             {ticket.status === 'pending' && (
                                                                 <>
                                                                     <button
                                                                         onClick={() => handleUpdateTicketStatus(ticket.id, 'resolved')}
-                                                                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100 transition-colors"
+                                                                        className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
                                                                         title="Marquer comme résolu"
                                                                     >
                                                                         <Check className="h-4 w-4" />
                                                                     </button>
                                                                     <button
                                                                         onClick={() => handleUpdateTicketStatus(ticket.id, 'ignored')}
-                                                                        className="p-1.5 rounded-lg bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100 transition-colors"
+                                                                        className="p-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
                                                                         title="Ignorer"
                                                                     >
                                                                         <X className="h-4 w-4" />
@@ -1399,8 +1442,11 @@ export default function AdminDashboard() {
                                                                 </>
                                                             )}
                                                             <button
-                                                                onClick={() => handleDeleteTicketClick(ticket.id)}
-                                                                className="p-1.5 rounded-lg bg-red-50 text-red-500 border border-red-100 hover:bg-red-100 transition-colors"
+                                                                onClick={() => {
+                                                                    setTicketToDelete(ticket.id)
+                                                                    setShowDeleteTicketConfirmModal(true)
+                                                                }}
+                                                                className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors ml-2"
                                                                 title="Supprimer"
                                                             >
                                                                 <Trash2 className="h-4 w-4" />
@@ -2234,12 +2280,19 @@ export default function AdminDashboard() {
                         <div className="px-8 py-6 border-b border-slate-100 flex items-start justify-between bg-white relative">
                             <div className="flex-1 pr-8">
                                 <div className="flex items-center gap-3 mb-3">
-                                    <span className={`px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wider ${
-                                        selectedTicketForDetail.type === 'reclamation' ? 'bg-red-50 text-red-600 border border-red-100' :
-                                        selectedTicketForDetail.type === 'avis' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                        'bg-blue-50 text-blue-600 border border-blue-100'
+                                    <span className={`px-3 py-1 text-xs font-bold rounded-full border ${
+                                        selectedTicketForDetail.type === 'reclamation' || selectedTicketForDetail.type === 'reclamation_insatisfaction' ? 'bg-red-50 text-red-700 border-red-100' :
+                                        selectedTicketForDetail.type === 'avis' || selectedTicketForDetail.type === 'suggestion' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                        selectedTicketForDetail.type === 'bug' || selectedTicketForDetail.type === 'dysfonctionnement' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                        selectedTicketForDetail.type === 'alea' ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                                        selectedTicketForDetail.type === 'non_conformite' ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                                        'bg-slate-50 text-slate-700 border-slate-100'
                                     }`}>
-                                        {selectedTicketForDetail.type}
+                                        {selectedTicketForDetail.type === 'reclamation' || selectedTicketForDetail.type === 'reclamation_insatisfaction' ? 'Réclamation' : 
+                                         selectedTicketForDetail.type === 'avis' || selectedTicketForDetail.type === 'suggestion' ? 'Suggestion' : 
+                                         selectedTicketForDetail.type === 'bug' || selectedTicketForDetail.type === 'dysfonctionnement' ? 'Dysfonctionnement' : 
+                                         selectedTicketForDetail.type === 'alea' ? 'Aléa' : 
+                                         selectedTicketForDetail.type === 'non_conformite' ? 'Non-conformité' : 'Autre'}
                                     </span>
                                     <span className={`px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wider ${
                                         selectedTicketForDetail.status === 'pending' ? 'bg-slate-100 text-slate-600' :

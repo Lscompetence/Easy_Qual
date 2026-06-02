@@ -5,6 +5,7 @@ import { Plus, History, Trash2, Sparkles, XCircle, AlertCircle } from 'lucide-re
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
 import ReclamationForm from '../../components/shared/ReclamationForm'
+import DeleteModal from '../../components/DeleteModal'
 
 export default function ConsultantReclamations() {
     const { user } = useAuth()
@@ -14,6 +15,8 @@ export default function ConsultantReclamations() {
     const [activeTab, setActiveTab] = useState('new') // 'new' | 'history'
     const [selectedTicket, setSelectedTicket] = useState(null)
     const [ticketToDelete, setTicketToDelete] = useState(null)
+    const [isDeleting, setIsDeleting] = useState(false)
+    const [isDeleted, setIsDeleted] = useState(false)
 
     useEffect(() => {
         if (user && activeTab === 'history') {
@@ -45,14 +48,24 @@ export default function ConsultantReclamations() {
 
     const confirmDelete = async () => {
         if (!ticketToDelete) return;
+        setIsDeleting(true);
         try {
-            const { error } = await supabase.from('reclamations').delete().eq('id', ticketToDelete);
+            const { data, error } = await supabase.from('reclamations').delete().eq('id', ticketToDelete).select();
             if (error) throw error;
+            
+            // Supabase silently fails on RLS. If data is empty, it wasn't deleted.
+            if (!data || data.length === 0) {
+                throw new Error("Impossible de supprimer la réclamation. Vérifiez les permissions (RLS) dans Supabase.");
+            }
+
             setReclamations(reclamations.filter(t => t.id !== ticketToDelete));
-            setTicketToDelete(null);
+            setIsDeleted(true);
         } catch (err) {
             console.error(err);
-            alert("Erreur lors de la suppression.");
+            alert("Erreur lors de la suppression : " + err.message);
+            setTicketToDelete(null);
+        } finally {
+            setIsDeleting(false);
         }
     }
 
@@ -68,7 +81,7 @@ export default function ConsultantReclamations() {
                     setShowMobileMenu={setShowMobileMenu}
                 />
                 
-                <main className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full">
+                <main className="p-4 sm:p-6 lg:p-8 w-full max-w-7xl mx-auto">
                     {/* Tabs Navigation */}
                     <div className="flex border-b border-gray-200 mb-8">
                         <button
@@ -284,54 +297,21 @@ export default function ConsultantReclamations() {
                 </div>
             )}
 
-            {/* Delete Confirmation Modal */}
+
             {ticketToDelete && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center p-4 z-[60]">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                        {/* Header Background */}
-                        <div className="bg-red-50/50 pt-10 pb-6 flex justify-center">
-                            <div className="relative">
-                                <div className="absolute inset-0 bg-red-100 rounded-full scale-150 opacity-50"></div>
-                                <div className="relative bg-white p-4 rounded-full shadow-sm border border-red-50">
-                                    <Trash2 className="h-8 w-8 text-red-600" strokeWidth={2.5} />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="p-8 pt-6 text-center">
-                            <h3 className="text-2xl font-black text-slate-900 mb-3">Supprimer la réclamation ?</h3>
-                            <p className="text-slate-500 text-sm leading-relaxed mb-8 px-4">
-                                Vous êtes sur le point de retirer définitivement cet élément.<br/>
-                                Cette action ne peut pas être annulée.
-                            </p>
-
-                            <div className="bg-red-50/50 border border-red-200 border-dashed rounded-xl p-4 mb-8 text-left flex gap-3">
-                                <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-                                <div>
-                                    <h4 className="text-sm font-bold text-red-700 uppercase tracking-wide mb-1">Attention irréversible</h4>
-                                    <p className="text-xs text-red-600/80 italic leading-relaxed">
-                                        Cette action supprimera également tous les fichiers et échanges liés à cette réclamation.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                <button 
-                                    onClick={() => setTicketToDelete(null)}
-                                    className="flex-1 py-3.5 bg-slate-50 text-slate-700 font-bold rounded-xl hover:bg-slate-100 transition-colors"
-                                >
-                                    Annuler
-                                </button>
-                                <button 
-                                    onClick={confirmDelete}
-                                    className="flex-1 py-3.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-sm shadow-red-600/20 hover:shadow transition-all active:scale-[0.98]"
-                                >
-                                    Confirmer
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <DeleteModal
+                    isOpen={true}
+                    onClose={() => {
+                        setTicketToDelete(null);
+                        setIsDeleted(false);
+                    }}
+                    onConfirm={confirmDelete}
+                    title="Supprimer la réclamation ?"
+                    message="Êtes-vous sûr de vouloir supprimer cette réclamation ?"
+                    itemType="la réclamation/avis"
+                    isDeleting={isDeleting}
+                    isDeleted={isDeleted}
+                />
             )}
         </div>
     )

@@ -67,7 +67,6 @@ export default function Ressources() {
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
                 <ConsultantTopBar
                     showNewFolder={false}
-                    showCredits={false}
                     showSearch={false}
                     showMobileMenu={showMobileMenu}
                     setShowMobileMenu={setShowMobileMenu}

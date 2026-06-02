@@ -3,7 +3,7 @@ import { getCriterionColor } from '../../utils/theme'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { Info, PlayCircle, FileText, CheckCircle, XCircle, ArrowRight, BookOpen, Clock, Play, Download, Search, AlertCircle, RefreshCw, Send, Image as ImageIcon, Link as LinkIcon, Paperclip, MoreVertical, ThumbsUp, MapPin, Building, Phone, Mail, Award, Users, Plus, Target, CheckSquare, Smile, MessageSquare, Menu, FileImage, Video, HelpCircle, FileCheck, CircleOff, Eye } from 'lucide-react'
+import { Sun, Flag, Ban, ChevronUp, ChevronDown, ChevronRight, AlertTriangle, Check, Trash2, Upload, Info, PlayCircle, FileText, CheckCircle, XCircle, ArrowRight, BookOpen, Clock, Play, Download, Search, AlertCircle, RefreshCw, Send, Image as ImageIcon, Link as LinkIcon, Paperclip, MoreVertical, ThumbsUp, MapPin, Building, Phone, Mail, Award, Users, Plus, Target, CheckSquare, Smile, MessageSquare, Menu, FileImage, Video, HelpCircle, FileCheck, CircleOff, Eye } from 'lucide-react'
 import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
 import SignatureModal from '../../components/shared/SignatureModal'
@@ -759,7 +759,7 @@ export default function ClientDashboard() {
                     // 3. Fetch case events (sessions/visios)
                     const { data: eventsData } = await supabase
                         .from('case_events')
-                        .select('id, case_id, event_date, title, visio_link, event_type')
+                        .select('id, case_id, event_date, title, visio_link, event_type, status, description, consultant_signature, consultant_signature_date, consultant_signature_name, client_signature, client_signature_date, client_signature_name, actual_start_time, actual_end_time')
                         .eq('case_id', caseData.id)
                         .order('event_date', { ascending: true })
                     setCaseEvents(eventsData || [])
@@ -1294,7 +1294,7 @@ export default function ClientDashboard() {
                         </div>
                     )}
                     <main className="flex-1 flex items-center justify-center p-8">
-                        <div className="w-full max-w-xl bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="w-full max-w-4xl bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                             {/* Header */}
                             <div className="p-8 text-center border-b border-gray-50">
                                 <div className="h-14 w-14 rounded-2xl bg-[#faf1ec] flex items-center justify-center mx-auto mb-4">
@@ -1307,7 +1307,7 @@ export default function ClientDashboard() {
                             </div>
 
                             {/* Messages */}
-                            <div className="p-6 space-y-3 min-h-[200px] max-h-[340px] overflow-y-auto bg-gray-50/50">
+                            <div className="p-6 space-y-3 min-h-[400px] max-h-[600px] overflow-y-auto bg-gray-50/50">
                                 {messages.length === 0 ? (
                                     <p className="text-center text-sm text-gray-400 py-8">Aucun message. Commencez la discussion !</p>
                                 ) : (

@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import CreditsModal from './CreditsModal'
 
-export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, showCredits = true, showSearch = true, refreshKey = 0, onCreditsUpdate = () => { }, showMobileMenu, setShowMobileMenu, hasUnreadNotifications, onNotificationClick, searchQuery = '', onSearchChange = () => { } }) {
+export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, showCredits = true, showNotifications = true, showSearch = true, refreshKey = 0, onCreditsUpdate = () => { }, showMobileMenu, setShowMobileMenu, hasUnreadNotifications, onNotificationClick, searchQuery = '', onSearchChange = () => { } }) {
     const [credits, setCredits] = useState(0)
     const [unreadCount, setUnreadCount] = useState(0)
     const [showCreditsModal, setShowCreditsModal] = useState(false)
@@ -104,6 +104,11 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
                             type="text"
                             value={searchQuery}
                             onChange={(e) => onSearchChange(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && window.location.pathname !== '/consultant/cases') {
+                                    navigate(`/consultant/cases?search=${encodeURIComponent(e.target.value)}`)
+                                }
+                            }}
                             className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-purple-500 focus:border-purple-500 sm:text-sm transition-colors"
                             placeholder="Rechercher un dossier par nom..."
                         />
@@ -154,25 +159,27 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
                     </button>
                 )}
 
-                <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
-
-                {/* Notifications Bell */}
-                <button 
-                    onClick={() => navigate('/consultant/notifications')}
-                    className={`relative p-2 transition-all rounded-xl border group shadow-sm ${
-                        unreadCount > 0 
-                        ? 'bg-red-50 border-red-100 text-red-600' 
-                        : 'text-gray-400 hover:text-purple-600 bg-gray-50 border-gray-100'
-                    }`}
-                >
-                    <Bell className={`h-5 w-5 ${unreadCount > 0 ? 'animate-bounce' : ''}`} />
-                    {unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-red-600/20 border-2 border-white animate-in zoom-in duration-300">
-                            {unreadCount > 99 ? '99+' : unreadCount}
-                        </span>
-                    )}
-                </button>
-
+                {showNotifications && (
+                    <>
+                        <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+                        {/* Notifications Bell */}
+                        <button 
+                            onClick={() => navigate('/consultant/notifications')}
+                            className={`relative p-2 transition-all rounded-xl border group shadow-sm ${
+                                unreadCount > 0 
+                                ? 'bg-red-50 border-red-100 text-red-600' 
+                                : 'text-gray-400 hover:text-purple-600 bg-gray-50 border-gray-100'
+                            }`}
+                        >
+                            <Bell className={`h-5 w-5 ${unreadCount > 0 ? 'animate-bounce' : ''}`} />
+                            {unreadCount > 0 && (
+                                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-red-600/20 border-2 border-white animate-in zoom-in duration-300">
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                </span>
+                            )}
+                        </button>
+                    </>
+                )}
             </div>
 
             <CreditsModal

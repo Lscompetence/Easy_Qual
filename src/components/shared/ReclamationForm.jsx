@@ -132,7 +132,7 @@ ${formData.description}
     }
 
     return (
-        <div className="max-w-4xl mx-auto w-full pb-12">
+        <div className="w-full pb-12">
             {/* Header Section */}
             <div className="text-center mb-12">
                 <div className="text-sm font-semibold text-slate-500 mb-2 tracking-wide uppercase">Accueil &gt; Réclamation</div>
