@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell, Menu, ShieldAlert, Settings, LifeBuoy, MessageSquare, AlertTriangle, Sparkles, Filter, Search, ChevronRight } from 'lucide-react'
+import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell, Menu, ShieldAlert, Settings, LifeBuoy, MessageSquare, AlertTriangle, Sparkles, Filter, Search, ChevronRight, Paperclip } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Logo from '../../components/Logo'
 import DeleteModal from '../../components/DeleteModal'
@@ -1403,7 +1403,7 @@ export default function AdminDashboard() {
                                                         <div className="flex flex-col">
                                                             <span className="text-sm font-bold text-slate-700 truncate">{ticket.title}</span>
                                                             <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">{ticket.content}</p>
-                                                            <div className="mt-2">
+                                                            <div className="mt-2 flex items-center gap-2">
                                                                 <button 
                                                                     onClick={() => setSelectedTicketForDetail(ticket)}
                                                                     className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold rounded-lg transition-colors group uppercase tracking-wider"
@@ -1411,6 +1411,17 @@ export default function AdminDashboard() {
                                                                     Voir détails
                                                                     <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                                                                 </button>
+                                                                {ticket.attachment_url && (
+                                                                    <a 
+                                                                        href={ticket.attachment_url} 
+                                                                        target="_blank" 
+                                                                        rel="noopener noreferrer"
+                                                                        title="Voir la pièce jointe"
+                                                                        className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors"
+                                                                    >
+                                                                        <Paperclip className="h-3.5 w-3.5" />
+                                                                    </a>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </td>
