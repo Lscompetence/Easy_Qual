@@ -219,16 +219,17 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }
     }
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto py-10">
-            <div className={`relative w-full ${step === 'selection' ? 'max-w-6xl' : 'max-w-md'} animate-in fade-in zoom-in-95 duration-300 my-auto`}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto py-10" onClick={resetAndClose}>
+            <div className={`relative w-full ${step === 'selection' ? 'max-w-6xl' : 'max-w-md'} animate-in fade-in zoom-in-95 duration-300 my-auto`} onClick={(e) => e.stopPropagation()}>
                 
                 {step === 'selection' ? (
                     // --- FULL MODAL LAYOUT FOR SELECTION ---
                     <div className="bg-white rounded-[2.5rem] shadow-2xl p-10 md:p-14 relative overflow-hidden">
                         
                         <button
+                            type="button"
                             onClick={resetAndClose}
-                            className="absolute top-8 right-8 p-3 bg-slate-50 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-all"
+                            className="absolute top-8 right-8 p-3 bg-slate-50 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-all z-50"
                         >
                             <X className="h-6 w-6" />
                         </button>
@@ -321,8 +322,9 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }
                     // --- CARD LAYOUT ---
                     <div className="bg-white rounded-[2.5rem] shadow-2xl p-10 relative overflow-hidden">
                         <button
+                            type="button"
                             onClick={resetAndClose}
-                            className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-700 transition-colors"
+                            className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-700 transition-colors z-50 cursor-pointer"
                         >
                             <X className="h-6 w-6" />
                         </button>

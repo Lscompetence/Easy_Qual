@@ -87,6 +87,26 @@ Date de l'incident : ${formData.incidentDate ? new Date(formData.incidentDate).t
 ${formData.description}
             `.trim()
 
+            let attachmentUrl = null
+            if (selectedFile) {
+                const fileExt = selectedFile.name.split('.').pop()
+                const fileName = `${user.id}-${Date.now()}.${fileExt}`
+                const { error: uploadError } = await supabase.storage
+                    .from('reclamations')
+                    .upload(fileName, selectedFile)
+                
+                if (uploadError) {
+                    console.error('Error uploading file:', uploadError)
+                    throw new Error("Erreur lors de l'envoi de la pièce jointe.")
+                }
+                
+                const { data: publicUrlData } = supabase.storage
+                    .from('reclamations')
+                    .getPublicUrl(fileName)
+                    
+                attachmentUrl = publicUrlData.publicUrl
+            }
+
             const { error: submitError } = await supabase
                 .from('reclamations')
                 .insert({
@@ -94,7 +114,8 @@ ${formData.description}
                     type: type,
                     title: formData.shortSubject,
                     content: contentText,
-                    status: 'pending'
+                    status: 'pending',
+                    attachment_url: attachmentUrl
                 })
 
             if (submitError) throw submitError
