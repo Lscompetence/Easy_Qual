@@ -183,6 +183,7 @@ export default function AdminDashboard() {
                     content,
                     status,
                     created_at,
+                    attachment_url,
                     profiles (
                         id,
                         first_name,
