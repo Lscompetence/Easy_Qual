@@ -121,9 +121,7 @@ ${formData.description}
             if (submitError) throw submitError
 
             setSuccess(true)
-            if (onSuccess) {
-                setTimeout(onSuccess, 2000)
-            }
+            // Suppression de la redirection automatique
         } catch (err) {
             console.error(err)
             setError("Une erreur est survenue lors de l'envoi de votre réclamation. Veuillez réessayer.")
@@ -142,12 +140,31 @@ ${formData.description}
                 <p className="text-slate-600 max-w-md mx-auto mb-8">
                     Nous avons bien reçu votre demande. Notre équipe qualité l'examinera et vous apportera une réponse dans les meilleurs délais.
                 </p>
-                <button 
-                    onClick={onSuccess}
-                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors"
-                >
-                    Retour à l'historique
-                </button>
+                <div className="flex flex-col sm:flex-row gap-4">
+                    <button 
+                        onClick={() => {
+                            setSuccess(false);
+                            setFormData(prev => ({
+                                ...prev,
+                                subjectCategory: '',
+                                incidentDate: '',
+                                shortSubject: '',
+                                description: '',
+                                consent: false
+                            }));
+                            setSelectedFile(null);
+                        }}
+                        className="px-6 py-3 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl transition-colors"
+                    >
+                        Nouvelle demande
+                    </button>
+                    <button 
+                        onClick={onSuccess}
+                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors"
+                    >
+                        Consulter mon historique
+                    </button>
+                </div>
             </div>
         )
     }
