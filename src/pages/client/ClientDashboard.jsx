@@ -2501,22 +2501,6 @@ export default function ClientDashboard() {
                         </div>
                     </div>
 
-                    {/* Soumission finale */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
-                        <h3 className="text-base font-black text-gray-900 mb-1">Soumission finale</h3>
-                        <p className="text-sm text-gray-400 mb-4">
-                            Une fois les {totalIndicators} indicateurs traités,{' '}
-                            <span className="text-[#cc6d3e] font-semibold">vous pourrez envoyer</span>{' '}
-                            le dossier complet à votre consultant.
-                        </p>
-                        <button
-                            disabled={validatedCount < totalIndicators}
-                            className="inline-flex items-center gap-2 px-6 py-3 bg-gray-100 text-gray-400 rounded-xl text-sm font-bold cursor-not-allowed transition-all disabled:opacity-60"
-                        >
-                            <CheckSquare className="h-4 w-4" />
-                            Soumettre mon dossier complet
-                        </button>
-                    </div>
 
                 </main>
             </div>

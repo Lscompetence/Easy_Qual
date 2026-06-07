@@ -1,19 +1,11 @@
-import { supabase } from '../src/supabaseClient.js';
+const url = 'https://gxworwhpcyfuqwuxocxx.supabase.co/rest/v1/questionnaires_results?select=*&limit=1';
+const key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4d29yd2hwY3lmdXF3dXhvY3h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1OTAwMTgsImV4cCI6MjA4NTE2NjAxOH0.VCD3Cs-syfEdTIAIms9VRBOsYI0PrRn8IxR9oXgOtQo';
 
-async function checkDb() {
-    const { data: states, error: sErr } = await supabase.from('case_indicator_states')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(10);
-    console.log("Recent indicator states:", states);
-
-    const { data: uploads, error: uErr } = await supabase.from('criterion_quiz_uploads')
-        .select('*')
-        .order('uploaded_at', { ascending: false })
-        .limit(10);
-    console.log("Recent quiz uploads:", uploads);
-    
-    process.exit(0);
+async function check() {
+    const res = await fetch(url, {
+        headers: { 'apikey': key, 'Authorization': `Bearer ${key}` }
+    });
+    console.log(res.status);
+    console.log(await res.text());
 }
-
-checkDb();
+check();

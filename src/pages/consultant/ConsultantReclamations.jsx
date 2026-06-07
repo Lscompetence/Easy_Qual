@@ -79,6 +79,7 @@ export default function ConsultantReclamations() {
                 <ConsultantTopBar 
                     showMobileMenu={showMobileMenu}
                     setShowMobileMenu={setShowMobileMenu}
+                    showSearch={false}
                 />
                 
                 <main className="p-4 sm:p-6 lg:p-8 w-full max-w-7xl mx-auto">

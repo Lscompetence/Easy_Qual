@@ -288,6 +288,7 @@ export default function AuditQualiopi() {
         <ConsultantTopBar
           showMobileMenu={showMobileMenu}
           setShowMobileMenu={setShowMobileMenu}
+          showSearch={false}
         />
         <div style={{...s.app, minHeight: 'auto', flex: 1, width: '100%'}}>
       <style>{CSS}</style>

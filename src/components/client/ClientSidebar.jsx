@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../supabaseClient'
-import { LogOut, ChevronDown, ChevronRight, CheckCircle, Circle, Video, MessageSquare, LayoutDashboard, GraduationCap, X, LifeBuoy, Archive } from 'lucide-react'
+import { LogOut, ChevronDown, ChevronRight, CheckCircle, Circle, Video, MessageSquare, LayoutDashboard, GraduationCap, X, LifeBuoy, Archive, FileText } from 'lucide-react'
 import FeedbackModal from '../shared/FeedbackModal'
 import { getCriterionColor } from '../../utils/theme'
 
@@ -204,6 +204,17 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
                             >
                                 <Archive className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/reclamations' ? 'text-[#cc6d3e]' : 'text-gray-400'}`} />
                                 <span className="flex-1">Mes Réclamations</span>
+                            </Link>
+
+                            <Link
+                                to="/client/questionnaires"
+                                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-bold transition-all relative ${location.pathname === '/client/questionnaires'
+                                    ? 'bg-[#faf1ec] text-[#cc6d3e] border border-[#f5e2d6]'
+                                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                                    }`}
+                            >
+                                <FileText className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/questionnaires' ? 'text-[#cc6d3e]' : 'text-gray-400'}`} />
+                                <span className="flex-1">Questionnaires</span>
                             </Link>
                         </div>
                     </div>

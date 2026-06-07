@@ -6,6 +6,7 @@ import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X,
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Logo from '../../components/Logo'
 import DeleteModal from '../../components/DeleteModal'
+import AdminQuestionnairesTab from '../../components/admin/AdminQuestionnairesTab'
 
 const COUNTRY_CODES = [
     { code: '+33', label: 'FR', flag: '🇫🇷' },
@@ -110,6 +111,7 @@ export default function AdminDashboard() {
     // Reclamations State
     const [reclamations, setReclamations] = useState([])
     const [ticketsLoading, setTicketsLoading] = useState(false)
+    const [unreadQuestionnairesCount, setUnreadQuestionnairesCount] = useState(0)
     const [activeTab, setActiveTab] = useState('consultants')
     const [ticketFilterType, setTicketFilterType] = useState('all')
     const [ticketFilterStatus, setTicketFilterStatus] = useState('all')
@@ -126,6 +128,7 @@ export default function AdminDashboard() {
         fetchNotifications()
         fetchMaintenanceStatus()
         fetchReclamations()
+        fetchQuestionnairesCount()
 
         // Subscribe to real-time notifications
         const channel = supabase
@@ -145,6 +148,21 @@ export default function AdminDashboard() {
             supabase.removeChannel(channel);
         }
     }, [])
+
+    const fetchQuestionnairesCount = async () => {
+        try {
+            const { count, error } = await supabase
+                .from('questionnaires_results')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'new')
+            
+            if (!error) {
+                setUnreadQuestionnairesCount(count || 0)
+            }
+        } catch (err) {
+            console.error(err)
+        }
+    }
 
     const fetchNotifications = async () => {
         const { data, error } = await supabase
@@ -1044,7 +1062,26 @@ export default function AdminDashboard() {
                             </span>
                         )}
                     </button>
+                    <button
+                        onClick={() => setActiveTab('questionnaires')}
+                        className={`pb-4 px-2 text-sm font-black border-b-2 transition-all relative flex items-center gap-2 ${
+                            activeTab === 'questionnaires'
+                                ? 'border-blue-600 text-blue-600'
+                                : 'border-transparent text-gray-400 hover:text-gray-600'
+                        }`}
+                    >
+                        <span>Résultats Questionnaires</span>
+                        {unreadQuestionnairesCount > 0 && (
+                            <span className="px-2 py-0.5 rounded-full bg-blue-500 text-white text-[10px] font-black animate-pulse">
+                                {unreadQuestionnairesCount}
+                            </span>
+                        )}
+                    </button>
                 </div>
+
+                {activeTab === 'questionnaires' && (
+                    <AdminQuestionnairesTab />
+                )}
 
                 {activeTab === 'consultants' && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

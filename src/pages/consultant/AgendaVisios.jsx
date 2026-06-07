@@ -14,6 +14,7 @@ export default function AgendaVisios() {
     const [casesWithoutMeetings, setCasesWithoutMeetings] = useState(0)
     const [loading, setLoading] = useState(true)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
+    const [searchQuery, setSearchQuery] = useState('')
 
     useEffect(() => {
         if (user) fetchData()
@@ -72,6 +73,14 @@ export default function AgendaVisios() {
         missingLink: events.filter(e => !e.visio_link).length
     }
 
+    const filteredEvents = events.filter(ev => {
+        if (!searchQuery) return true;
+        const searchLower = searchQuery.toLowerCase();
+        const clientName = ev.cases?.tenants?.name || 'Client Inconnu';
+        const title = ev.title || 'Réunion';
+        return clientName.toLowerCase().includes(searchLower) || title.toLowerCase().includes(searchLower);
+    });
+
     return (
         <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
             <ConsultantSidebar isOpen={showMobileMenu} onClose={() => setShowMobileMenu(false)} />
@@ -79,6 +88,8 @@ export default function AgendaVisios() {
                 <ConsultantTopBar
                     showMobileMenu={showMobileMenu}
                     setShowMobileMenu={setShowMobileMenu}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
                 />
 
                 <main className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-[2000px] mx-auto w-full">
@@ -170,28 +181,30 @@ export default function AgendaVisios() {
                                 <tbody>
                                     {loading ? (
                                         <tr><td colSpan="5" className="text-center py-10 text-sm text-gray-400">Chargement...</td></tr>
-                                    ) : events.length === 0 ? (
+                                    ) : filteredEvents.length === 0 ? (
                                         <tr>
                                             <td colSpan="5" className="py-16">
                                                 <div className="flex flex-col items-center justify-center text-center">
                                                     <div className="h-16 w-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-4">
                                                         <CalendarIcon className="h-8 w-8 text-gray-400" />
                                                     </div>
-                                                    <h3 className="text-lg font-bold text-gray-900 mb-1">Aucune réunion planifiée</h3>
+                                                    <h3 className="text-lg font-bold text-gray-900 mb-1">{events.length === 0 ? "Aucune réunion planifiée" : "Aucun résultat trouvé"}</h3>
                                                     <p className="text-sm text-gray-500 max-w-sm mb-6">
-                                                        Vous n'avez pas encore programmé de réunion ou d'audit blanc dans vos dossiers.
+                                                        {events.length === 0 ? "Vous n'avez pas encore programmé de réunion ou d'audit blanc dans vos dossiers." : "Aucune réunion ne correspond à votre recherche."}
                                                     </p>
-                                                    <button 
-                                                        onClick={() => navigate('/consultant/cases')}
-                                                        className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-colors shadow-sm"
-                                                    >
-                                                        Voir mes dossiers
-                                                    </button>
+                                                    {events.length === 0 && (
+                                                        <button 
+                                                            onClick={() => navigate('/consultant/cases')}
+                                                            className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-colors shadow-sm"
+                                                        >
+                                                            Voir mes dossiers
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
                                     ) : (
-                                        events.map((ev) => {
+                                        filteredEvents.map((ev) => {
                                             const clientName = ev.cases?.tenants?.name || 'Client Inconnu'
                                             const isPast = ev.event_date && new Date(ev.event_date) < new Date()
                                             return (

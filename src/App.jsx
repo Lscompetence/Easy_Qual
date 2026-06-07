@@ -12,12 +12,14 @@ import CaseDetails from './pages/consultant/CaseDetails'
 import ClientDashboard from './pages/client/ClientDashboard'
 import ClientProfile from './pages/client/ClientProfile'
 import ClientReclamations from './pages/client/ClientReclamations'
+import ClientQuestionnaires from './pages/client/ClientQuestionnaires'
 import AgendaVisios from './pages/consultant/AgendaVisios'
 import Ressources from './pages/consultant/Ressources'
 import ConsultantNotifications from './pages/consultant/ConsultantNotifications'
 import ConsultantMessages from './pages/consultant/ConsultantMessages'
 import ConsultantBackups from './pages/consultant/ConsultantBackups'
 import ConsultantReclamations from './pages/consultant/ConsultantReclamations'
+import ConsultantQuestionnaires from './pages/consultant/ConsultantQuestionnaires'
 import Profile from './pages/Profile'
 import Unauthorized from './pages/Unauthorized'
 import MaquetteDemo from './pages/MaquetteDemo'
@@ -60,6 +62,7 @@ function App() {
             <Route path="/consultant/messages" element={<ConsultantMessages />} />
             <Route path="/consultant/backups" element={<ConsultantBackups />} />
             <Route path="/consultant/reclamations" element={<ConsultantReclamations />} />
+            <Route path="/consultant/questionnaires" element={<ConsultantQuestionnaires />} />
             <Route path="/consultant/audit/:id" element={<AuditQualiopi />} />
             <Route path="/consultant/audit" element={<AuditQualiopi />} />
           </Route>
@@ -74,6 +77,7 @@ function App() {
             <Route path="/client/criterion/:id" element={<ClientDashboard />} />
             <Route path="/client/profile" element={<ClientProfile />} />
             <Route path="/client/reclamations" element={<ClientReclamations />} />
+            <Route path="/client/questionnaires" element={<ClientQuestionnaires />} />
           </Route>
 
           {/* Default Route - Redirect logic could be here or inside Login */}
