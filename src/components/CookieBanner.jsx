@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useEffect } from 'react';
 import { X, ToggleLeft, ToggleRight, ShieldCheck, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';

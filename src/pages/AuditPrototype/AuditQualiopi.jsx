@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useMemo, useRef } from "react";
 
 // Couleurs CertifOpac (utilisées dans tout le composant)

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import jsPDF from 'jspdf'
@@ -103,14 +104,12 @@ export default function CaseDetails() {
     const [criteriaData, setCriteriaData] = useState([])
     const [allIndicatorStates, setAllIndicatorStates] = useState([])
     const [error, setError] = useState(null)
-    const [stats, setStats] = useState({ total: 32, validated: 0 })
     const [showNewCaseModal, setShowNewCaseModal] = useState(false)
     const [quizUploads, setQuizUploads] = useState({}) // { criterion_id: { audit_type: quiz } }
     const [showMobileMenu, setShowMobileMenu] = useState(false)
 
     // NEW TABS STATE
     const [activeTab, setActiveTab] = useState(() => localStorage.getItem(`consultantActiveTab_${id}`) || 'suivi_rno')
-    const [permanentLink, setPermanentLink] = useState('')
     const [selectedAudit, setSelectedAudit] = useState(() => localStorage.getItem(`consultantSelectedAudit_${id}`) || 'initial') // 'initial' | 'surveillance 1' | ...
     const [activeCriterion, setActiveCriterion] = useState(() => {
         const saved = localStorage.getItem(`consultantActiveCriterion_${id}`)
@@ -132,13 +131,11 @@ export default function CaseDetails() {
     const [showSignatureModal, setShowSignatureModal] = useState(false)
     const [signatureEventId, setSignatureEventId] = useState(null)
     const [editingEvent, setEditingEvent] = useState(null)
-    const [savingEvent, setSavingEvent] = useState(false)
 
     // Messaging State
     const [messages, setMessages] = useState([])
     const [newMessage, setNewMessage] = useState('')
     const [loadingMessages, setLoadingMessages] = useState(false)
-    const [scrolledToBottom, setScrolledToBottom] = useState(false)
     const messagesEndRef = useRef(null)
 
     // Status Modal State
@@ -305,7 +302,7 @@ export default function CaseDetails() {
             }
             syncProgress()
         }
-    }, [progressPercent, caseData?.progress, caseData?.status, id])
+    }, [progressPercent, caseData?.progress, caseData?.status, id, allIndicatorStates.length, caseData, criteriaData.length])
 
     // Handle tab and deep links from URL
     useEffect(() => {
@@ -344,103 +341,9 @@ export default function CaseDetails() {
         }, 800)
     }, [location.search, criteriaData])
 
-    useEffect(() => {
-        if (!caseData || criteriaData.length === 0) return
-        
-        let validatedCount = 0
-        Object.values(indicatorStatesMap).forEach(s => {
-            if (s.consultant_verdict === 'validated' || s.consultant_verdict === 'non_applicable') validatedCount++
-        })
-        setStats({ total: totalPossibleIndicators, validated: validatedCount })
-    }, [indicatorStatesMap, criteriaData, caseData])
 
-    useEffect(() => {
-        if (id) {
-            fetchCaseDetails()
-            // Reset active tab on case change
-            setActiveTab('suivi_rno')
-        }
-    }, [id])
 
-    useEffect(() => {
-        if (events && events.length > 0) {
-            const meeting = events.find(e => e.visio_link) || events[0]
-            if (meeting?.visio_link) {
-                setPermanentLink(meeting.visio_link)
-            }
-        }
-    }, [events])
-
-    useEffect(() => {
-        if (id && user) {
-            // ... (original fetch logic called by id change)
-        } else if (!id) {
-            setError("ID manquant dans l'URL")
-            setLoading(false)
-        }
-
-        // Realtime subscription for ALL relevant case data
-        if (id) {
-            const channel = supabase
-                .channel(`case_realtime:${id}`)
-                // Indicator States Subscription
-                .on('postgres_changes', {
-                    event: '*',
-                    schema: 'public',
-                    table: 'case_indicator_states',
-                    filter: `case_id=eq.${id}`
-                }, (payload) => {
-
-                    if (payload.eventType === 'DELETE') {
-                        setAllIndicatorStates(prev => prev.filter(s => s.id !== (payload.old.id || payload.old.id_indicateur_perdu))) // Fallback to id
-                    } else {
-                        // For INSERT and UPDATE: Replace or add into the local array by ID
-                        setAllIndicatorStates(prev => {
-                            const filtered = prev.filter(s => s.id !== payload.new.id)
-                            return [...filtered, payload.new]
-                        })
-                    }
-                })
-                // Quiz Uploads Subscription
-                .on('postgres_changes', {
-                    event: '*',
-                    schema: 'public',
-                    table: 'criterion_quiz_uploads',
-                    filter: `case_id=eq.${id}`
-                }, (payload) => {
-                    if (payload.eventType === 'DELETE') {
-                        setQuizUploads(prev => {
-                            const next = { ...prev }
-                            const critId = payload.old.criterion_id
-                            if (next[critId]) {
-                                const aType = payload.old.audit_type || 'initial'
-                                delete next[critId][aType]
-                            }
-                            return next
-                        })
-                    } else {
-                        const q = payload.new
-                        const aType = (q.audit_type || 'initial').trim().toLowerCase()
-                        const storageKey = String(q.criterion_id) // 'crit_X' or 'ind_X'
-                        setQuizUploads(prev => ({
-                            ...prev,
-                            [storageKey]: {
-                                ...(prev[storageKey] || {}),
-                                [aType]: q
-                            }
-                        }))
-                    }
-                })
-                .subscribe()
-
-            return () => {
-                supabase.removeChannel(channel)
-            }
-        }
-    }, [id, user])
-
-    const fetchCaseDetails = async () => {
-
+    const fetchCaseDetails = useCallback(async () => {
         try {
             setLoading(true)
             setError(null)
@@ -558,7 +461,76 @@ export default function CaseDetails() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [id])
+
+    useEffect(() => {
+        if (id && user) {
+            fetchCaseDetails()
+        } else if (!id) {
+            setError("ID manquant dans l'URL")
+            setLoading(false)
+        }
+
+        // Realtime subscription for ALL relevant case data
+        if (id) {
+            const channel = supabase
+                .channel(`case_realtime:${id}`)
+                // Indicator States Subscription
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'case_indicator_states',
+                    filter: `case_id=eq.${id}`
+                }, (payload) => {
+
+                    if (payload.eventType === 'DELETE') {
+                        setAllIndicatorStates(prev => prev.filter(s => s.id !== (payload.old.id || payload.old.id_indicateur_perdu))) // Fallback to id
+                    } else {
+                        // For INSERT and UPDATE: Replace or add into the local array by ID
+                        setAllIndicatorStates(prev => {
+                            const filtered = prev.filter(s => s.id !== payload.new.id)
+                            return [...filtered, payload.new]
+                        })
+                    }
+                })
+                // Quiz Uploads Subscription
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'criterion_quiz_uploads',
+                    filter: `case_id=eq.${id}`
+                }, (payload) => {
+                    if (payload.eventType === 'DELETE') {
+                        setQuizUploads(prev => {
+                            const next = { ...prev }
+                            const critId = payload.old.criterion_id
+                            if (next[critId]) {
+                                const aType = payload.old.audit_type || 'initial'
+                                delete next[critId][aType]
+                            }
+                            return next
+                        })
+                    } else {
+                        const q = payload.new
+                        const aType = (q.audit_type || 'initial').trim().toLowerCase()
+                        const storageKey = String(q.criterion_id) // 'crit_X' or 'ind_X'
+                        setQuizUploads(prev => ({
+                            ...prev,
+                            [storageKey]: {
+                                ...(prev[storageKey] || {}),
+                                [aType]: q
+                            }
+                        }))
+                    }
+                })
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channel)
+            }
+        }
+    }, [id, user])
+
 
     // Scroll to bottom of chat
     const scrollToBottom = () => {
@@ -566,6 +538,35 @@ export default function CaseDetails() {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
         }
     }
+
+    const fetchMessages = useCallback(async () => {
+        try {
+            setLoadingMessages(true)
+            const { data, error } = await supabase
+                .from('case_messages')
+                .select('id, case_id, sender_id, content, created_at, read_at')
+                .eq('case_id', id)
+                .order('created_at', { ascending: true })
+
+            if (error) throw error
+            // Filter out system messages for the chat tab
+            const userMessages = (data || []).filter(m => !m.content.startsWith('[SYSTEM]'))
+            setMessages(userMessages)
+
+            // Mark messages from client as read
+            const unreadIds = data?.filter(m => m.sender_id !== user.id && !m.read_at).map(m => m.id)
+            if (unreadIds && unreadIds.length > 0) {
+                await supabase
+                    .from('case_messages')
+                    .update({ read_at: new Date().toISOString() })
+                    .in('id', unreadIds)
+            }
+        } catch (err) {
+            console.error('Error loading messages:', err)
+        } finally {
+            setLoadingMessages(false)
+        }
+    }, [id])
 
     useEffect(() => {
         if (activeTab === 'messagerie') {
@@ -593,40 +594,11 @@ export default function CaseDetails() {
                 supabase.removeChannel(channel)
             }
         }
-    }, [activeTab, id])
+    }, [activeTab, id, fetchMessages])
 
     useEffect(() => {
         scrollToBottom()
     }, [messages])
-
-    const fetchMessages = async () => {
-        try {
-            setLoadingMessages(true)
-            const { data, error } = await supabase
-                .from('case_messages')
-                .select('id, case_id, sender_id, content, created_at, read_at')
-                .eq('case_id', id)
-                .order('created_at', { ascending: true })
-
-            if (error) throw error
-            // Filter out system messages for the chat tab
-            const userMessages = (data || []).filter(m => !m.content.startsWith('[SYSTEM]'))
-            setMessages(userMessages)
-
-            // Mark messages from client as read
-            const unreadIds = data?.filter(m => m.sender_id !== user.id && !m.read_at).map(m => m.id)
-            if (unreadIds && unreadIds.length > 0) {
-                await supabase
-                    .from('case_messages')
-                    .update({ read_at: new Date().toISOString() })
-                    .in('id', unreadIds)
-            }
-        } catch (err) {
-            console.error('Error loading messages:', err)
-        } finally {
-            setLoadingMessages(false)
-        }
-    }
 
     const handleSendMessage = async (e) => {
         e.preventDefault()
@@ -659,29 +631,7 @@ export default function CaseDetails() {
         }
     }
 
-    const handleCriterionClick = (criterion) => {
-        setActiveCriterion(criterion)
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
 
-    const handleIndicatorUpdate = async (indicatorId, newStatus) => {
-        // This function handled CLIENT updates, but we'll keep it as is if needed by client.
-        // However, the USER request implies progress should be based on CONSULTANT verdicts now.
-        // Let's focus on handleVerdict for the consultant's automation.
-
-        let updatedStates = [...allIndicatorStates]
-        const type = selectedAudit || 'initial'
-        const index = updatedStates.findIndex(s => s.indicator_id === indicatorId && (s.audit_type || 'initial') === type)
-
-        if (index >= 0) {
-            updatedStates[index] = { ...updatedStates[index], status: newStatus }
-        } else {
-            updatedStates.push({ indicator_id: indicatorId, audit_type: type, status: newStatus, case_id: id })
-        }
-
-        setAllIndicatorStates(updatedStates)
-        // We'll let handleVerdict handle the main case updates for the consultant view.
-    }
 
     // Save consultant verdict for an indicator
     const handleVerdict = async (indicatorId, verdict) => {
@@ -695,7 +645,7 @@ export default function CaseDetails() {
             const clientStatus = currentIndState.status === 'non_applicable' ? 'not_applicable' : currentIndState.status
             const statusToSave = clientStatus || (verdict === 'non_applicable' ? 'not_applicable' : 'to_do')
 
-            const { data: updatedState, error: upsertError } = await supabase.from('case_indicator_states').upsert({
+            const { error: upsertError } = await supabase.from('case_indicator_states').upsert({
                 case_id: id,
                 indicator_id: indicatorId,
                 audit_type: type,
@@ -721,7 +671,6 @@ export default function CaseDetails() {
             // 3. Global Progress Calculation (Across all audit types)
             const totalIndicators = criteriaData.reduce((acc, crit) => acc + (crit.indicators?.length || 0), 0)
             const activeAuditTypes = caseData?.audit_type || ['initial']
-            const totalPossibleGlobal = totalIndicators * activeAuditTypes.length
 
             const newProgress = calculateScore(Object.values(getGroupedStates(null)), totalIndicators)
 
@@ -941,7 +890,7 @@ export default function CaseDetails() {
         }
 
         // -- CRITERIA LOOP --
-        criteriaData.forEach((crit, index) => {
+        criteriaData.forEach((crit) => {
             // Check page break
             if (yPos > 240) {
                 doc.addPage()

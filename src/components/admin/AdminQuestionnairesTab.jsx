@@ -48,7 +48,9 @@ export default function AdminQuestionnairesTab() {
     const formatDate = (dateStr) => {
         if (!dateStr) return '';
         const d = new Date(dateStr);
-        return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+        const datePart = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+        const timePart = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        return `${datePart} à ${timePart}`;
     }
 
     return (

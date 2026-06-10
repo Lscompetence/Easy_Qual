@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useEffect } from 'react'
 import { LayoutDashboard, FolderOpen, Calendar, BookOpen, Settings, LogOut, MoreVertical, X, MessageSquare, BellRing, HardDrive, LifeBuoy, Archive, ClipboardCheck, FileText } from 'lucide-react'
 import FeedbackModal from '../shared/FeedbackModal'

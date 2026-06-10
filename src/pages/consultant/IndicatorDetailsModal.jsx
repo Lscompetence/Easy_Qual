@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { X, CheckCircle, XCircle, MessageSquare, Download, FileText, Clock, AlertCircle } from 'lucide-react'
 import { supabase } from '../../supabaseClient'
 
@@ -13,9 +13,9 @@ export default function IndicatorDetailsModal({ indicator, caseId, auditType, on
 
     useEffect(() => {
         if (indicator && caseId) fetchDetails()
-    }, [indicator, caseId])
+    }, [indicator, caseId, auditType, fetchDetails])
 
-    const fetchDetails = async () => {
+    const fetchDetails = useCallback(async () => {
         setLoading(true)
         try {
             // 1. Fetch indicator state (client status + consultant data)
@@ -50,7 +50,7 @@ export default function IndicatorDetailsModal({ indicator, caseId, auditType, on
         } finally {
             setLoading(false)
         }
-    }
+    }, [indicator, caseId, auditType])
 
     const handleSaveVerdict = async (newVerdict) => {
         setSaving(true)

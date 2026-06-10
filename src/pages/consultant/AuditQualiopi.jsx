@@ -456,14 +456,7 @@ function Entete({ org, G }) {
 
 /* ====== UNE GRILLE D'AUDIT (fidèle au document) ====== */
 function Grille({ org, G, gd, applic, setGD }) {
-  const qs = useMemo(()=> {
-    const set=new Set();
-    indicateurs.forEach(i=>{
-      const m=matrice[i.id][G.cat];
-      if(m[0]==="CONDITIONNEL"&&m[1])set.add(m[1]);
-    });
-    return questionsPrelim;
-  }, [G.cat]);
+
 
   const setRep = (k,v)=>setGD({ rep:{...gd.rep,[k]:v} });
   const setPt = (id,i,v)=>setGD({ pts:{...gd.pts,[id]:{...(gd.pts[id]||{}),[i]:v}} });
@@ -774,7 +767,7 @@ function PageSynthese({ org, G, maj, min, applic, gd, page, total }) {
     if(!a.applicable){na++;return;}
     const d=gd.dec[a.ind.id];
     if(d==="CONFORME")conf++; else if(d==="NON_APPLICABLE")na++;
-    else if(d==="NON_CONFORME"){} else nr++;
+    else if(d !== "NON_CONFORME") nr++;
   });
   return (
     <div style={s.page}>

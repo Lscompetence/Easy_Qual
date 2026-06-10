@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -13,7 +13,7 @@ import DeleteModal from '../../components/DeleteModal'
 import StatusModal from '../../components/shared/StatusModal'
 
 export default function ConsultantDashboard() {
-    const { user, logout } = useAuth() // specific logout not needed here if Sidebar handles it, but kept for logic
+    const { user } = useAuth() // specific logout not needed here if Sidebar handles it, but kept for logic
     const navigate = useNavigate() // Sidebar uses Link, but we might need it for programmatic navigation
 
 
@@ -21,7 +21,7 @@ export default function ConsultantDashboard() {
     const [wallet, setWallet] = useState({ balance: 0 })
     const [cases, setCases] = useState([])
     const [loading, setLoading] = useState(true)
-    const [actionLoading, setActionLoading] = useState(false)
+
     const [error, setError] = useState(null)
     const [successMsg, setSuccessMsg] = useState(null)
     const [filterStatus, setFilterStatus] = useState('all') // 'all', 'active'
@@ -109,9 +109,7 @@ export default function ConsultantDashboard() {
         completed: 8
     })
 
-    useEffect(() => {
-        if (user) fetchConsultantData()
-    }, [user])
+
 
     // ✅ Real-time: listen to tenants table changes
     //    When a client updates their password, it updates tenants.initial_password
@@ -137,7 +135,7 @@ export default function ConsultantDashboard() {
         return () => { supabase.removeChannel(channel) }
     }, [user])
 
-    const fetchConsultantData = async () => {
+    const fetchConsultantData = useCallback(async () => {
         try {
             setLoading(true)
 
@@ -191,7 +189,6 @@ export default function ConsultantDashboard() {
             })
 
             // Update Compliance Stats (Mocking history for now, but putting real current average)
-            const currentMonth = new Date().getMonth() // 0-11
             const monthNames = ['Jan', 'Fev', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aou', 'Sep', 'Oct', 'Nov', 'Dec']
 
             // Generate last 6 months labels dynamically
@@ -220,15 +217,7 @@ export default function ConsultantDashboard() {
             }
 
             // Calculate Trend (Current vs Previous Month)
-            const currentVal = historyData[historyData.length - 1].value
-            const prevVal = historyData[historyData.length - 2]?.value || 0
-            const trendVal = currentVal - prevVal
 
-            setComplianceStats({
-                average: avgProgress,
-                trend: trendVal,
-                history: historyData
-            })
 
         } catch (error) {
             console.error('Error loading consultant data:', error)
@@ -236,23 +225,12 @@ export default function ConsultantDashboard() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [user])
 
+    useEffect(() => {
+        if (user) fetchConsultantData()
+    }, [user, fetchConsultantData])
 
-
-    // Compliance Data State
-    const [complianceStats, setComplianceStats] = useState({
-        average: 0,
-        trend: 0,
-        history: [
-            { name: 'Jan', value: 0 },
-            { name: 'Fev', value: 0 },
-            { name: 'Mar', value: 0 },
-            { name: 'Avr', value: 0 },
-            { name: 'Mai', value: 0 },
-            { name: 'Juin', value: 0 },
-        ]
-    })
 
     return (
         <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">

@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
                     <div class="footer">
                         <div class="logo" style="color: #ffffff; margin-bottom: 25px; font-size: 24px;">Easy<span>'</span>Qual</div>
                         <p>L'excellence opérationnelle pour votre certification Qualiopi.</p>
-                        <p>Une question ? <a href="mailto:yassinealaoui095@gmail.com">Contactez notre support</a></p>
+                        <p>Une question ? <a href="mailto:devweb.lsc@outlook.com">Contactez notre support</a></p>
                         <p style="margin-top: 30px; border-top: 1px solid #1e293b; padding-top: 25px; font-size: 10px; opacity: 0.6;">
                             © 2026 EasyQual. Tous droits réservés.
                         </p>

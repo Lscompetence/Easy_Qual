@@ -1,6 +1,6 @@
 -- ⚠️ ATTENTION : CE SCRIPT SUPPRIME TOUTES LES DONNÉES DE TEST DE VOTRE BASE DE DONNÉES.
 -- IL VA RENDRE LA BASE ENTIÈREMENT VIERGE ET PRÊTE POUR LA PRODUCTION.
--- SEUL LE COMPTE ADMINISTRATEUR PRINCIPAL (yassinealaoui095@gmail.com) SERA CONSERVÉ.
+-- SEUL LE COMPTE ADMINISTRATEUR PRINCIPAL (devweb.lsc@outlook.com) SERA CONSERVÉ.
 
 -- 1. Désactiver temporairement les contraintes pour vider les tables en toute sécurité
 SET session_replication_role = 'replica';
@@ -24,16 +24,16 @@ TRUNCATE TABLE public.tenants CASCADE;
 -- 3. Nettoyer les portefeuilles de crédits (conserver uniquement celui de l'admin s'il existe)
 DELETE FROM public.credits_wallet 
 WHERE consultant_id NOT IN (
-  SELECT id FROM public.profiles WHERE email = 'yassinealaoui095@gmail.com'
+  SELECT id FROM public.profiles WHERE email = 'devweb.lsc@outlook.com'
 );
 
 -- 4. Supprimer tous les profils de test (consultants, clients) sauf l'admin principal
 DELETE FROM public.profiles 
-WHERE email != 'yassinealaoui095@gmail.com' AND role != 'admin';
+WHERE email != 'devweb.lsc@outlook.com' AND role != 'admin';
 
 -- 5. Supprimer tous les comptes de connexion de Supabase Auth (emails/mots de passe) sauf l'admin
 DELETE FROM auth.users 
-WHERE email != 'yassinealaoui095@gmail.com';
+WHERE email != 'devweb.lsc@outlook.com';
 
 -- 6. Réactiver les contraintes de clés étrangères
 SET session_replication_role = 'origin';

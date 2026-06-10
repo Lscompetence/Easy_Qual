@@ -14,8 +14,8 @@ async function testSmtp() {
     try {
         console.log("Testing SMTP connection...")
         let info = await transporter.sendMail({
-            from: '"EasyQual" <yassinealaoui095@gmail.com>',
-            to: "yassinealaoui095@gmail.com", 
+            from: '"EasyQual" <devweb.lsc@outlook.com>',
+            to: "devweb.lsc@outlook.com", 
             subject: "Test SMTP",
             text: "Hello world?",
         });

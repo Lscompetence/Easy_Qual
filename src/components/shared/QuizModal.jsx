@@ -1,3 +1,4 @@
+ 
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, HelpCircle, Trophy, AlertCircle, Play, ArrowRight, ArrowLeft, CheckSquare } from 'lucide-react';
 import { QUIZ_DATA } from '../../data/qcmData';
@@ -14,6 +15,8 @@ export default function QuizModal({ isOpen, onClose, criterionId, criterionLabel
 
     const questions = QUIZ_DATA[criterionId] || QUIZ_DATA['1']; // fallback to crit 1 if not found
 
+     
+     
     useEffect(() => {
         if (isOpen) {
             setStep('intro');

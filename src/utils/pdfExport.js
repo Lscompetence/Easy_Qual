@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 
-export const generateEmargementPDF = (event, caseData, tenantData) => {
+export const generateEmargementPDF = (event, caseData) => {
     const doc = new jsPDF();
     
     // Header

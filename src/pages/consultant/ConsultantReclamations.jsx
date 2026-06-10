@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { Plus, History, Trash2, Sparkles, XCircle, AlertCircle } from 'lucide-react'
@@ -18,13 +18,8 @@ export default function ConsultantReclamations() {
     const [isDeleting, setIsDeleting] = useState(false)
     const [isDeleted, setIsDeleted] = useState(false)
 
-    useEffect(() => {
-        if (user && activeTab === 'history') {
-            fetchReclamations()
-        }
-    }, [user, activeTab])
 
-    const fetchReclamations = async () => {
+    const fetchReclamations = useCallback(async () => {
         try {
             setLoading(true)
             const { data, error } = await supabase
@@ -40,7 +35,14 @@ export default function ConsultantReclamations() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [user])
+
+    useEffect(() => {
+        if (user && activeTab === 'history') {
+            fetchReclamations()
+        }
+    }, [user, activeTab, fetchReclamations])
+
 
     const handleDeleteTicket = (id) => {
         setTicketToDelete(id);

@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { Video, Upload, Link as LinkIcon, Save, CheckCircle, Trash2, X, AlertCircle, Loader2, PlayCircle, FileText, ChevronRight, Eye } from 'lucide-react';

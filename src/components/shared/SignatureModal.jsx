@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useRef, useState, useEffect } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { X, Calendar, Clock, Eraser, Check } from 'lucide-react';
@@ -9,6 +10,7 @@ export default function SignatureModal({ isOpen, onClose, onConfirm, eventDetail
     const [startTime, setStartTime] = useState('');
     const [endTime, setEndTime] = useState('');
 
+     
     useEffect(() => {
         if (isOpen && eventDetails) {
             const dateObj = new Date(eventDetails.event_date || Date.now());

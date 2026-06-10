@@ -6,11 +6,11 @@ const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const supabase = createClient(SUPABASE_URL, ANON_KEY)
 
 async function testEdgeFunction() {
-    console.log("Invoking edge function with EXISTING EMAIL yassinealaoui095@gmail.com...")
+    console.log("Invoking edge function with EXISTING EMAIL devweb.lsc@outlook.com...")
     const { data, error } = await supabase.functions.invoke('admin_create_consultant', {
         body: {
             action: 'create_consultant',
-            email: 'yassinealaoui095@gmail.com',
+            email: 'devweb.lsc@outlook.com',
             password: 'TestPassword123!',
             firstName: 'Test',
             lastName: 'User',

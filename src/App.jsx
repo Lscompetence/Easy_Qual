@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import ForgotPassword from './pages/ForgotPassword'
 import UpdatePassword from './pages/UpdatePassword'
 import AdminDashboard from './pages/admin/AdminDashboard'
+import AdminActivities from './pages/admin/AdminActivities'
 import ConsultantDashboard from './pages/consultant/ConsultantDashboard'
 import ConsultantCases from './pages/consultant/ConsultantCases'
 import CaseDetails from './pages/consultant/CaseDetails'
@@ -33,6 +34,9 @@ function App() {
       <Router>
         <CookieBanner />
         <Routes>
+          {/* Secret Admin Login Route */}
+          <Route path="/admin-lsc-secure" element={<Login forceRole="admin" />} />
+          
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/update-password" element={<UpdatePassword />} />
@@ -49,6 +53,7 @@ function App() {
           {/* Admin Routes */}
           <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/activities" element={<AdminActivities />} />
           </Route>
 
           {/* Consultant Routes */}

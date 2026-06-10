@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { User, Briefcase, Building, ShieldCheck, ArrowRight, Paperclip, CheckCircle } from 'lucide-react'

@@ -157,7 +157,18 @@ export default function AdminDashboard() {
                 .eq('status', 'new')
             
             if (!error) {
-                setUnreadQuestionnairesCount(count || 0)
+                // Check if user has locally cleared questionnaires count recently
+                const clearedLocal = localStorage.getItem('questionnaires_cleared_at');
+                // We'll just trust local storage if they clicked it in this session or ever.
+                // If the count fetched is > 0, we only show it if they haven't cleared it.
+                // But what if NEW ones arrive? We can store the last count they cleared.
+                const lastClearedCount = parseInt(localStorage.getItem('questionnaires_cleared_count') || '0', 10);
+                
+                if (count > lastClearedCount) {
+                    setUnreadQuestionnairesCount(count - lastClearedCount);
+                } else {
+                    setUnreadQuestionnairesCount(0);
+                }
             }
         } catch (err) {
             console.error(err)
@@ -172,7 +183,13 @@ export default function AdminDashboard() {
             .limit(10);
 
         if (!error && data) {
-            setNotifications(data);
+            // Respect local storage read IDs
+            const localReadIds = JSON.parse(localStorage.getItem('read_admin_notifs') || '[]');
+            const processedData = data.map(n => ({
+                ...n,
+                is_read: n.is_read || localReadIds.includes(n.id)
+            }));
+            setNotifications(processedData);
         }
     }
 
@@ -638,7 +655,7 @@ export default function AdminDashboard() {
             if (funcError) throw funcError
             if (funcData && funcData.success === false) throw new Error(funcData.error)
 
-            const responseData = { user: funcData.user, success: true };
+
 
             // --- UI UPDATE ---
             setCreatedConsultantParams({ ...newConsultant })
@@ -667,7 +684,7 @@ export default function AdminDashboard() {
 
             // If the error is an object without a standard message, stringify it
             if (typeof error === 'object' && !error.message) {
-                try { errMsg = JSON.stringify(error) } catch(e) {}
+                try { errMsg = JSON.stringify(error) } catch { /* ignore */ }
             }
 
             if (errMsg?.includes('401') || error.status === 401) {
@@ -726,9 +743,7 @@ export default function AdminDashboard() {
         }
     }
 
-    const handleSendCredentials = (consultant) => {
-        handleInitiateSendEmail(consultant)
-    }
+
 
     const handleInitiateSendEmail = (consultant) => {
         setSelectedConsultantForEmail(consultant)
@@ -851,14 +866,74 @@ export default function AdminDashboard() {
 
                             <div className="relative">
                                 <button
-                                    onClick={() => setShowNotifications(!showNotifications)}
+                                    onClick={async () => {
+                                        setShowNotifications(!showNotifications);
+                                        const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+                                        if (unreadIds.length > 0) {
+                                            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+                                            
+                                            // Fallback: save to localStorage to ensure they stay read locally
+                                            const existingReadIds = JSON.parse(localStorage.getItem('read_admin_notifs') || '[]');
+                                            localStorage.setItem('read_admin_notifs', JSON.stringify([...new Set([...existingReadIds, ...unreadIds])]));
+                                            
+                                            try {
+                                                for (const id of unreadIds) {
+                                                    const { error } = await supabase
+                                                        .from('admin_notifications')
+                                                        .update({ is_read: true })
+                                                        .eq('id', id);
+                                                    if (error) console.error('Error updating notif:', id, error);
+                                                }
+                                            } catch (err) {
+                                                console.error('Error marking notifications as read:', err);
+                                            }
+                                        }
+                                    }}
                                     className="p-2 text-gray-400 hover:text-blue-600 transition-colors relative"
                                 >
                                     <Bell className="h-6 w-6" />
-                                    {notifications.length > 0 && notifications.some(n => !n.is_read) && (
-                                        <span className="absolute top-2 right-2 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white shadow-sm"></span>
+                                    {notifications.filter(n => !n.is_read).length > 0 && (
+                                        <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full flex items-center justify-center text-[10px] font-black text-white border-2 border-white shadow-sm transform translate-x-1 -translate-y-1">
+                                            {notifications.filter(n => !n.is_read).length}
+                                        </span>
                                     )}
                                 </button>
+
+                                {showNotifications && (
+                                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-[100] overflow-hidden flex flex-col">
+                                        <div className="p-4 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+                                            <h4 className="font-bold text-gray-900 text-sm">Notifications</h4>
+                                            {notifications.filter(n => !n.is_read).length > 0 && (
+                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                                                    {notifications.filter(n => !n.is_read).length} non lues
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="max-h-72 overflow-y-auto">
+                                            {notifications.length === 0 ? (
+                                                <div className="p-6 text-center text-gray-400 text-sm">Aucune notification</div>
+                                            ) : (
+                                                notifications.slice(0, 5).map(notif => (
+                                                    <div key={notif.id} className={`p-4 border-b border-gray-50 hover:bg-slate-50 transition-colors ${!notif.is_read ? 'bg-blue-50/30' : ''}`}>
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <span className="text-xs font-bold text-gray-900">{notif.title}</span>
+                                                            <span className="text-[10px] text-gray-400 whitespace-nowrap ml-2">
+                                                                {new Date(notif.created_at).toLocaleDateString()}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[11px] text-gray-500 line-clamp-2">{notif.content}</p>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                        <button 
+                                            onClick={() => { setShowNotifications(false); navigate('/admin/activities'); }}
+                                            className="p-3 text-xs font-bold text-blue-600 hover:text-blue-700 bg-gray-50 text-center transition-colors border-t border-gray-100 w-full"
+                                        >
+                                            Voir tout l'historique
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <button
                                 onClick={handleLogout}
@@ -1026,8 +1101,8 @@ export default function AdminDashboard() {
 
                         <div className="mt-4 pt-4 border-t border-gray-50">
                             <button
-                                onClick={fetchNotifications}
-                                className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest flex items-center gap-2"
+                                onClick={() => navigate('/admin/activities')}
+                                className="w-full justify-center text-xs font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:bg-blue-100 px-3 py-2 rounded-lg transition-colors uppercase tracking-widest flex items-center gap-2"
                             >
                                 <Plus className="h-3 w-3" /> Voir tout l'historique
                             </button>
@@ -1063,7 +1138,35 @@ export default function AdminDashboard() {
                         )}
                     </button>
                     <button
-                        onClick={() => setActiveTab('questionnaires')}
+                        onClick={async () => {
+                            setActiveTab('questionnaires');
+                            if (unreadQuestionnairesCount > 0) {
+                                // Save locally to prevent them coming back on refresh
+                                const lastCleared = parseInt(localStorage.getItem('questionnaires_cleared_count') || '0', 10);
+                                localStorage.setItem('questionnaires_cleared_count', (lastCleared + unreadQuestionnairesCount).toString());
+                                setUnreadQuestionnairesCount(0);
+                                
+                                try {
+                                    // Fetch the unread ids first
+                                    const { data: unread } = await supabase
+                                        .from('questionnaires_results')
+                                        .select('id')
+                                        .eq('status', 'new');
+                                        
+                                    if (unread && unread.length > 0) {
+                                        for (const item of unread) {
+                                            const { error } = await supabase
+                                                .from('questionnaires_results')
+                                                .update({ status: 'reviewed' })
+                                                .eq('id', item.id);
+                                            if (error) console.error('Error updating questionnaire:', item.id, error);
+                                        }
+                                    }
+                                } catch (err) {
+                                    console.error('Exception updating questionnaires:', err);
+                                }
+                            }
+                        }}
                         className={`pb-4 px-2 text-sm font-black border-b-2 transition-all relative flex items-center gap-2 ${
                             activeTab === 'questionnaires'
                                 ? 'border-blue-600 text-blue-600'
@@ -1072,7 +1175,7 @@ export default function AdminDashboard() {
                     >
                         <span>Résultats Questionnaires</span>
                         {unreadQuestionnairesCount > 0 && (
-                            <span className="px-2 py-0.5 rounded-full bg-blue-500 text-white text-[10px] font-black animate-pulse">
+                            <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse">
                                 {unreadQuestionnairesCount}
                             </span>
                         )}

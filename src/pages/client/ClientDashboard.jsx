@@ -1,6 +1,7 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect, useRef } from 'react'
 import { getCriterionColor } from '../../utils/theme'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { Sun, Flag, Ban, ChevronUp, ChevronDown, ChevronRight, AlertTriangle, Check, Trash2, Upload, Info, PlayCircle, FileText, CheckCircle, XCircle, ArrowRight, BookOpen, Clock, Play, Download, Search, AlertCircle, RefreshCw, Send, Image as ImageIcon, Link as LinkIcon, Paperclip, MoreVertical, ThumbsUp, MapPin, Building, Phone, Mail, Award, Users, Plus, Target, CheckSquare, Smile, MessageSquare, Menu, FileImage, Video, HelpCircle, FileCheck, CircleOff, Eye } from 'lucide-react'
@@ -446,7 +447,7 @@ const getModalContent = (indId) => {
 };
 
 export default function ClientDashboard() {
-    const { user, profile } = useAuth()
+    const { user } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
 
@@ -471,7 +472,7 @@ export default function ClientDashboard() {
     const [sendingMsg, setSendingMsg] = useState(false)
     const [uploadingFor, setUploadingFor] = useState(null)
     const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
+
     const [consultantName, setConsultantName] = useState('')
     const fileInputRef = useRef(null)
     const [pendingCriterionId, setPendingCriterionId] = useState(null)
@@ -498,7 +499,7 @@ export default function ClientDashboard() {
         return saved ? JSON.parse(saved) : {}
     })
     const [allStatesData, setAllStatesData] = useState([])
-    const [allQuizData, setAllQuizData] = useState([])
+
     const [caseEvents, setCaseEvents] = useState([])
     const [isQuizOpen, setIsQuizOpen] = useState(false)
     const [templateModalOpen, setTemplateModalOpen] = useState(false)
@@ -535,6 +536,7 @@ export default function ClientDashboard() {
     const isCriterion = location.pathname.startsWith('/client/criterion/')
     const criterionId = isCriterion ? location.pathname.split('/').pop() : null
 
+     
     useEffect(() => {
         const init = async () => {
             if (user) {
@@ -553,6 +555,7 @@ export default function ClientDashboard() {
         }
     }, [selectedVideoIndicator])
 
+     
     useEffect(() => {
         if (myCase?.id) fetchMessages()
     }, [myCase?.id])
@@ -575,6 +578,7 @@ export default function ClientDashboard() {
         }
     }
 
+     
     useEffect(() => {
         if (isMessages && messages.some(m => m.sender_id !== user.id && !m.read_at)) {
             markAllMessagesAsRead()
@@ -589,6 +593,7 @@ export default function ClientDashboard() {
         return () => clearTimeout(timer)
     }, [messages])
 
+     
     useEffect(() => {
         if (!myCase?.id) return
 
@@ -639,7 +644,7 @@ export default function ClientDashboard() {
                     }
                 }
             })
-            .subscribe((status) => {
+            .subscribe(() => {
 
             })
 
@@ -754,7 +759,7 @@ export default function ClientDashboard() {
                         .from('criterion_quiz_uploads')
                         .select('id, case_id, criterion_id, audit_type, file_name, file_url, uploaded_at')
                         .eq('case_id', caseData.id)
-                    setAllQuizData(quizData || [])
+
 
                     // 3. Fetch case events (sessions/visios)
                     const { data: eventsData } = await supabase
@@ -772,7 +777,6 @@ export default function ClientDashboard() {
             }
         } catch (err) {
             console.error('Error loading client data:', err)
-            setError(err.message)
         } finally {
             setLoading(false)
         }
@@ -818,6 +822,7 @@ export default function ClientDashboard() {
     }
 
     // Effect to re-map states when selectedAudit changes
+     
     useEffect(() => {
         if (allStatesData.length > 0 && selectedAudit) {
             mapIndicatorStates(allStatesData, selectedAudit)
@@ -837,14 +842,7 @@ export default function ClientDashboard() {
         setDirtyIndicators(prev => new Set(prev).add(indicatorId))
     }
 
-    const handleCommentChange = (indicatorId, comment) => {
-        if (!myCase) return
-        setIndicatorStates(prev => ({
-            ...prev,
-            [indicatorId]: { ...(prev[indicatorId] || {}), client_comment: comment }
-        }))
-        setDirtyIndicators(prev => new Set(prev).add(indicatorId))
-    }
+
 
     const handleFileSelect = (file, indicatorId) => {
         if (!file) return
@@ -1103,6 +1101,7 @@ export default function ClientDashboard() {
         )
     }
 
+     
     useEffect(() => {
         if (isMessages && myCase?.id) {
 
@@ -1136,7 +1135,7 @@ export default function ClientDashboard() {
         setNewMessage('')
 
         try {
-            const { data, error } = await supabase.from('case_messages').insert({
+            const { error } = await supabase.from('case_messages').insert({
                 case_id: myCase.id,
                 sender_id: user.id,
                 content: content
@@ -1194,7 +1193,7 @@ export default function ClientDashboard() {
     // Stats
     const totalIndicators = indicators.length
     const validatedCount = Object.values(indicatorStates).filter(s => s?.status === 'done' || s?.status === 'not_applicable' || s?.status === 'non_applicable').length
-    const toTreatCount = Object.values(indicatorStates).filter(s => !s?.status || (s?.status !== 'done' && s?.status !== 'not_applicable' && s?.status !== 'non_applicable')).length
+
     const rejectedCount = Object.values(indicatorStates).filter(s => s?.consultant_verdict === 'non_conforme').length
     const progressPercent = totalIndicators > 0 ? Math.round((validatedCount / totalIndicators) * 100) : 0
 
@@ -1924,7 +1923,7 @@ export default function ClientDashboard() {
                                     showStatus('error', 'Erreur', "Impossible de générer le rapport : " + err.message);
                                 }
                             }}
-                            onFail={async (score, details) => {
+                            onFail={async (score) => {
                                 try {
                                     const key = 'crit_' + currentCriterion.id;
                                     setLastFailedScores(prev => {
@@ -1964,7 +1963,7 @@ export default function ClientDashboard() {
                                     // Robust state lookup: try both number and string keys
                                      const state = indicatorStates[ind.id] || indicatorStates[String(ind.id)] || {}
                                      const status = state.status || null
-                                    const verdict = state.consultant_verdict
+
                                     const currentAuditKey = (selectedAudit || 'initial').trim().toLowerCase()
                                     const fileData = quizUploads['ind_' + ind.id]?.[currentAuditKey]
 

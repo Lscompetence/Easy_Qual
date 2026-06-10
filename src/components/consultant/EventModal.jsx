@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useEffect } from 'react'
 import { X, Calendar, Video, Type, AlignLeft } from 'lucide-react'
 

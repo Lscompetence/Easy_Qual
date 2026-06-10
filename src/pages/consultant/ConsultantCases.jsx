@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -87,6 +87,37 @@ export default function ConsultantCases() {
         }
     }
 
+
+
+    const fetchWallet = useCallback(async () => {
+        const { data } = await supabase
+            .from('credits_wallet')
+            .select('balance')
+            .eq('consultant_id', user.id)
+            .single()
+        if (data) setWalletBalance(data.balance)
+    }, [user])
+
+    const fetchCases = useCallback(async () => {
+        try {
+            setLoading(true)
+            const { data, error } = await supabase
+                .from('cases')
+                .select(`
+                    *,
+                    tenants (name, siret, logo_url, client_email, initial_password)
+                `)
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+            setCases(data || [])
+        } catch (error) {
+            console.error('Error fetching cases:', error)
+        } finally {
+            setLoading(false)
+        }
+    }, [])
+
     useEffect(() => {
         if (user) {
             fetchCases()
@@ -117,36 +148,7 @@ export default function ConsultantCases() {
                 supabase.removeChannel(channel)
             }
         }
-    }, [user])
-
-    const fetchWallet = async () => {
-        const { data } = await supabase
-            .from('credits_wallet')
-            .select('balance')
-            .eq('consultant_id', user.id)
-            .single()
-        if (data) setWalletBalance(data.balance)
-    }
-
-    const fetchCases = async () => {
-        try {
-            setLoading(true)
-            const { data, error } = await supabase
-                .from('cases')
-                .select(`
-                    *,
-                    tenants (name, siret, logo_url, client_email, initial_password)
-                `)
-                .order('created_at', { ascending: false })
-
-            if (error) throw error
-            setCases(data || [])
-        } catch (error) {
-            console.error('Error fetching cases:', error)
-        } finally {
-            setLoading(false)
-        }
-    }
+    }, [user, fetchCases, fetchWallet])
 
     const filteredCases = cases.filter(c => {
         const matchesSearch = c.tenants?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -166,23 +168,7 @@ export default function ConsultantCases() {
         return matchesSearch && matchesStatus
     })
 
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'active': return 'bg-blue-50 text-blue-700'
-            case 'validated': return 'bg-green-50 text-green-700'
-            case 'draft': return 'bg-gray-100 text-gray-600'
-            default: return 'bg-amber-50 text-amber-700'
-        }
-    }
 
-    const getStatusLabel = (status) => {
-        switch (status) {
-            case 'active': return 'Non Terminé'
-            case 'validated': return 'Terminé'
-            case 'draft': return '—'
-            default: return '—'
-        }
-    }
 
     return (
         <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">

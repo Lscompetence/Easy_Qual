@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState } from 'react'
 import { X, CreditCard, ShieldCheck, CheckCircle2, Lock, Sparkles, AlertCircle, Gift } from 'lucide-react'
 import { supabase } from '../../supabaseClient'

@@ -67,7 +67,7 @@ export default function StatusModal({
         }
     }
 
-    const { icon, bgColor, ringColor, buttonColor, titleColor, descriptionColor } = config[type] || config.info
+    const { icon, bgColor, ringColor, buttonColor, titleColor } = config[type] || config.info
 
     const dynamicTheme = customTheme || (criterionId ? getCriterionColor(criterionId) : null);
     const useDynamicTheme = dynamicTheme && (type === 'success' || type === 'confirm' || type === 'info');

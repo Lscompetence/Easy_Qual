@@ -52,7 +52,6 @@ export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuc
             const { error: caseError } = await supabase
                 .from('cases')
                 .update({
-                    category: formData.category,
                     audit_type: formData.auditTypes,
                     training_categories: formData.trainingCategories
                 })
@@ -104,34 +103,6 @@ export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuc
                 )}
 
                 <form onSubmit={handleUpdate} className="space-y-6">
-                    {/* Type Selection */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div
-                            className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center text-center transition-all ${formData.category === 'mono-site'
-                                ? 'border-purple-600 bg-purple-50 ring-1 ring-purple-600'
-                                : 'border-gray-100 hover:border-purple-200'
-                                }`}
-                            onClick={() => setFormData({ ...formData, category: 'mono-site' })}
-                        >
-                            <Building className="h-5 w-5 text-gray-400 mb-2" />
-                            <span className="block text-sm font-bold text-gray-900">Mono-site</span>
-                        </div>
-
-                        <div
-                            className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col items-center text-center transition-all ${formData.category === 'multi-site'
-                                ? 'border-purple-600 bg-purple-50 ring-1 ring-purple-600'
-                                : 'border-gray-100 hover:border-purple-200'
-                                }`}
-                            onClick={() => setFormData({ ...formData, category: 'multi-site' })}
-                        >
-                            <div className="flex -space-x-1 mb-2">
-                                <Building className="h-4 w-4 text-gray-400" />
-                                <Building className="h-4 w-4 text-gray-400" />
-                            </div>
-                            <span className="block text-sm font-bold text-gray-900">Multi-site</span>
-                        </div>
-                    </div>
-
                     {/* Form Fields */}
                     <div className="space-y-4">
                         <div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -14,24 +14,8 @@ export default function ConsultantMessages() {
     const [showMobileMenu, setShowMobileMenu] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
 
-    useEffect(() => {
-        if (user) {
-            fetchConversations()
-            
-            const channel = supabase
-                .channel('global_chat_sync')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'case_messages' }, () => {
-                    fetchConversations()
-                })
-                .subscribe()
 
-            return () => {
-                supabase.removeChannel(channel)
-            }
-        }
-    }, [user])
-
-    const fetchConversations = async () => {
+    const fetchConversations = useCallback(async () => {
         try {
             // Get all cases for this consultant
             const { data: casesData } = await supabase
@@ -73,7 +57,25 @@ export default function ConsultantMessages() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [user])
+
+    useEffect(() => {
+        if (user) {
+            fetchConversations()
+            
+            const channel = supabase
+                .channel('global_chat_sync')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'case_messages' }, () => {
+                    fetchConversations()
+                })
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channel)
+            }
+        }
+    }, [user, fetchConversations])
+
 
     const filteredConvs = conversations.filter(c => 
         c.clientName.toLowerCase().includes(searchQuery.toLowerCase())

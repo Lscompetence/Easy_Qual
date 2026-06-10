@@ -4,7 +4,7 @@ import { Loader2, AlertCircle } from 'lucide-react';
 
 const getYoutubeId = (url) => {
     if (!url) return null;
-    const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const regExp = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/;
     const match = url.match(regExp);
     return (match && match[1]) ? match[1] : null;
 };

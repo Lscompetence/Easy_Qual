@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom'
+import { supabase } from '../supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
 
-export default function Login() {
+export default function Login({ forceRole }) {
     const [searchParams] = useSearchParams()
     const location = useLocation()
-    const roleParam = searchParams.get('role') || 'admin'
+    
+    // Block the URL parameter 'role=admin' to force the use of the secret route
+    let roleParam = forceRole || searchParams.get('role') || 'client';
+    if (!forceRole && roleParam === 'admin') {
+        roleParam = 'client'; // Fallback to client if someone tries to guess the admin URL
+    }
 
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -98,7 +104,7 @@ export default function Login() {
 
 
                     // 1. Check if email exists in tenants table
-                    const { data: tenant, error: tErr } = await supabase
+                    const { data: tenant } = await supabase
                         .from('tenants')
                         .select('id, name, initial_password')
                         .eq('client_email', cleanEmail)

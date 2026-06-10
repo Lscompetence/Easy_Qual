@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { useNavigate } from 'react-router-dom'
+
 import { User, Lock, Mail, Save, Eye, EyeOff, Camera, Check, AlertCircle } from 'lucide-react'
 import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
 
 export default function ClientProfile() {
     const { user, role, refreshProfile, profile } = useAuth()
-    const navigate = useNavigate()
+
     const fileInputRef = useRef(null)
 
     const [loading, setLoading] = useState(true)
@@ -16,14 +16,14 @@ export default function ClientProfile() {
     const [updatingPassword, setUpdatingPassword] = useState(false)
     const [uploadingAvatar, setUploadingAvatar] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
-    const [showConfirm, setShowConfirm] = useState(false)
+
     const [showSuccessModal, setShowSuccessModal] = useState(false)
     const [message, setMessage] = useState({ type: '', content: '' })
     const [initialized, setInitialized] = useState(false)
     const [consultantName, setConsultantName] = useState('')
     const [indicatorStates, setIndicatorStates] = useState({})
     const [myCase, setMyCase] = useState(null)
-    const [quizUploads, setQuizUploads] = useState({})
+
     const [showMobileMenu, setShowMobileMenu] = useState(false)
 
     const [formData, setFormData] = useState({ first_name: '', last_name: '', email: '' })
@@ -167,6 +167,7 @@ export default function ClientProfile() {
 
             showMsg('success', 'Profil mis à jour avec succès.')
         } catch (err) {
+            console.error(err)
             showMsg('error', 'Erreur lors de la mise à jour.')
         } finally {
             setUpdatingInfo(false)
@@ -424,7 +425,7 @@ export default function ClientProfile() {
                                         Confirmer
                                     </label>
                                     <input
-                                        type={showConfirm ? 'text' : 'password'}
+                                        type="password"
                                         value={passwordData.confirmPassword}
                                         onChange={e => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                                         className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 bg-gray-50 outline-none focus:border-[#cc6d3e] focus:ring-2 focus:ring-[#cc6d3e]/20 focus:bg-white transition-all"

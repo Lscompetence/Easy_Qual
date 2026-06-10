@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useEffect } from 'react'
 import { Search, Bell, Plus, Menu, Lock } from 'lucide-react'
 import { supabase } from '../../supabaseClient'

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
     MessageSquare, 
@@ -21,40 +21,12 @@ export default function ConsultantNotifications() {
     const { user } = useAuth()
     const navigate = useNavigate()
     const [notifications, setNotifications] = useState([])
-    const [casesCount, setCasesCount] = useState(0)
+
     const [loading, setLoading] = useState(true)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
 
-    useEffect(() => {
-        if (user) {
-            fetchNotifications()
-            
-            // Subscribe to new notifications
-            const channel = supabase
-                .channel('global_notifs')
-                .on('postgres_changes', { 
-                    event: 'INSERT', 
-                    schema: 'public', 
-                    table: 'case_messages' 
-                }, () => {
-                    fetchNotifications()
-                })
-                .on('postgres_changes', { 
-                    event: 'UPDATE', 
-                    schema: 'public', 
-                    table: 'case_messages' 
-                }, () => {
-                    fetchNotifications()
-                })
-                .subscribe()
 
-            return () => {
-                supabase.removeChannel(channel)
-            }
-        }
-    }, [user])
-
-    const fetchNotifications = async () => {
+    const fetchNotifications = useCallback(async () => {
         setLoading(true)
         try {
             // [AUTO-REPAIR] Fix old cases missing consultant_id
@@ -129,7 +101,37 @@ export default function ConsultantNotifications() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [user])
+
+    useEffect(() => {
+        if (user) {
+            fetchNotifications()
+            
+            // Subscribe to new notifications
+            const channel = supabase
+                .channel('global_notifs')
+                .on('postgres_changes', { 
+                    event: 'INSERT', 
+                    schema: 'public', 
+                    table: 'case_messages' 
+                }, () => {
+                    fetchNotifications()
+                })
+                .on('postgres_changes', { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'case_messages' 
+                }, () => {
+                    fetchNotifications()
+                })
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channel)
+            }
+        }
+    }, [user, fetchNotifications])
+
 
     const markAsRead = async (caseId) => {
         const now = new Date().toISOString()

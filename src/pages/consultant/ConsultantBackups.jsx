@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../supabaseClient'
+
 import { useAuth } from '../../contexts/AuthContext'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
 import { CloudOff, CloudCheck, ShieldCheck, Download, Clock, HardDrive, AlertCircle } from 'lucide-react'
 
 export default function ConsultantBackups() {
-    const { user } = useAuth()
+    useAuth()
     const [showMobileMenu, setShowMobileMenu] = useState(false)
     const [lastSync, setLastSync] = useState(new Date())
 
