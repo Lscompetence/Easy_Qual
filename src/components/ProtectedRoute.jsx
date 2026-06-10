@@ -16,7 +16,7 @@ const ProtectedRoute = ({ allowedRoles }) => {
 
     if (!user) {
         let redirectPath = "/login"
-        if (allowedRoles?.includes('admin')) redirectPath = "/login?role=admin"
+        if (allowedRoles?.includes('admin')) redirectPath = "/admin-lsc-secure"
         else if (allowedRoles?.includes('consultant')) redirectPath = "/login?role=consultant"
         else if (allowedRoles?.includes('of')) redirectPath = "/login?role=client"
 
