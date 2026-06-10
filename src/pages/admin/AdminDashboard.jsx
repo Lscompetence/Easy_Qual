@@ -798,7 +798,7 @@ export default function AdminDashboard() {
     const handleLogout = async () => {
         try {
             await logout()
-            navigate('/login?role=admin')
+            navigate('/admin-lsc-secure')
         } catch (error) {
             console.error('Failed to logout', error)
         }

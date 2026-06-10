@@ -6,7 +6,7 @@ import { ArrowLeft, Check, Mail } from 'lucide-react'
 
 export default function ForgotPassword() {
     const [searchParams] = useSearchParams()
-    const roleParam = searchParams.get('role')
+    const roleParam = searchParams.get('role') || 'client'
 
     const [email, setEmail] = useState('')
     const [loading, setLoading] = useState(false)
