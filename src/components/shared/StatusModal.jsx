@@ -18,12 +18,12 @@ export default function StatusModal({
 
     const config = {
         info: {
-            icon: <Info className="h-10 w-10 text-blue-500" />,
-            bgColor: 'bg-blue-50',
-            ringColor: 'ring-blue-50/50',
-            buttonColor: 'bg-blue-600 hover:bg-blue-700 shadow-blue-200',
-            titleColor: 'text-blue-900',
-            descriptionColor: 'text-blue-600'
+            icon: <Info className="h-10 w-10 text-purple-500" />,
+            bgColor: 'bg-purple-50',
+            ringColor: 'ring-purple-50/50',
+            buttonColor: 'bg-purple-600 hover:bg-purple-700 shadow-purple-200',
+            titleColor: 'text-purple-900',
+            descriptionColor: 'text-purple-600'
         },
         success: {
             icon: <CheckCircle className="h-10 w-10 text-emerald-500" />,
@@ -50,12 +50,12 @@ export default function StatusModal({
             descriptionColor: 'text-amber-600'
         },
         confirm: {
-            icon: <Info className="h-10 w-10 text-blue-500" />,
-            bgColor: 'bg-blue-50',
-            ringColor: 'ring-blue-50/50',
-            buttonColor: 'bg-blue-600 hover:bg-blue-700 shadow-blue-200',
-            titleColor: 'text-blue-900',
-            descriptionColor: 'text-blue-600'
+            icon: <Info className="h-10 w-10 text-purple-500" />,
+            bgColor: 'bg-purple-50',
+            ringColor: 'ring-purple-50/50',
+            buttonColor: 'bg-purple-600 hover:bg-purple-700 shadow-purple-200',
+            titleColor: 'text-purple-900',
+            descriptionColor: 'text-purple-600'
         },
         delete: {
             icon: <Trash2 className="h-10 w-10 text-red-500" />,

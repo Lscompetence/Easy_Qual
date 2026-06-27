@@ -39,15 +39,22 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
             const cleanedTenantName = newCaseData.tenantName.trim()
 
             // 🔍 PRE-CHECK 1: SIRET and Email in database (Prevent spending credits for nothing)
+            const cleanedSiret = newCaseData.siret.trim()
+            // Build the filter safely: only check SIRET if it is provided, and
+            // escape any comma that would break the PostgREST .or() syntax.
+            const orFilters = [`client_email.eq.${cleanedEmail}`]
+            if (cleanedSiret) {
+                orFilters.unshift(`siret.eq.${cleanedSiret.replace(/,/g, '')}`)
+            }
             const { data: existingTenant, error: checkError } = await supabase
                 .from('tenants')
                 .select('id, siret, client_email')
-                .or(`siret.eq.${newCaseData.siret.trim()},client_email.eq.${cleanedEmail}`)
+                .or(orFilters.join(','))
                 .maybeSingle()
 
             if (checkError) console.warn("Pre-check failed:", checkError)
             if (existingTenant) {
-                if (existingTenant.siret === newCaseData.siret.trim()) throw new Error("Ce numéro SIRET est déjà utilisé par un autre dossier.")
+                if (cleanedSiret && existingTenant.siret === cleanedSiret) throw new Error("Ce numéro SIRET est déjà utilisé par un autre dossier.")
                 if (existingTenant.client_email === cleanedEmail) throw new Error("Cet email est déjà associé à un autre dossier client.")
             }
 

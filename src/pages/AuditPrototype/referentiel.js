@@ -109,3 +109,112 @@ export function syntheseAvis(maj, min) {
   return { cle:"FAVORABLE", label:"Favorable", couleur:"#16a34a",
     txt:"Obtient la certification de plein droit, sans aucune réserve." };
 }
+
+// ─── MOTEUR DE PRÉ-AUDIT (réutilise le même moteur que l'audit blanc) ────────
+// Map indicateur -> "MAJEURE" | "MINEURE" (depuis le référentiel)
+export const NC_PAR_INDICATEUR = Object.fromEntries(indicateurs.map(i => [i.id, i.nc]));
+
+// ─── Critères éliminatoires (ANO-03) ────────────────────────────────────────
+// Ce sont 2 critères SPÉCIAUX (hors des 32 indicateurs), avec une applicabilité
+// qui suit STRICTEMENT le type d'audit du périmètre. Un seul d'entre eux,
+// applicable ET Non conforme, force l'avis à "Non conforme" + reprogrammation.
+export const CRITERES_ELIMINATOIRES = [
+  {
+    key: "logo",
+    label: "Usage du logo / certificat Qualiopi alors que l'organisme n'est pas certifié",
+    attendu: "Logo / certificat NON affiché",
+    // Applicable uniquement en audit Initial (en surveillance/renouvellement l'usage est autorisé)
+    typesApplicables: ["initial"],
+  },
+  {
+    key: "certificat",
+    label: "Affichage public obligatoire du certificat Qualiopi (internet et/ou locaux)",
+    attendu: "Certificat affiché publiquement",
+    // Applicable uniquement en Surveillance / Renouvellement (pas de certificat en initial)
+    typesApplicables: ["surveillance", "renouvellement"],
+  },
+];
+
+// Classe un libellé de type d'audit en 'initial' | 'surveillance' | 'renouvellement'
+export function classeTypeAudit(type) {
+  const s = String(type || "").toLowerCase();
+  if (s.includes("renouv")) return "renouvellement";
+  if (s.includes("surv")) return "surveillance";
+  return "initial";
+}
+
+// Retourne les critères éliminatoires applicables à un type d'audit donné,
+// enrichis du statut consultant (depuis l'objet stocké { logo, certificat }).
+export function eliminatoiresPourType(type, statuts = {}) {
+  const cls = classeTypeAudit(type);
+  return CRITERES_ELIMINATOIRES.map((c) => ({
+    ...c,
+    applicable: c.typesApplicables.includes(cls),
+    statut: statuts[c.key], // undefined | 'conforme' | 'non_conforme'
+  }));
+}
+
+// Mappe un libellé de catégorie de formation du dossier vers une clé de la matrice
+// (AFC / BC / VAE / CFA). Tolérant à la casse et aux variantes de libellés.
+export function cleMatriceCategorie(label) {
+  const s = String(label || "").toLowerCase();
+  if (s.includes("bilan")) return "BC";
+  if (s.includes("vae") || s.includes("validation")) return "VAE";
+  if (s.includes("cfa") || s.includes("apprentissage") || s.includes("altern")) return "CFA";
+  return "AFC"; // ACFC, ACFNC, "Actions de formation"… par défaut
+}
+
+/**
+ * Calcule le résultat d'un pré-audit pour UN périmètre (catégorie × type).
+ * @param {Object} verdictsParId  ex: { 1:'validated', 2:'non_conforme', 3:'non_applicable', ... }
+ *   Valeurs attendues : 'validated' (conforme) | 'non_conforme' | 'non_applicable' | 'to_do'/absent (non évalué)
+ * @param {string|null} categorieMatrice  clé matrice (AFC/BC/VAE/CFA) ; si null, pas de filtrage par catégorie
+ * @param {Array} eliminatoires  critères éliminatoires enrichis [{key,label,applicable,statut}] (cf. eliminatoiresPourType)
+ * @returns {{maj,min,na,conforme,nr,hors,total,applicables,eliminatoire,eliminatoiresNonRespectes,avis}}
+ */
+export function calculerPreAudit(verdictsParId = {}, categorieMatrice = null, eliminatoires = []) {
+  let maj = 0, min = 0, na = 0, conforme = 0, nr = 0, hors = 0;
+
+  indicateurs.forEach((ind) => {
+    // ÉTAPE 0 — Périmètre par catégorie : "JAMAIS" dans la matrice = hors périmètre (exclu)
+    if (categorieMatrice) {
+      const cell = matrice[ind.id]?.[categorieMatrice];
+      if (cell && cell[0] === N) { hors++; return; }
+    }
+    const v = verdictsParId[ind.id];
+    if (v === "non_applicable") { na++; return; }            // exclu du décompte
+    if (v === "non_conforme") {
+      if (ind.nc === "MAJEURE") maj++; else min++;            // gravité intrinsèque
+      return;
+    }
+    if (v === "validated") { conforme++; return; }
+    nr++; // 'to_do' ou non évalué
+  });
+
+  // ÉTAPE 1 (priorité, ordre strict) — ANO-03 : un critère éliminatoire APPLICABLE
+  // et Non conforme force l'avis à "Non conforme", indépendamment du décompte,
+  // et signale qu'un nouvel audit devra être reprogrammé.
+  const eliminatoiresNonRespectes = eliminatoires.filter(e => e.applicable && e.statut === "non_conforme");
+  const eliminatoire = eliminatoiresNonRespectes.length > 0;
+
+  // ÉTAPE 2 — sinon, avis selon les seuils du décompte.
+  let avis = eliminatoire ? syntheseAvis(1, 0) : syntheseAvis(maj, min);
+  if (eliminatoire) {
+    avis = {
+      ...avis,
+      motifEliminatoire: true,
+      txt: "Critère éliminatoire non respecté : reprogrammation d'audit requise.",
+    };
+  }
+  // Libellés alignés sur l'annexe : Favorable / Sous réserve / Non conforme
+  const LABELS_AVIS = { FAVORABLE: "Favorable", RESERVE: "Sous réserve", DEFAVORABLE: "Non conforme" };
+  avis = { ...avis, label: LABELS_AVIS[avis.cle] || avis.label };
+
+  return {
+    maj, min, na, conforme, nr, hors,
+    total: indicateurs.length,
+    applicables: maj + min + na + conforme + nr, // indicateurs du périmètre (hors "JAMAIS")
+    eliminatoire, eliminatoiresNonRespectes,
+    avis,
+  };
+}

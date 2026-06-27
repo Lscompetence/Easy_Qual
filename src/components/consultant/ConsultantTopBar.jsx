@@ -1,6 +1,6 @@
 /* eslint-disable */
-import { useState, useEffect } from 'react'
-import { Search, Bell, Plus, Menu, Lock } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Search, Bell, Plus, Menu, Lock, CheckCircle, XCircle, AlertTriangle, Info, X, ClipboardList, ExternalLink } from 'lucide-react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -8,25 +8,291 @@ import CreditsModal from './CreditsModal'
 
 export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, showCredits = true, showNotifications = true, showSearch = true, refreshKey = 0, onCreditsUpdate = () => { }, showMobileMenu, setShowMobileMenu, hasUnreadNotifications, onNotificationClick, searchQuery = '', onSearchChange = () => { } }) {
     const [credits, setCredits] = useState(0)
-    const [unreadCount, setUnreadCount] = useState(0)
+    const [unreadCount, setUnreadCount] = useState(0)         // Messages (Bell)
+    const [unreadActionsCount, setUnreadActionsCount] = useState(0) // Client actions (ClipboardList)
     const [showCreditsModal, setShowCreditsModal] = useState(false)
     const { user, profile, logout } = useAuth()
     const navigate = useNavigate()
 
-    const isActive = profile?.is_active !== false 
+    const [toasts, setToasts] = useState(() => {
+        if (typeof window !== 'undefined' && user) {
+            try {
+                const stored = localStorage.getItem(`eq_toasts_active_${user.id}`);
+                return stored ? JSON.parse(stored) : [];
+            } catch (e) {
+                console.error("Error loading toasts:", e);
+            }
+        }
+        return [];
+    });
+
+    const [toastHistory, setToastHistory] = useState(() => {
+        if (typeof window !== 'undefined' && user) {
+            try {
+                const stored = localStorage.getItem(`eq_toast_history_${user.id}`);
+                return stored ? JSON.parse(stored) : [];
+            } catch (e) {
+                console.error("Error loading toast history:", e);
+            }
+        }
+        return [];
+    });
 
     useEffect(() => {
         if (user) {
+            try {
+                const storedActive = localStorage.getItem(`eq_toasts_active_${user.id}`);
+                if (storedActive) setToasts(JSON.parse(storedActive));
+                else setToasts([]);
+
+                const storedHistory = localStorage.getItem(`eq_toast_history_${user.id}`);
+                if (storedHistory) setToastHistory(JSON.parse(storedHistory));
+                else setToastHistory([]);
+            } catch (e) {
+                console.error("Error loading toasts on user change:", e);
+            }
+        } else {
+            setToasts([]);
+            setToastHistory([]);
+        }
+    }, [user]);
+
+    // showToast: shows toast AND saves to actions history (for CLIENT ACTIONS only)
+    const showToast = useCallback((message, type = 'info', options = {}) => {
+        const id = Date.now() + Math.random().toString(36).substr(2, 9);
+        const { clientName, case_id, targetUrl } = options;
+        const newToast = {
+            id, message, type, clientName, case_id, targetUrl,
+            created_at: new Date().toISOString()
+        };
+        setToasts(prev => {
+            const updated = [...prev, newToast];
+            if (user) {
+                try { localStorage.setItem(`eq_toasts_active_${user.id}`, JSON.stringify(updated)); }
+                catch (e) { console.error("Error saving active toast:", e); }
+            }
+            return updated;
+        });
+        setToastHistory(prev => {
+            const updated = [newToast, ...prev].slice(0, 50);
+            if (user) {
+                try { localStorage.setItem(`eq_toast_history_${user.id}`, JSON.stringify(updated)); }
+                catch (e) { console.error("Error saving toast history:", e); }
+            }
+            return updated;
+        });
+        // No auto-dismiss
+    }, [user]);
+
+    // showToastOnly: shows toast but does NOT save to history (for MESSAGES)
+    const showToastOnly = useCallback((message, type = 'info', options = {}) => {
+        const id = Date.now() + Math.random().toString(36).substr(2, 9);
+        const { clientName, case_id, targetUrl } = options;
+        const newToast = {
+            id, message, type, clientName, case_id, targetUrl,
+            created_at: new Date().toISOString(),
+            isMessage: true  // flag to identify message toasts
+        };
+        setToasts(prev => {
+            const updated = [...prev, newToast];
+            if (user) {
+                try { localStorage.setItem(`eq_toasts_active_${user.id}`, JSON.stringify(updated)); }
+                catch (e) { console.error("Error saving active toast:", e); }
+            }
+            return updated;
+        });
+        // Not saved to toastHistory
+        // No auto-dismiss
+    }, [user]);
+
+    const dismissToast = useCallback((id) => {
+        setToasts(prev => {
+            const updated = prev.filter(x => x.id !== id);
+            if (user) {
+                try {
+                    localStorage.setItem(`eq_toasts_active_${user.id}`, JSON.stringify(updated));
+                } catch (e) {
+                    console.error("Error removing toast:", e);
+                }
+            }
+            return updated;
+        });
+    }, [user]);
+
+    const clearHistory = useCallback(() => {
+        setToastHistory([]);
+        if (user) {
+            localStorage.removeItem(`eq_toast_history_${user.id}`);
+        }
+    }, [user]);
+
+    const renderToasts = () => {
+        return (
+            <div className="fixed top-[76px] right-5 z-[9999] flex flex-col gap-3 pointer-events-none" style={{ maxWidth: '24rem', maxHeight: 'calc(100vh - 100px)', overflowY: 'auto' }}>
+                {toasts.map(t => {
+                    const isMsg = t.isMessage === true
+                    const iconMap = {
+                        success: <CheckCircle className="h-5 w-5 text-purple-400" />,
+                        error: <XCircle className="h-5 w-5 text-rose-400" />,
+                        warning: <AlertTriangle className="h-5 w-5 text-amber-400" />,
+                        info: <Info className="h-5 w-5 text-indigo-400" />
+                    }
+                    const borderMap = {
+                        success: 'border-l-4 border-l-purple-500 border-slate-800/80',
+                        error: 'border-l-4 border-l-rose-500 border-slate-800/80',
+                        warning: 'border-l-4 border-l-amber-500 border-slate-800/80',
+                        info: isMsg ? 'border-l-4 border-l-blue-400 border-slate-800/80' : 'border-l-4 border-l-indigo-500 border-slate-800/80'
+                    }
+                    const titleMap = {
+                        success: 'Succès',
+                        error: 'Erreur',
+                        warning: 'Avertissement',
+                        info: isMsg ? 'Message Client' : 'Notification'
+                    }
+                    const icon = iconMap[t.type] || iconMap.info
+                    const borderClass = borderMap[t.type] || borderMap.info
+                    const title = titleMap[t.type] || titleMap.info
+                    const timeStr = t.created_at ? new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                    // Navigate to correct destination based on toast type
+                    const navTarget = t.targetUrl || (isMsg ? '/consultant/messages' : '/consultant/actions-history')
+                    const navLabel = isMsg ? 'Voir la messagerie' : "Voir l'historique"
+
+                    return (
+                        <div
+                            key={t.id}
+                            className={`pointer-events-auto flex gap-3 bg-slate-900/95 text-white rounded-xl shadow-2xl border backdrop-blur-md animate-in slide-in-from-right-5 duration-300 w-80 sm:w-96 overflow-hidden ${borderClass}`}
+                        >
+                            {/* Clickable body — navigates to correct page */}
+                            <button
+                                onClick={() => navigate(navTarget)}
+                                className="flex-1 flex gap-3 p-4 text-left hover:bg-slate-800/40 transition-colors min-w-0"
+                            >
+                                <div className="flex-shrink-0 mt-0.5">
+                                    {icon}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                        <span className="text-sm font-bold tracking-wide text-slate-200">
+                                            {title}
+                                        </span>
+                                        {timeStr && (
+                                            <span className="text-[10px] text-slate-500 font-medium">
+                                                {timeStr}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-line font-medium break-words">
+                                        {t.message.length > 120 ? `${t.message.substring(0, 120)}...` : t.message}
+                                    </div>
+                                    <span className={`mt-2 inline-flex items-center gap-1 text-[10px] font-bold ${isMsg ? 'text-blue-400' : 'text-indigo-400'}`}>
+                                        <ExternalLink className="h-2.5 w-2.5" />
+                                        {navLabel}
+                                    </span>
+                                </div>
+                            </button>
+                            {/* Dismiss button — only way to remove */}
+                            <button
+                                onClick={(e) => { e.stopPropagation(); dismissToast(t.id); }}
+                                className="flex-shrink-0 self-start mt-3 mr-3 text-slate-500 hover:text-white hover:bg-rose-600 transition-all p-1.5 rounded-lg"
+                                aria-label="Fermer"
+                                title="Supprimer ce toast"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        </div>
+                    )
+                })}
+            </div>
+        )
+    }
+
+    const isActive = profile?.is_active !== false 
+
+    useEffect(() => {
+        let channel;
+        if (user) {
             fetchCredits()
             fetchUnreadCount()
+            fetchUnreadActionsCount()
 
-            const channel = supabase
-                .channel('topbar_notifs')
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'case_messages' }, () => {
-                    fetchUnreadCount()
+            const setupSubscription = async () => {
+                const { data: casesData, error } = await supabase
+                    .from('cases')
+                    .select('id, tenants(name)')
+                    .eq('consultant_id', user.id)
+                
+                if (error) console.error("Error fetching cases for topbar:", error);
+
+                const casesMap = {}
+                casesData?.forEach(c => {
+                    casesMap[String(c.id)] = {
+                        clientName: c.tenants?.name || 'Client'
+                    }
                 })
-                .subscribe()
-            return () => supabase.removeChannel(channel)
+                const caseIds = Object.keys(casesMap)
+                if (caseIds.length === 0) return
+
+                channel = supabase
+                    .channel('topbar_global_notifications')
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'case_messages' }, (payload) => {
+                        fetchUnreadCount()
+                        
+                        // Check if message belongs to consultant's cases and is from client
+                        if (caseIds.includes(String(payload.new.case_id)) && payload.new.sender_id !== user.id) {
+                            const content = payload.new.content || ''
+                            const isSystem = /^(?:\[SYSTEM\]|\[Remarque)/i.test(content)
+                            if (!isSystem) {
+                                const clientName = casesMap[String(payload.new.case_id)]?.clientName || 'Client'
+                                const isMessagesPage = window.location.pathname === '/consultant/messages' || 
+                                                       (window.location.pathname.startsWith('/consultant/case/') && window.location.search.includes('tab=messagerie'))
+                                
+                                if (!isMessagesPage) {
+                                    const targetUrl = `/consultant/case/${payload.new.case_id}?tab=messagerie`
+                                    // Use showToastOnly: messages are NOT saved to actions history
+                                    showToastOnly(`💬 Nouveau message de votre client :\n${content}`, 'info', { clientName, case_id: payload.new.case_id, targetUrl })
+                                }
+                            }
+                        }
+                    })
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'case_notifications' }, (payload) => {
+                        const caseId = String(payload.new.case_id)
+                        if (caseIds.includes(caseId)) {
+                            const isClientAction = payload.new.type?.startsWith('client_')
+                            if (isClientAction) {
+                                // Increment actions badge
+                                fetchUnreadActionsCount()
+
+                                const clientName = casesMap[caseId]?.clientName || 'Client'
+                                let targetUrl = `/consultant/case/${caseId}`
+                                
+                                if (payload.new.type === 'client_file_upload' || payload.new.type === 'client_indicator_update') {
+                                    targetUrl += `?tab=suivi_rno`
+                                } else if (payload.new.type === 'client_quiz_success' || payload.new.type === 'client_quiz_failure') {
+                                    targetUrl += `?tab=suivi_rno`
+                                } else if (payload.new.type === 'client_profile_update' || payload.new.type === 'client_password_change') {
+                                    targetUrl += `?tab=infocentre`
+                                }
+                                
+                                let toastType = 'info';
+                                if (payload.new.type.includes('success')) toastType = 'success';
+                                else if (payload.new.type.includes('failure')) toastType = 'warning';
+                                else if (payload.new.type === 'client_file_upload') toastType = 'success';
+                                
+                                showToast(payload.new.content, toastType, { clientName, case_id: payload.new.case_id, targetUrl })
+                                
+                                // Dispatch event to update storage components
+                                window.dispatchEvent(new Event('storage'))
+                            }
+                        }
+                    })
+                    .subscribe()
+            }
+
+            setupSubscription()
+        }
+
+        return () => {
+            if (channel) supabase.removeChannel(channel)
         }
     }, [user, refreshKey, showCreditsModal])
 
@@ -43,30 +309,56 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
     const fetchUnreadCount = async () => {
         if (!user) return
         try {
-            // 1. Fetch case IDs for this consultant
+            // Fetch case IDs for this consultant
             const { data: casesData } = await supabase
                 .from('cases')
                 .select('id')
                 .eq('consultant_id', user.id)
 
             const caseIds = casesData?.map(c => c.id) || []
-            if (caseIds.length === 0) {
-                setUnreadCount(0)
-                return
-            }
+            if (caseIds.length === 0) { setUnreadCount(0); return }
 
-            // 2. Count unread messages for these cases
+            // Count ONLY unread human MESSAGES (not actions, not system)
             const { count, error } = await supabase
                 .from('case_messages')
                 .select('id', { count: 'exact', head: true })
                 .in('case_id', caseIds)
                 .neq('sender_id', user.id)
                 .is('read_at', null)
+                .not('content', 'ilike', '[SYSTEM]%')
+                .not('content', 'ilike', '[Remarque%')
 
             if (error) throw error
             setUnreadCount(count || 0)
         } catch (err) {
-            console.error('Error fetching unread count:', err)
+            console.error('Error fetching unread messages count:', err)
+        }
+    }
+
+    const fetchUnreadActionsCount = async () => {
+        if (!user) return
+        try {
+            const { data: casesData } = await supabase
+                .from('cases')
+                .select('id')
+                .eq('consultant_id', user.id)
+
+            const caseIds = casesData?.map(c => c.id) || []
+            if (caseIds.length === 0) { setUnreadActionsCount(0); return }
+
+            // Use localStorage timestamp to know which actions are "new"
+            const lastSeen = localStorage.getItem(`eq_last_actions_seen_${user.id}`) || new Date(0).toISOString()
+
+            const { count } = await supabase
+                .from('case_notifications')
+                .select('id', { count: 'exact', head: true })
+                .in('case_id', caseIds)
+                .like('type', 'client_%')
+                .gt('created_at', lastSeen)
+
+            setUnreadActionsCount(count || 0)
+        } catch (err) {
+            console.error('Error fetching unread actions count:', err)
         }
     }
 
@@ -163,18 +455,47 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
                 {showNotifications && (
                     <>
                         <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
-                        {/* Notifications Bell */}
+
+                        {/* 📋 ClipboardList = Client ACTIONS only (uploads, statuts, profil) */}
+                        <button
+                            onClick={() => {
+                                // Mark all actions as seen
+                                localStorage.setItem(`eq_last_actions_seen_${user.id}`, new Date().toISOString())
+                                setUnreadActionsCount(0)
+                                navigate('/consultant/actions-history')
+                            }}
+                            className={`relative p-2 transition-all rounded-xl border group shadow-sm ${
+                                unreadActionsCount > 0 
+                                ? 'bg-indigo-50 border-indigo-100 text-indigo-600' 
+                                : 'bg-gray-50 border-gray-100 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-100'
+                            }`}
+                            title="Actions client (uploads, statuts, profil)"
+                        >
+                            <ClipboardList className={`h-5 w-5 transition-transform group-hover:scale-110 ${unreadActionsCount > 0 ? 'animate-pulse' : ''}`} />
+                            {unreadActionsCount > 0 && (
+                                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-indigo-600 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-indigo-600/20 border-2 border-white animate-in zoom-in duration-300">
+                                    {unreadActionsCount > 99 ? '99+' : unreadActionsCount}
+                                </span>
+                            )}
+                        </button>
+                        
+                        {/* 🔔 Bell = Messages ONLY between consultant and client */}
                         <button 
-                            onClick={() => navigate('/consultant/notifications')}
+                            onClick={() => {
+                                // Optimistic reset: clear badge immediately on click
+                                setUnreadCount(0)
+                                navigate('/consultant/messages')
+                            }}
                             className={`relative p-2 transition-all rounded-xl border group shadow-sm ${
                                 unreadCount > 0 
-                                ? 'bg-red-50 border-red-100 text-red-600' 
+                                ? 'bg-purple-50 border-purple-100 text-purple-600' 
                                 : 'text-gray-400 hover:text-purple-600 bg-gray-50 border-gray-100'
                             }`}
+                            title="Messages avec les clients"
                         >
                             <Bell className={`h-5 w-5 ${unreadCount > 0 ? 'animate-bounce' : ''}`} />
                             {unreadCount > 0 && (
-                                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-600 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-red-600/20 border-2 border-white animate-in zoom-in duration-300">
+                                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-purple-600 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-purple-600/20 border-2 border-white animate-in zoom-in duration-300">
                                     {unreadCount > 99 ? '99+' : unreadCount}
                                 </span>
                             )}
@@ -189,6 +510,7 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
                 balance={credits}
                 onSuccess={handleCreditsSuccess}
             />
+            {renderToasts()}
         </header >
     )
 }

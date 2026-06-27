@@ -1,16 +1,18 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { getCriterionColor } from '../../utils/theme'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { Sun, Flag, Ban, ChevronUp, ChevronDown, ChevronRight, AlertTriangle, Check, Trash2, Upload, Info, PlayCircle, FileText, CheckCircle, XCircle, ArrowRight, BookOpen, Clock, Play, Download, Search, AlertCircle, RefreshCw, Send, Image as ImageIcon, Link as LinkIcon, Paperclip, MoreVertical, ThumbsUp, MapPin, Building, Phone, Mail, Award, Users, Plus, Target, CheckSquare, Smile, MessageSquare, Menu, FileImage, Video, HelpCircle, FileCheck, CircleOff, Eye } from 'lucide-react'
+import { Sun, Flag, Ban, ChevronUp, ChevronDown, ChevronRight, AlertTriangle, Check, Trash2, Upload, Info, PlayCircle, FileText, CheckCircle, XCircle, ArrowRight, BookOpen, Clock, Play, Download, Search, AlertCircle, RefreshCw, Send, Image as ImageIcon, Link as LinkIcon, Paperclip, MoreVertical, ThumbsUp, MapPin, Building, Phone, Mail, Award, Users, Plus, Target, CheckSquare, Smile, MessageSquare, Menu, FileImage, Video, HelpCircle, FileCheck, CircleOff, Eye, X } from 'lucide-react'
 import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
 import SignatureModal from '../../components/shared/SignatureModal'
 import UniversalPlayer from '../../components/shared/UniversalPlayer'
 import StatusModal from '../../components/shared/StatusModal'
 import QuizModal from '../../components/shared/QuizModal'
+import PreAuditResult from '../../components/consultant/PreAuditResult'
+import { calculerPreAudit } from '../AuditPrototype/referentiel'
 import { jsPDF } from 'jspdf'
 
 const isInitialAudit = (type) => {
@@ -530,11 +532,20 @@ export default function ClientDashboard() {
         })
     }
 
+    const showToast = useCallback((message, type = 'info') => {
+        window.dispatchEvent(new CustomEvent('eq_show_client_toast', { detail: { message, type } }))
+    }, [])
+
     // Determine current page from URL
     const isMessages = location.pathname === '/client/messages'
     const isSessions = location.pathname === '/client/sessions'
     const isCriterion = location.pathname.startsWith('/client/criterion/')
     const criterionId = isCriterion ? location.pathname.split('/').pop() : null
+
+    const isMessagesRef = useRef(isMessages)
+    useEffect(() => {
+        isMessagesRef.current = isMessages
+    }, [isMessages])
 
      
     useEffect(() => {
@@ -558,12 +569,12 @@ export default function ClientDashboard() {
      
     useEffect(() => {
         if (myCase?.id) fetchMessages()
-    }, [myCase?.id])
+    }, [myCase?.id, isMessages])
 
     const markAllMessagesAsRead = async () => {
         if (!myCase || !user) return
         const unreadIds = messages
-            .filter(m => m.sender_id !== user.id && !m.read_at)
+            .filter(m => m.sender_id !== user?.id && !m.read_at)
             .map(m => m.id)
         
         if (unreadIds.length === 0) return
@@ -580,7 +591,7 @@ export default function ClientDashboard() {
 
      
     useEffect(() => {
-        if (isMessages && messages.some(m => m.sender_id !== user.id && !m.read_at)) {
+        if (isMessages && messages.some(m => m.sender_id !== user?.id && !m.read_at)) {
             markAllMessagesAsRead()
         }
     }, [isMessages, messages.length])
@@ -621,9 +632,9 @@ export default function ClientDashboard() {
                 table: 'case_messages',
                 filter: `case_id=eq.${myCase.id}`
             }, (payload) => {
+                const isSystem = /^\s*\[(?:SYSTEM|Remarque)/i.test(payload.new.content || '')
+                if (isSystem) return
 
-                // Only ignore system messages sent by the client themselves
-                if (payload.new.content.startsWith('[SYSTEM]') && payload.new.sender_id === user.id) return
                 setMessages(prev => {
                     if (prev.some(m => m.id === payload.new.id)) return prev
                     const filtered = prev.filter(m => !String(m.id).startsWith('temp-') || m.content !== payload.new.content)
@@ -667,8 +678,8 @@ export default function ClientDashboard() {
             return;
         }
 
-        // Filter out system messages sent by the client themselves
-        const filteredMessages = (data || []).filter(m => !m.content.startsWith('[SYSTEM]') || m.sender_id !== user.id)
+        // Le fil de dialogue ne contient que du message humain : on exclut toute entrée système ([SYSTEM], [Remarque])
+        const filteredMessages = (data || []).filter(m => !/^\s*\[(?:SYSTEM|Remarque)/i.test(m.content || ''))
 
         setMessages(filteredMessages)
     }
@@ -705,13 +716,13 @@ export default function ClientDashboard() {
             const { data: tenantsData } = await supabase
                 .from('tenants')
                 .select('id, name, logo_url, siret, nda, client_email, owner_id, created_by, created_at')
-                .or(`owner_id.eq.${user.id},client_email.eq.${user.email}`)
+                .or(`owner_id.eq.${user?.id},client_email.eq.${user?.email}`)
 
             if (tenantsData && tenantsData.length > 0) {
                 const tenantIds = tenantsData.map(t => t.id)
                 const { data: casesData } = await supabase
                     .from('cases')
-                    .select('id, tenant_id, audit_type, training_categories, consultant_id, created_at')
+                    .select('id, tenant_id, audit_type, training_categories, consultant_id, created_at, preaudit_shared')
                     .in('tenant_id', tenantIds)
 
                 const caseData = casesData?.sort((a, b) => {
@@ -770,7 +781,24 @@ export default function ClientDashboard() {
                     setCaseEvents(eventsData || [])
 
                     // Process initial mapping
-                    const currentAudit = selectedAudit || (caseData.audit_type?.[caseData.audit_type.length - 1] || 'initial')
+                    let currentAudit = selectedAudit;
+                    if (caseData.audit_type && caseData.audit_type.length > 0) {
+                        // Validate that currentAudit exists in this case's allowed audit types
+                        const isValid = currentAudit && caseData.audit_type.some(t => {
+                            const tNorm = String(t).trim().toLowerCase();
+                            const curNorm = String(currentAudit).trim().toLowerCase();
+                            return tNorm === curNorm || (tNorm.includes('initial') && curNorm.includes('initial')) || (tNorm.includes('surveillance') && curNorm.includes('surveillance'));
+                        });
+                        
+                        if (!isValid) {
+                            currentAudit = caseData.audit_type[0];
+                            setSelectedAudit(currentAudit);
+                            localStorage.setItem('clientSelectedAudit', currentAudit);
+                        }
+                    } else {
+                        currentAudit = currentAudit || 'initial';
+                    }
+                    
                     mapIndicatorStates(statesData || [], currentAudit)
                     mapQuizUploads(quizData || [])
                 }
@@ -931,12 +959,12 @@ export default function ClientDashboard() {
                 if (fileUploaded) msgContent += `📁 Document joint : ${pendingFile.name}\n`;
                 
                 try {
-                    const { error: msgErr } = await supabase.from('case_messages').insert({
+                    const { error: msgErr } = await supabase.from('case_notifications').insert({
                         case_id: myCase.id,
-                        sender_id: user.id,
-                        content: `[SYSTEM] ${msgContent}`
+                        type: 'client_indicator_update',
+                        content: msgContent
                     });
-                    if (msgErr) console.error("Failed to insert [SYSTEM] message:", msgErr);
+                    if (msgErr) console.error("Failed to insert notification:", msgErr);
                 } catch (e) { console.warn("Could not insert notification exception:", e); }
             }
 
@@ -965,7 +993,7 @@ export default function ClientDashboard() {
             });
 
             setSaveSuccess(prev => ({ ...prev, [indicatorId]: true }));
-            showStatus('success', 'Enregistré !', 'Les informations ont été sauvegardées et votre consultant a été notifié.');
+            showToast('Enregistré ! Les informations ont été sauvegardées et votre consultant a été notifié.', 'success');
             setTimeout(() => {
                 setSaveSuccess(prev => ({ ...prev, [indicatorId]: false }));
             }, 5000);
@@ -1006,10 +1034,10 @@ export default function ClientDashboard() {
                 : targetKey === 'validation' ? 'Validation finale / Quiz' : `Ressource ${targetKey}`;
 
             try {
-                await supabase.from('case_messages').insert({
+                await supabase.from('case_notifications').insert({
                     case_id: myCase.id,
-                    sender_id: user.id,
-                    content: `[SYSTEM] 📁 Nouveau document déposé\n🎯 Cible : ${targetLabel.substring(0, 60)}...\n📄 Fichier : ${file.name}`
+                    type: 'client_file_upload',
+                    content: `📁 Nouveau document déposé\n🎯 Cible : ${targetLabel.substring(0, 60)}...\n📄 Fichier : ${file.name}`
                 });
             } catch (e) { console.warn("Could not insert notification:", e); }
 
@@ -1024,7 +1052,7 @@ export default function ClientDashboard() {
                     }
                 }
             }));
-            showStatus('success', 'Fichier envoyé !', 'Votre document a été correctement téléchargé et votre consultant a été prévenu.');
+            showToast('Fichier envoyé ! Votre document a été correctement téléchargé et votre consultant a été prévenu.', 'success');
         } catch (err) {
             showStatus('error', 'Échec de l\'envoi', 'Une erreur est survenue : ' + err.message);
         } finally {
@@ -1089,7 +1117,7 @@ export default function ClientDashboard() {
                     })
 
                     setStatusModal(prev => ({ ...prev, isOpen: false, isLoading: false }))
-                    showStatus('success', 'Fichier supprimé', 'Le document a été retiré avec succès.')
+                    showToast('Fichier supprimé ! Le document a été retiré avec succès.', 'success');
                 } catch (err) {
                     console.error('Delete error:', err)
                     setStatusModal(prev => ({ ...prev, isLoading: false }))
@@ -1125,7 +1153,7 @@ export default function ClientDashboard() {
         const optimisticMsg = {
             id: tempId,
             case_id: myCase.id,
-            sender_id: user.id,
+            sender_id: user?.id,
             content: content,
             created_at: new Date().toISOString(),
             is_read: false
@@ -1137,7 +1165,7 @@ export default function ClientDashboard() {
         try {
             const { error } = await supabase.from('case_messages').insert({
                 case_id: myCase.id,
-                sender_id: user.id,
+                sender_id: user?.id,
                 content: content
             }).select()
             
@@ -1197,6 +1225,21 @@ export default function ClientDashboard() {
     const rejectedCount = Object.values(indicatorStates).filter(s => s?.consultant_verdict === 'non_conforme').length
     const progressPercent = totalIndicators > 0 ? Math.round((validatedCount / totalIndicators) * 100) : 0
 
+    // Avis de pré-audit (visible uniquement si le consultant l'a partagé) — même moteur
+    const clientPreAudit = (() => {
+        if (!myCase?.preaudit_shared) return null
+        const norm = normalizeAudit(selectedAudit || 'initial')
+        const byInd = {}
+        allStatesData.forEach(s => {
+            if (normalizeAudit(s.audit_type || 'initial') !== norm) return
+            const prev = byInd[s.indicator_id]
+            if (!prev || new Date(s.updated_at || 0) > new Date(prev.updated_at || 0)) byInd[s.indicator_id] = s
+        })
+        const verdicts = {}
+        Object.entries(byInd).forEach(([id, s]) => { verdicts[id] = s.consultant_verdict || 'to_do' })
+        return calculerPreAudit(verdicts)
+    })()
+
     // Group indicators by criterion
     const criteriaMap = {}
 
@@ -1249,7 +1292,7 @@ export default function ClientDashboard() {
                     consultantName={consultantName}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
-                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
+                    unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                 />
                 <div className="flex-1 flex items-center justify-center">
@@ -1268,7 +1311,7 @@ export default function ClientDashboard() {
                     indicators={indicators}
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
-                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
+                    unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
@@ -1311,7 +1354,7 @@ export default function ClientDashboard() {
                                     <p className="text-center text-sm text-gray-400 py-8">Aucun message. Commencez la discussion !</p>
                                 ) : (
                                     messages.map((msg) => {
-                                        const isMe = msg.sender_id === user.id
+                                        const isMe = msg.sender_id === user?.id
                                         const isTemp = String(msg.id).startsWith('temp-')
                                         return (
                                             <div key={msg.id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -1333,7 +1376,7 @@ export default function ClientDashboard() {
                                                 </div>
                                                 {isMe && (
                                                     <div className="h-8 w-8 rounded-lg bg-[#faf1ec] flex items-center justify-center text-[10px] font-black text-[#cc6d3e] border border-white shadow-sm flex-shrink-0">
-                                                        {tenant?.name?.[0] || user.email?.[0]?.toUpperCase() || 'M'}
+                                                        {tenant?.name?.[0] || user?.email?.[0]?.toUpperCase() || 'M'}
                                                     </div>
                                                 )}
                                             </div>
@@ -1371,6 +1414,7 @@ export default function ClientDashboard() {
                             </div>
                         </div>
                     </main>
+
                 </div>
             </div>
         )
@@ -1385,7 +1429,7 @@ export default function ClientDashboard() {
                     indicators={indicators}
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
-                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
+                    unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
@@ -1536,6 +1580,7 @@ export default function ClientDashboard() {
                         cancelText={statusModal.cancelText}
                         isLoading={statusModal.isLoading}
                     />
+
                 </div>
             </div>
         )
@@ -1550,7 +1595,7 @@ export default function ClientDashboard() {
                     indicators={indicators}
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
-                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
+                    unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
@@ -1628,6 +1673,14 @@ export default function ClientDashboard() {
                                 });
                             })}
                         </div>
+
+                        {/* Avis de pré-audit partagé par le consultant */}
+                        {clientPreAudit && (
+                            <div className="mb-6">
+                                <PreAuditResult result={clientPreAudit} auditType={selectedAudit} />
+                            </div>
+                        )}
+
                         {/* Criterion Header */}
                         <div className="mb-6">
                             <div className="flex items-center gap-3 mb-1">
@@ -1796,7 +1849,7 @@ export default function ClientDashboard() {
                                     doc.setFontSize(11);
                                     doc.setTextColor(100, 100, 100);
                                     doc.text(`Date : ${new Date().toLocaleString('fr-FR')}`, 20, 35);
-                                    doc.text(`Client : ${user.email}`, 20, 42);
+                                    doc.text(`Client : ${user?.email}`, 20, 42);
                                     doc.text(`Critère : ${currentCriterion.id} - ${currentCriterion.label}`, 20, 49);
                                     
                                     doc.setFontSize(14);
@@ -1896,12 +1949,12 @@ export default function ClientDashboard() {
                                     if (dbError) throw dbError;
 
                                     // 5. Notify Consultant
-                                    const { error: msgErr } = await supabase.from('case_messages').insert({
+                                    const { error: msgErr } = await supabase.from('case_notifications').insert({
                                         case_id: myCase.id,
-                                        sender_id: user.id,
-                                        content: `[SYSTEM] 🏆 Quiz validé avec rapport détaillé !\n🎯 Critère ${currentCriterion.id}\n📊 Score : ${score}%\n📄 Fichier généré : ${fileName}`
+                                        type: 'client_quiz_success',
+                                        content: `🏆 Quiz validé avec rapport détaillé !\n🎯 Critère ${currentCriterion.id}\n📊 Score : ${score}%\n📄 Fichier généré : ${fileName}`
                                     });
-                                    if (msgErr) console.error("Quiz success message error:", msgErr);
+                                    if (msgErr) console.error("Quiz success notification error:", msgErr);
 
                                     // 6. Update local UI
                                     setQuizUploads(prev => ({
@@ -1917,7 +1970,7 @@ export default function ClientDashboard() {
                                         }
                                     }));
 
-                                    showStatus('success', 'Rapport généré !', `Votre score de ${score}% et le détail de vos réponses ont été transmis à votre consultant.`);
+                                    showToast(`Rapport généré ! Votre score de ${score}% et le détail de vos réponses ont été transmis à votre consultant.`, 'success');
                                 } catch (err) {
                                     console.error("Error saving detailed quiz score:", err);
                                     showStatus('error', 'Erreur', "Impossible de générer le rapport : " + err.message);
@@ -1933,12 +1986,14 @@ export default function ClientDashboard() {
                                     })
 
                                     // Notify Consultant of failed attempt
-                                    const { error: failErr } = await supabase.from('case_messages').insert({
+                                    const { error: failErr } = await supabase.from('case_notifications').insert({
                                         case_id: myCase.id,
-                                        sender_id: user.id,
-                                        content: `[SYSTEM] ❌ Tentative de quiz échouée (Score : ${score}%)\n🎯 Critère ${currentCriterion.id}\nLe client n'a pas atteint les 70% requis.`
+                                        type: 'client_quiz_failed',
+                                        content: `❌ Tentative de quiz échouée (Score : ${score}%)\n🎯 Critère ${currentCriterion.id}\nLe client n'a pas atteint les 70% requis.`
                                     });
-                                    if (failErr) console.error("Quiz fail message error:", failErr);
+                                    if (failErr) console.error("Quiz fail notification error:", failErr);
+                                    
+                                    showToast("Le score obtenu n'est pas suffisant pour valider le quiz (70% requis). Veuillez réviser et réessayer !", "warning");
                                 } catch (err) {
                                     console.error("Error logging failed quiz attempt:", err);
                                 }
@@ -2053,11 +2108,10 @@ export default function ClientDashboard() {
                                                                     <button
                                                                         key={opt.val}
                                                                         onClick={() => handleStatusChange(ind.id, opt.val)}
-                                                                        disabled={!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null}
                                                                         className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 text-[13px] font-bold transition-all ${status === opt.val
                                                                             ? (opt.active || 'shadow-sm')
                                                                             : 'border-transparent bg-gray-50/50 text-gray-400 hover:bg-gray-50'
-                                                                            } ${(!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null) ? 'opacity-50 cursor-not-allowed' : 'opacity-100 cursor-pointer'}`}
+                                                                            } opacity-100 cursor-pointer`}
                                                                         style={status === opt.val && opt.val === 'to_do' ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary, borderColor: getCriterionColor(currentCriterion.id).border } : {}}
                                                                     >
                                                                         <div className="flex items-center gap-3">
@@ -2134,15 +2188,7 @@ export default function ClientDashboard() {
 
                                                             {/* SAVE BUTTON AT BOTTOM OF CARD */}
                                                             <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-end gap-4">
-                                                                {saveSuccess[ind.id] && (
-                                                                    <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100 animate-in fade-in zoom-in duration-300">
-                                                                        <CheckCircle className="h-4 w-4 text-emerald-500" />
-                                                                        <span className="text-emerald-600 text-[11px] font-black uppercase tracking-widest leading-none">
-                                                                            Enregistrement réussi !
-                                                                        </span>
-                                                                    </div>
-                                                                )}
-                                                                
+
                                                                  <button
                                                                      onClick={() => {
                                                                          if (!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null) {
@@ -2272,9 +2318,10 @@ export default function ClientDashboard() {
                         </div>
                     </div>
                 )}
-            </div>
-        )
-    }
+
+                </div>
+            )
+        }
 
     // ─── MAIN DASHBOARD (Vue d'ensemble) ─────────────────────────────────────
     return (
@@ -2284,7 +2331,7 @@ export default function ClientDashboard() {
                 indicators={indicators}
                 indicatorStates={indicatorStates}
                 consultantName={consultantName}
-                unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
+                unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
                 upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                 isOpen={showMobileMenu}
                 onClose={() => setShowMobileMenu(false)}
@@ -2501,6 +2548,7 @@ export default function ClientDashboard() {
                     </div>
 
 
+                    {/* Floating Toasts rendered globally in ClientTopBar */}
                 </main>
             </div>
         </div>

@@ -20,19 +20,21 @@ export default function ConsultantMessages() {
             // Get all cases for this consultant
             const { data: casesData } = await supabase
                 .from('cases')
-                .select('id, tenants(commercial_name, first_name, last_name)')
+                .select('id, tenants(name)')
             
             if (!casesData) return
 
-            // For each case, fetch the last message and unread count
+            // For each case, fetch the last message and unread count (excluding system events)
             const convs = await Promise.all(casesData.map(async (c) => {
                 const { data: lastMsg } = await supabase
                     .from('case_messages')
                     .select('content, created_at, sender_id, read_at')
                     .eq('case_id', c.id)
+                    .not('content', 'ilike', '[SYSTEM]%')
+                    .not('content', 'ilike', '[Remarque%')
                     .order('created_at', { ascending: false })
                     .limit(1)
-                    .single()
+                    .maybeSingle()
 
                 const { count: unreadCount } = await supabase
                     .from('case_messages')
@@ -40,10 +42,12 @@ export default function ConsultantMessages() {
                     .eq('case_id', c.id)
                     .is('read_at', null)
                     .neq('sender_id', user.id)
+                    .not('content', 'ilike', '[SYSTEM]%')
+                    .not('content', 'ilike', '[Remarque%')
 
                 return {
                     case_id: c.id,
-                    clientName: c.tenants?.commercial_name || `${c.tenants?.first_name} ${c.tenants?.last_name}`,
+                    clientName: c.tenants?.name || 'Client',
                     lastMessage: lastMsg?.content || 'Aucun message encore.',
                     lastTime: lastMsg?.created_at,
                     unreadCount: unreadCount || 0

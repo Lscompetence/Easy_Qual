@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { Building, FileText, CheckCircle, AlertCircle, Mail, Calendar, FolderOpen, Clock, AlertTriangle, Lock } from 'lucide-react'
+import { Building, FileText, CheckCircle, AlertCircle, Mail, Calendar, FolderOpen, Clock, AlertTriangle, Lock, Send, Loader2 } from 'lucide-react'
 import { BarChart, Bar, ResponsiveContainer, Cell } from 'recharts'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
@@ -99,6 +99,51 @@ export default function ConsultantDashboard() {
         } finally {
             setIsDeleting(false)
         }
+    }
+
+    const [sendingAccessId, setSendingAccessId] = useState(null)
+
+    const handleSendAccess = async (e, c) => {
+        e.stopPropagation()
+        const tenant = c.tenants
+        if (!tenant || !tenant.client_email || !tenant.initial_password) {
+            showStatus('error', 'Champs manquants', "L'adresse email ou le mot de passe provisoire n'est pas défini pour ce dossier.")
+            return
+        }
+
+        showStatus(
+            'info',
+            'Confirmer l\'envoi des accès',
+            `Voulez-vous envoyer par email les accès de connexion à ${tenant.client_email} ?`,
+            async () => {
+                setSendingAccessId(c.id)
+                setStatusModal(prev => ({ ...prev, isLoading: true }))
+                try {
+                    const { data, error: inviteError } = await supabase.functions.invoke('invite-client', {
+                        body: {
+                            email: tenant.client_email,
+                            password: tenant.initial_password,
+                            tenant_id: c.tenant_id,
+                            tenant_name: tenant.name
+                        }
+                    })
+
+                    if (inviteError) throw inviteError
+                    if (data?.error) throw new Error(data.error)
+
+                    setSuccessMsg(`Les accès de connexion ont été envoyés à ${tenant.client_email} avec succès !`)
+                    setTimeout(() => setSuccessMsg(null), 5000)
+                } catch (err) {
+                    console.error('Error sending access:', err)
+                    showStatus('error', 'Erreur d\'envoi', "Impossible d'envoyer les accès : " + (err.message || err))
+                } finally {
+                    setSendingAccessId(null)
+                    setStatusModal(prev => ({ ...prev, isOpen: false }))
+                }
+            },
+            'Confirmer',
+            'Annuler'
+        )
     }
 
 
@@ -284,65 +329,86 @@ export default function ConsultantDashboard() {
                     )}
 
                     {/* KPI Cards Row */}
+                    {/* KPI Cards Row */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         {/* Card 1: Dossiers actifs */}
                         <div
                             onClick={() => setFilterStatus(filterStatus === 'active' ? 'all' : 'active')}
-                            className={`rounded-xl p-5 border shadow-sm flex flex-col justify-between relative group hover:shadow-md transition-all cursor-pointer ${filterStatus === 'active'
-                                ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300'
-                                : 'bg-white border-gray-100'
-                                }`}
+                            className={`rounded-2xl p-6 border shadow-sm flex flex-col justify-between relative overflow-hidden group hover:-translate-y-1 hover:shadow-lg transition-all duration-300 cursor-pointer ${
+                                filterStatus === 'active'
+                                    ? 'bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200 ring-2 ring-blue-300 shadow-blue-100'
+                                    : 'bg-white border-gray-100 hover:border-blue-100 shadow-gray-100/50'
+                            }`}
                         >
-                            <div className="flex justify-between items-start mb-4">
-                                <div className={`p-3 rounded-lg ${filterStatus === 'active' ? 'bg-blue-100 text-blue-700' : 'bg-blue-50 text-blue-600'}`}>
+                            <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-24 h-24 bg-blue-500/5 rounded-full blur-xl group-hover:scale-150 transition-all duration-500" />
+                            <div className="flex justify-between items-start mb-6">
+                                <div className={`p-3 rounded-xl transition-colors duration-300 ${
+                                    filterStatus === 'active' 
+                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
+                                        : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-blue-500/20'
+                                }`}>
                                     <FolderOpen className="h-6 w-6" />
                                 </div>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    filterStatus === 'active' ? 'bg-blue-200 text-blue-800' : 'bg-gray-100 text-gray-400'
+                                }`}>
+                                    {filterStatus === 'active' ? 'Filtre Actif' : 'Global'}
+                                </span>
                             </div>
                             <div>
-                                <h3 className={`text-3xl font-bold ${filterStatus === 'active' ? 'text-blue-900' : 'text-gray-900'}`}>{stats.active}</h3>
-                                <p className={`text-xs font-medium mt-1 ${filterStatus === 'active' ? 'text-blue-600' : 'text-gray-500'}`}>
-                                    {filterStatus === 'active' ? 'Filtre activé (Cliquez pour désactiver)' : 'Dossiers actifs'}
+                                <h3 className={`text-4xl font-black tracking-tight ${filterStatus === 'active' ? 'text-blue-900' : 'text-slate-900'}`}>
+                                    {stats.active}
+                                </h3>
+                                <p className={`text-xs font-semibold mt-2 transition-colors duration-300 ${
+                                    filterStatus === 'active' ? 'text-blue-700' : 'text-slate-500 group-hover:text-blue-600'
+                                }`}>
+                                    {filterStatus === 'active' ? 'Affichage des dossiers actifs' : 'Dossiers actifs'}
                                 </p>
                             </div>
                         </div>
 
                         {/* Card 2: À valider / corriger */}
-                        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between relative group hover:shadow-md transition-shadow">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="p-3 bg-amber-50 rounded-lg text-amber-600">
+                        <div className="bg-white border-gray-100 hover:border-amber-100 hover:-translate-y-1 hover:shadow-lg shadow-sm shadow-gray-100/50 rounded-2xl p-6 border flex flex-col justify-between relative overflow-hidden group transition-all duration-300">
+                            <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-24 h-24 bg-amber-500/5 rounded-full blur-xl group-hover:scale-150 transition-all duration-500" />
+                            <div className="flex justify-between items-start mb-6">
+                                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl group-hover:bg-amber-500 group-hover:text-white group-hover:shadow-md group-hover:shadow-amber-500/20 transition-colors duration-300">
                                     <AlertTriangle className="h-6 w-6" />
                                 </div>
-                                <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-full uppercase">Urgent</span>
+                                <span className="bg-rose-100 text-rose-700 text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm animate-pulse">Urgent</span>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-gray-900">{stats.toValidate}</h3>
-                                <p className="text-xs font-medium text-gray-500 mt-1">À valider / corriger</p>
+                                <h3 className="text-4xl font-black text-slate-900 tracking-tight">{stats.toValidate}</h3>
+                                <p className="text-xs font-semibold text-slate-500 mt-2 group-hover:text-amber-600 transition-colors duration-300">À valider / corriger</p>
                             </div>
                         </div>
 
                         {/* Card 3: Audits Blancs à planifier */}
-                        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between relative group hover:shadow-md transition-shadow">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="p-3 bg-purple-50 rounded-lg text-purple-600">
+                        <div className="bg-white border-gray-100 hover:border-purple-100 hover:-translate-y-1 hover:shadow-lg shadow-sm shadow-gray-100/50 rounded-2xl p-6 border flex flex-col justify-between relative overflow-hidden group transition-all duration-300">
+                            <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-24 h-24 bg-purple-500/5 rounded-full blur-xl group-hover:scale-150 transition-all duration-500" />
+                            <div className="flex justify-between items-start mb-6">
+                                <div className="p-3 bg-purple-50 text-purple-600 rounded-xl group-hover:bg-purple-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-purple-500/20 transition-colors duration-300">
                                     <Calendar className="h-6 w-6" />
                                 </div>
+                                <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Planification</span>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-gray-900">{stats.planned}</h3>
-                                <p className="text-xs font-medium text-gray-500 mt-1">Audits Blancs à planifier</p>
+                                <h3 className="text-4xl font-black text-slate-900 tracking-tight">{stats.planned}</h3>
+                                <p className="text-xs font-semibold text-slate-500 mt-2 group-hover:text-purple-600 transition-colors duration-300">Audits blancs à planifier</p>
                             </div>
                         </div>
 
                         {/* Card 4: Dossiers terminés */}
-                        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between relative group hover:shadow-md transition-shadow">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="p-3 bg-green-50 rounded-lg text-green-600">
+                        <div className="bg-white border-gray-100 hover:border-emerald-100 hover:-translate-y-1 hover:shadow-lg shadow-sm shadow-gray-100/50 rounded-2xl p-6 border flex flex-col justify-between relative overflow-hidden group transition-all duration-300">
+                            <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl group-hover:scale-150 transition-all duration-500" />
+                            <div className="flex justify-between items-start mb-6">
+                                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white group-hover:shadow-md group-hover:shadow-emerald-500/20 transition-colors duration-300">
                                     <CheckCircle className="h-6 w-6" />
                                 </div>
+                                <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Succès</span>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-gray-900">{stats.completed}</h3>
-                                <p className="text-xs font-medium text-gray-500 mt-1">Dossiers terminés</p>
+                                <h3 className="text-4xl font-black text-slate-900 tracking-tight">{stats.completed}</h3>
+                                <p className="text-xs font-semibold text-slate-500 mt-2 group-hover:text-emerald-600 transition-colors duration-300">Dossiers terminés</p>
                             </div>
                         </div>
                     </div>
@@ -424,6 +490,26 @@ export default function ConsultantDashboard() {
                                                         </td>
                                                         <td className="py-6 min-w-[220px]">
                                                             <div className="flex flex-col gap-2 pr-4">
+                                                                {/* Action / Send row above the credentials */}
+                                                                <div className="flex items-center justify-between px-1 mb-0.5">
+                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                                                                        <Lock className="h-3 w-3 text-gray-400" /> Accès client
+                                                                    </span>
+                                                                    <button
+                                                                        onClick={(e) => handleSendAccess(e, c)}
+                                                                        disabled={sendingAccessId === c.id || !c.tenants?.client_email}
+                                                                        className="text-[11px] font-bold text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 disabled:opacity-50 px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-purple-100 transition-all active:scale-95 cursor-pointer"
+                                                                        title="Envoyer les identifiants de connexion par email au client"
+                                                                    >
+                                                                        {sendingAccessId === c.id ? (
+                                                                            <Loader2 className="h-3 w-3 animate-spin text-purple-600" />
+                                                                        ) : (
+                                                                            <Send className="h-2.5 w-2.5" />
+                                                                        )}
+                                                                        {sendingAccessId === c.id ? 'Envoi...' : 'Envoyer'}
+                                                                    </button>
+                                                                </div>
+
                                                                 {/* EMAIL — read-only, click to copy */}
                                                                 <div
                                                                     onClick={(e) => {
@@ -438,7 +524,7 @@ export default function ConsultantDashboard() {
                                                                     <div className="flex-shrink-0 bg-white p-1.5 rounded-lg shadow-sm border border-slate-100">
                                                                         <Mail className="h-4 w-4 text-slate-400 group-hover/item:text-purple-500" />
                                                                     </div>
-                                                                    <span className="text-xs font-bold text-slate-700 whitespace-nowrap truncate">
+                                                                    <span className="text-xs font-bold text-slate-700 whitespace-nowrap truncate font-medium">
                                                                         {c.tenants?.client_email || 'Non défini'}
                                                                     </span>
                                                                 </div>
@@ -538,107 +624,174 @@ export default function ConsultantDashboard() {
                             </div>
                         </div>
 
-                        {/* ── Client Stats Card ── */}
-                        {(() => {
-                            // Build last-6-months data from cases
-                            const now = new Date()
-                            const months = Array.from({ length: 6 }, (_, i) => {
-                                const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
-                                return {
-                                    label: d.toLocaleDateString('fr-FR', { month: 'short' }),
-                                    year: d.getFullYear(),
-                                    month: d.getMonth(),
-                                    count: 0
-                                }
-                            })
-                            cases.forEach(c => {
-                                const d = new Date(c.created_at)
-                                const m = months.find(x => x.year === d.getFullYear() && x.month === d.getMonth())
-                                if (m) m.count++
-                            })
-                            // Cumulative
-                            let cum = 0
-                            const cumMonths = months.map(m => { cum += m.count; return { ...m, cum } })
+                        {/* ── Client Stats Sidebar ── */}
+                        <div className="lg:sticky lg:top-28 flex flex-col gap-6 w-full self-start">
+                            {(() => {
+                                // Build last-6-months data from cases
+                                const now = new Date()
+                                const months = Array.from({ length: 6 }, (_, i) => {
+                                    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+                                    return {
+                                        label: d.toLocaleDateString('fr-FR', { month: 'short' }),
+                                        year: d.getFullYear(),
+                                        month: d.getMonth(),
+                                        count: 0
+                                    }
+                                })
+                                cases.forEach(c => {
+                                    const d = new Date(c.created_at)
+                                    const m = months.find(x => x.year === d.getFullYear() && x.month === d.getMonth())
+                                    if (m) m.count++
+                                })
+                                // Cumulative
+                                let cum = 0
+                                const cumMonths = months.map(m => { cum += m.count; return { ...m, cum } })
 
-                            // SVG line chart
-                            const W = 260, H = 80, pad = 10
-                            const maxVal = Math.max(...cumMonths.map(m => m.cum), 1)
-                            const pts = cumMonths.map((m, i) => ({
-                                x: pad + (i / (cumMonths.length - 1)) * (W - pad * 2),
-                                y: H - pad - (m.cum / maxVal) * (H - pad * 2)
-                            }))
-                            const polyline = pts.map(p => `${p.x},${p.y}`).join(' ')
-                            const area = `${pts[0].x},${H} ` + pts.map(p => `${p.x},${p.y}`).join(' ') + ` ${pts[pts.length - 1].x},${H}`
+                                // SVG line chart
+                                const W = 260, H = 80, pad = 10
+                                const maxVal = Math.max(...cumMonths.map(m => m.cum), 1)
+                                const pts = cumMonths.map((m, i) => ({
+                                    x: pad + (i / (cumMonths.length - 1)) * (W - pad * 2),
+                                    y: H - pad - (m.cum / maxVal) * (H - pad * 2)
+                                }))
+                                const polyline = pts.map(p => `${p.x},${p.y}`).join(' ')
+                                const area = `${pts[0].x},${H} ` + pts.map(p => `${p.x},${p.y}`).join(' ') + ` ${pts[pts.length - 1].x},${H}`
 
-                            const monoCount = cases.filter(c => c.category !== 'multi-site').length
-                            const multiCount = cases.filter(c => c.category === 'multi-site').length
-                            return (
-                                <div className="lg:sticky lg:top-28 rounded-2xl overflow-hidden shadow-xl flex flex-col self-start w-full"
-                                    style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)' }}>
+                                const monoCount = cases.filter(c => c.category !== 'multi-site').length
+                                const multiCount = cases.filter(c => c.category === 'multi-site').length
+                                return (
+                                    <div className="rounded-2xl overflow-hidden shadow-xl flex flex-col w-full border border-indigo-950/20"
+                                        style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)' }}>
 
-                                    {/* Header */}
-                                    <div className="px-6 pt-6 pb-3">
-                                        <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1">Clients inscrits</p>
-                                        <div className="flex items-end justify-between">
+                                        {/* Header */}
+                                        <div className="px-6 pt-6 pb-3">
+                                            <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-1">Clients inscrits</p>
+                                            <div className="flex items-end justify-between">
+                                                <div>
+                                                    <span className="text-5xl font-black text-white">{cases.length}</span>
+                                                    <span className="ml-2 text-sm text-indigo-300 font-medium">dossiers</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1">
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                                                    <span className="text-[11px] font-bold text-emerald-300">+{months[months.length - 1].count} ce mois</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* SVG Line Chart */}
+                                        <div className="px-4 py-4">
+                                            <svg viewBox={`0 0 ${W} ${H + 18}`} className="w-full" style={{ overflow: 'visible' }}>
+                                                <defs>
+                                                    <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.5" />
+                                                        <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
+                                                    </linearGradient>
+                                                </defs>
+                                                {/* Grid lines */}
+                                                {[0, 0.5, 1].map((t, i) => (
+                                                    <line key={i}
+                                                        x1={pad} y1={pad + t * (H - pad * 2)}
+                                                        x2={W - pad} y2={pad + t * (H - pad * 2)}
+                                                        stroke="rgba(255,255,255,0.07)" strokeWidth="1" />
+                                                ))}
+                                                {/* Area fill */}
+                                                <polygon points={area} fill="url(#lineGrad)" />
+                                                {/* Line */}
+                                                <polyline points={polyline} fill="none" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                                {/* Dots */}
+                                                {pts.map((p, i) => (
+                                                    <circle key={i} cx={p.x} cy={p.y} r="3.5" fill="#7c3aed" stroke="white" strokeWidth="1.5" />
+                                                ))}
+                                                {/* Month labels */}
+                                                {cumMonths.map((m, i) => (
+                                                    <text key={i} x={pts[i].x} y={H + 14} textAnchor="middle"
+                                                        fontSize="8" fill="rgba(199,210,254,0.7)" fontWeight="600">
+                                                        {m.label}
+                                                    </text>
+                                                ))}
+                                            </svg>
+                                        </div>
+
+                                        {/* Footer stats */}
+                                        <div className="px-6 py-4 border-t border-white/10 grid grid-cols-2 gap-4">
                                             <div>
-                                                <span className="text-5xl font-black text-white">{cases.length}</span>
-                                                <span className="ml-2 text-sm text-indigo-300 font-medium">dossiers</span>
+                                                <p className="text-[10px] text-indigo-300 uppercase font-bold tracking-wider mb-0.5">Mono-site</p>
+                                                <p className="text-2xl font-black text-white">{monoCount}</p>
                                             </div>
-                                            <div className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                                                <span className="text-[11px] font-bold text-emerald-300">+{months[months.length - 1].count} ce mois</span>
+                                            <div>
+                                                <p className="text-[10px] text-indigo-300 uppercase font-bold tracking-wider mb-0.5">Multi-site</p>
+                                                <p className="text-2xl font-black text-white">{multiCount}</p>
                                             </div>
                                         </div>
                                     </div>
+                                )
+                            })()}
 
-                                    {/* SVG Line Chart */}
-                                    <div className="px-4 py-4">
-                                        <svg viewBox={`0 0 ${W} ${H + 18}`} className="w-full" style={{ overflow: 'visible' }}>
-                                            <defs>
-                                                <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.5" />
-                                                    <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
-                                                </linearGradient>
-                                            </defs>
-                                            {/* Grid lines */}
-                                            {[0, 0.5, 1].map((t, i) => (
-                                                <line key={i}
-                                                    x1={pad} y1={pad + t * (H - pad * 2)}
-                                                    x2={W - pad} y2={pad + t * (H - pad * 2)}
-                                                    stroke="rgba(255,255,255,0.07)" strokeWidth="1" />
-                                            ))}
-                                            {/* Area fill */}
-                                            <polygon points={area} fill="url(#lineGrad)" />
-                                            {/* Line */}
-                                            <polyline points={polyline} fill="none" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                            {/* Dots */}
-                                            {pts.map((p, i) => (
-                                                <circle key={i} cx={p.x} cy={p.y} r="3.5" fill="#7c3aed" stroke="white" strokeWidth="1.5" />
-                                            ))}
-                                            {/* Month labels */}
-                                            {cumMonths.map((m, i) => (
-                                                <text key={i} x={pts[i].x} y={H + 14} textAnchor="middle"
-                                                    fontSize="8" fill="rgba(199,210,254,0.7)" fontWeight="600">
-                                                    {m.label}
-                                                </text>
-                                            ))}
-                                        </svg>
-                                    </div>
+                            {/* Progression globale card */}
+                            {(() => {
+                                const progressionStats = {
+                                    start: cases.filter(c => (c.progress || 0) <= 10).length,
+                                    inProgress: cases.filter(c => (c.progress || 0) > 10 && (c.progress || 0) <= 80).length,
+                                    finalizing: cases.filter(c => (c.progress || 0) > 80 && (c.progress || 0) < 100).length,
+                                    done: cases.filter(c => (c.progress || 0) === 100).length
+                                }
+                                return (
+                                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
+                                        <div className="flex items-center justify-between border-b border-gray-50 pb-3">
+                                            <h3 className="text-sm font-bold text-gray-900">Progression globale</h3>
+                                            <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                                                Répartition
+                                            </span>
+                                        </div>
+                                        <div className="space-y-4">
+                                            {/* Row 1: Complété */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between text-xs font-semibold text-slate-700">
+                                                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>Complété (100%)</span>
+                                                    <span>{progressionStats.done} {progressionStats.done > 1 ? 'dossiers' : 'dossier'}</span>
+                                                </div>
+                                                <div className="h-2 bg-slate-50 border border-slate-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${cases.length > 0 ? (progressionStats.done / cases.length) * 100 : 0}%` }}></div>
+                                                </div>
+                                            </div>
 
-                                    {/* Footer stats */}
-                                    <div className="px-6 py-4 border-t border-white/10 grid grid-cols-2 gap-4">
-                                        <div>
-                                            <p className="text-[10px] text-indigo-300 uppercase font-bold tracking-wider mb-0.5">Mono-site</p>
-                                            <p className="text-2xl font-black text-white">{monoCount}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-indigo-300 uppercase font-bold tracking-wider mb-0.5">Multi-site</p>
-                                            <p className="text-2xl font-black text-white">{multiCount}</p>
+                                            {/* Row 2: Finalisation */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between text-xs font-semibold text-slate-700">
+                                                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>Finalisation (81-99%)</span>
+                                                    <span>{progressionStats.finalizing} {progressionStats.finalizing > 1 ? 'dossiers' : 'dossier'}</span>
+                                                </div>
+                                                <div className="h-2 bg-slate-50 border border-slate-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-purple-500 rounded-full" style={{ width: `${cases.length > 0 ? (progressionStats.finalizing / cases.length) * 100 : 0}%` }}></div>
+                                                </div>
+                                            </div>
+
+                                            {/* Row 3: En cours */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between text-xs font-semibold text-slate-700">
+                                                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>En cours (11-80%)</span>
+                                                    <span>{progressionStats.inProgress} {progressionStats.inProgress > 1 ? 'dossiers' : 'dossier'}</span>
+                                                </div>
+                                                <div className="h-2 bg-slate-50 border border-slate-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${cases.length > 0 ? (progressionStats.inProgress / cases.length) * 100 : 0}%` }}></div>
+                                                </div>
+                                            </div>
+
+                                            {/* Row 4: Démarrage */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between text-xs font-semibold text-slate-700">
+                                                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-slate-400"></span>Démarrage (0-10%)</span>
+                                                    <span>{progressionStats.start} {progressionStats.start > 1 ? 'dossiers' : 'dossier'}</span>
+                                                </div>
+                                                <div className="h-2 bg-slate-50 border border-slate-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-slate-400 rounded-full" style={{ width: `${cases.length > 0 ? (progressionStats.start / cases.length) * 100 : 0}%` }}></div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            )
-                        })()}
+                                )
+                            })()}
+                        </div>
 
                     </div>
                 </main>

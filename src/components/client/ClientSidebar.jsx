@@ -1,9 +1,9 @@
 /* eslint-disable */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../supabaseClient'
-import { LogOut, ChevronDown, ChevronRight, CheckCircle, Circle, Video, MessageSquare, LayoutDashboard, GraduationCap, X, LifeBuoy, Archive, FileText } from 'lucide-react'
+import { LogOut, ChevronDown, ChevronRight, CheckCircle, Circle, Video, MessageSquare, LayoutDashboard, GraduationCap, X, LifeBuoy, Archive, FileText, ClipboardList } from 'lucide-react'
 import FeedbackModal from '../shared/FeedbackModal'
 import { getCriterionColor } from '../../utils/theme'
 
@@ -13,6 +13,70 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
     const navigate = useNavigate()
     const [formationOpen, setFormationOpen] = useState(true)
     const [feedbackOpen, setFeedbackOpen] = useState(false)
+
+    // ─── Badge "Historique toasts" : notifications consultant non lues ──────────
+    const [unreadNotifs, setUnreadNotifs] = useState(0)
+    const pathRef = useRef(location.pathname)
+    pathRef.current = location.pathname
+    const seenKey = user ? `eq_client_notifs_seen_${user.id}` : null
+
+    useEffect(() => {
+        if (!user) return
+        let channel
+        let active = true
+
+        const computeUnread = async (cid) => {
+            const lastSeen = (seenKey && localStorage.getItem(seenKey)) || '1970-01-01T00:00:00Z'
+            const { count } = await supabase
+                .from('case_notifications')
+                .select('*', { count: 'exact', head: true })
+                .eq('case_id', cid)
+                .like('type', 'consultant_%')
+                .gt('created_at', lastSeen)
+            if (active) setUnreadNotifs(count || 0)
+        }
+
+        const init = async () => {
+            let caseId = caseData?.id
+            if (!caseId) {
+                const { data: tenants } = await supabase.from('tenants').select('id').eq('owner_id', user.id)
+                if (!tenants || tenants.length === 0) return
+                const { data: cases } = await supabase
+                    .from('cases').select('id')
+                    .eq('tenant_id', tenants[0].id)
+                    .order('created_at', { ascending: false }).limit(1)
+                if (!cases || cases.length === 0) return
+                caseId = cases[0].id
+            }
+            await computeUnread(caseId)
+
+            channel = supabase
+                .channel(`client_sidebar_notifs:${caseId}`)
+                .on('postgres_changes', {
+                    event: 'INSERT', schema: 'public', table: 'case_notifications',
+                    filter: `case_id=eq.${caseId}`
+                }, (payload) => {
+                    if (!payload.new.type?.startsWith('consultant_')) return
+                    // Si le client consulte déjà la page, on marque comme vu au lieu d'incrémenter
+                    if (pathRef.current === '/client/toasts-history') {
+                        if (seenKey) localStorage.setItem(seenKey, new Date().toISOString())
+                    } else {
+                        setUnreadNotifs(prev => prev + 1)
+                    }
+                })
+                .subscribe()
+        }
+        init()
+        return () => { active = false; if (channel) supabase.removeChannel(channel) }
+    }, [user, caseData?.id])
+
+    // Remise à zéro du badge dès que le client ouvre l'historique
+    useEffect(() => {
+        if (location.pathname === '/client/toasts-history' && seenKey) {
+            localStorage.setItem(seenKey, new Date().toISOString())
+            setUnreadNotifs(0)
+        }
+    }, [location.pathname, seenKey])
 
     // Group indicators by criterion
     const criteriaMap = {}
@@ -216,6 +280,22 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
                             >
                                 <FileText className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/questionnaires' ? 'text-[#cc6d3e]' : 'text-gray-400'}`} />
                                 <span className="flex-1">Questionnaires</span>
+                            </Link>
+
+                            <Link
+                                to="/client/toasts-history"
+                                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-bold transition-all relative ${location.pathname === '/client/toasts-history'
+                                    ? 'bg-[#faf1ec] text-[#cc6d3e] border border-[#f5e2d6]'
+                                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                                    }`}
+                            >
+                                <ClipboardList className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/toasts-history' ? 'text-[#cc6d3e]' : 'text-gray-400'}`} />
+                                <span className="flex-1">Historique toasts</span>
+                                {unreadNotifs > 0 && (
+                                    <span className="h-5 min-w-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-red-500/20">
+                                        {unreadNotifs > 99 ? '99+' : unreadNotifs}
+                                    </span>
+                                )}
                             </Link>
                         </div>
                     </div>

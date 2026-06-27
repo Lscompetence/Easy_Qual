@@ -49,6 +49,13 @@ export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuc
 
             if (tenantError) throw tenantError
 
+            // Synchroniser le nom dans le profil du client (via fonction sécurisée SECURITY DEFINER)
+            const { error: syncError } = await supabase.rpc('sync_client_profile_name', {
+                p_tenant_id: caseData.tenant_id,
+                p_full_name: formData.tenantName.trim()
+            })
+            if (syncError) console.warn('Sync du nom client échouée:', syncError)
+
             const { error: caseError } = await supabase
                 .from('cases')
                 .update({

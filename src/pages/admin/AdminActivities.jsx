@@ -150,7 +150,7 @@ export default function AdminActivities() {
                                         </p>
                                         <div className="mt-3">
                                             <span className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-md border ${getBadgeColor(activity.title)}`}>
-                                                {activity.title.split(' ')[0] || 'Système'}
+                                                {activity.title?.split(' ')[0] || 'Système'}
                                             </span>
                                         </div>
                                     </div>

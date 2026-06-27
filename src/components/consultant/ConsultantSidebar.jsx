@@ -1,6 +1,6 @@
 /* eslint-disable */
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, FolderOpen, Calendar, BookOpen, Settings, LogOut, MoreVertical, X, MessageSquare, BellRing, HardDrive, LifeBuoy, Archive, ClipboardCheck, FileText } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, Calendar, BookOpen, Settings, LogOut, MoreVertical, X, MessageSquare, BellRing, HardDrive, LifeBuoy, Archive, ClipboardCheck, FileText, ClipboardList } from 'lucide-react'
 import FeedbackModal from '../shared/FeedbackModal'
 import { Link, useLocation } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
@@ -44,14 +44,22 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
     const fetchUnreadCounts = async () => {
         if (!user) return
         try {
-            // Count unread system notifications for this consultant's cases
+            // ANO-01 : compter les actions client non vues dans case_notifications (type client_*)
+            const { data: casesData } = await supabase
+                .from('cases')
+                .select('id')
+                .eq('consultant_id', user.id)
+            const caseIds = casesData?.map(c => c.id) || []
+            if (caseIds.length === 0) { setUnreadNotifications(0); return }
+
+            const lastSeen = localStorage.getItem(`eq_last_actions_seen_${user.id}`) || new Date(0).toISOString()
             const { count, error } = await supabase
-                .from('case_messages')
-                .select(`id, cases!inner(consultant_id)`, { count: 'exact', head: true })
-                .eq('cases.consultant_id', user.id)
-                .is('read_at', null)
-                .ilike('content', '%[SYSTEM]%')
-            
+                .from('case_notifications')
+                .select('id', { count: 'exact', head: true })
+                .in('case_id', caseIds)
+                .like('type', 'client_%')
+                .gt('created_at', lastSeen)
+
             if (error) throw error
             setUnreadNotifications(count || 0)
         } catch (err) {
@@ -120,6 +128,7 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                                     </span>
                                 )}
                             </Link>
+
 
                             <Link
                                 to="/consultant/calendar"
@@ -200,6 +209,21 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                                     }`} />
                                 Questionnaires
                                 {isActive('/consultant/questionnaires') && (
+                                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
+                                )}
+                            </Link>
+
+                            <Link
+                                to="/consultant/actions-history"
+                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive('/consultant/actions-history')
+                                    ? 'bg-purple-50 text-purple-700'
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                    }`}
+                            >
+                                <ClipboardList className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/actions-history') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
+                                    }`} />
+                                Historique toasts
+                                {isActive('/consultant/actions-history') && (
                                     <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
                                 )}
                             </Link>

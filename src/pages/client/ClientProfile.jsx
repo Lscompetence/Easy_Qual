@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 
-import { User, Lock, Mail, Save, Eye, EyeOff, Camera, Check, AlertCircle } from 'lucide-react'
+import { User, Lock, Mail, Save, Eye, EyeOff, Camera, Check, AlertCircle, ArrowLeft } from 'lucide-react'
 import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
 
 export default function ClientProfile() {
     const { user, role, refreshProfile, profile } = useAuth()
+    const navigate = useNavigate()
 
     const fileInputRef = useRef(null)
 
@@ -121,6 +123,7 @@ export default function ClientProfile() {
     const showMsg = (type, content) => {
         setMessage({ type, content })
         setTimeout(() => setMessage({ type: '', content: '' }), 5000)
+        window.dispatchEvent(new CustomEvent('eq_show_client_toast', { detail: { message: content, type } }))
     }
 
     const handleUploadAvatar = async (e) => {
@@ -153,14 +156,21 @@ export default function ClientProfile() {
                 .eq('id', user.id)
             if (error) throw error
             await refreshProfile()
-            
+
+            // 🔁 Synchroniser le nom vers tenants.name (ce que voit le consultant)
+            const fullName = `${formData.first_name || ''} ${formData.last_name || ''}`.trim()
+            const { error: tenantSyncError } = await supabase.rpc('sync_tenant_name_from_client', {
+                p_full_name: fullName
+            })
+            if (tenantSyncError) console.warn('Sync du nom vers le dossier échouée:', tenantSyncError)
+
             // 📩 NOTIFICATION POUR LE CONSULTANT
             if (myCase?.id) {
                 try {
-                    await supabase.from('case_messages').insert({
+                    await supabase.from('case_notifications').insert({
                         case_id: myCase.id,
-                        sender_id: user.id,
-                        content: `[SYSTEM] 👤 Le client a mis à jour ses informations de profil (Nom/Prénom).`
+                        type: 'client_profile_update',
+                        content: `👤 Le client a mis à jour ses informations de profil (Nom/Prénom).`
                     });
                 } catch (e) { console.warn("Could not insert notification:", e); }
             }
@@ -211,14 +221,15 @@ export default function ClientProfile() {
             // 📩 NOTIFICATION POUR LE CONSULTANT
             if (myCase?.id) {
                 try {
-                    await supabase.from('case_messages').insert({
+                    await supabase.from('case_notifications').insert({
                         case_id: myCase.id,
-                        sender_id: user.id,
-                        content: `[SYSTEM] 🔐 Le client a modifié son mot de passe.`
+                        type: 'client_password_change',
+                        content: `🔐 Le client a modifié son mot de passe.`
                     });
                 } catch (e) { console.warn("Could not insert notification:", e); }
             }
 
+            showMsg('success', 'Mot de passe modifié avec succès !')
             setShowSuccessModal(true)
             setPasswordData({ newPassword: '', confirmPassword: '' })
         } catch (err) {
@@ -272,20 +283,16 @@ export default function ClientProfile() {
                 />
 
                 <main className="flex-1 p-6 lg:p-8 w-full max-w-[1300px] mx-auto">
+                    {/* Back Button */}
+                    <button
+                        onClick={() => navigate('/client/dashboard')}
+                        className="mb-5 inline-flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-[#cc6d3e] transition-colors cursor-pointer bg-white border border-gray-100 px-4 py-2 rounded-xl shadow-sm hover:shadow-md active:scale-95"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        Retour au tableau de bord
+                    </button>
 
-                    {/* Alert message */}
-                    {message.content && (
-                        <div className={`mb-5 p-3.5 rounded-xl flex items-center gap-3 text-sm font-semibold border ${message.type === 'success'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-red-50 text-red-700 border-red-200'
-                            }`}>
-                            {message.type === 'success'
-                                ? <Check className="h-4 w-4 flex-shrink-0" />
-                                : <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                            }
-                            {message.content}
-                        </div>
-                    )}
+
 
                     {/* ── BANNER CARD ── */}
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-6">
