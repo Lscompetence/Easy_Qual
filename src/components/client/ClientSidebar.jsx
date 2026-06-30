@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../supabaseClient'
-import { LogOut, ChevronDown, ChevronRight, CheckCircle, Circle, Video, MessageSquare, LayoutDashboard, GraduationCap, X, LifeBuoy, Archive, FileText, ClipboardList } from 'lucide-react'
+import { LogOut, ChevronDown, ChevronRight, CheckCircle, Circle, Video, MessageSquare, LayoutDashboard, GraduationCap, X, LifeBuoy, Archive, FileText, ClipboardList, Award } from 'lucide-react'
 import FeedbackModal from '../shared/FeedbackModal'
 import { getCriterionColor } from '../../utils/theme'
 
@@ -147,12 +147,9 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
             <aside className={`fixed inset-y-0 left-0 lg:sticky lg:top-0 w-[240px] bg-white h-screen flex flex-col z-50 flex-shrink-0 border-r border-gray-100 text-[13px] font-sans transition-transform duration-300 transform lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 {/* Logo */}
                 <div className="h-16 flex items-center px-6 border-b border-gray-100 justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 bg-[#cc6d3e] rounded-xl flex items-center justify-center shadow-lg shadow-[#cc6d3e]/20">
-                            <GraduationCap className="h-5 w-5 text-white" />
-                        </div>
-                        <span className="font-black text-gray-900 text-lg tracking-tight">Easy<span className="text-[#cc6d3e]">'</span>Qual</span>
-                    </div>
+                    <Link to="/client/dashboard" className="flex items-center">
+                        <img src="/logo.png" alt="Easy'Qual" className="h-8 w-auto object-contain" />
+                    </Link>
                     {/* Close button for mobile */}
                     <button onClick={onClose} className="lg:hidden p-2 text-gray-400 hover:text-gray-600">
                         <X className="h-5 w-5" />
@@ -171,6 +168,20 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
                         >
                             <LayoutDashboard className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/dashboard' ? 'text-[#cc6d3e]' : ''}`} />
                             Vue d'ensemble
+                        </Link>
+                    </div>
+
+                    {/* Résultat d'audit */}
+                    <div className="px-4 mb-2">
+                        <Link
+                            to="/client/audit"
+                            className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-bold transition-all ${location.pathname === '/client/audit'
+                                ? 'bg-[#faf1ec] text-[#cc6d3e] shadow-sm shadow-[#cc6d3e]/5 border border-[#f5e2d6]'
+                                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
+                        >
+                            <Award className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/audit' ? 'text-[#cc6d3e]' : 'text-gray-400'}`} />
+                            Synthèse pré-audit
                         </Link>
                     </div>
 

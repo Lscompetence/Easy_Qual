@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { getCriterionColor } from '../../utils/theme'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
@@ -12,7 +12,7 @@ import UniversalPlayer from '../../components/shared/UniversalPlayer'
 import StatusModal from '../../components/shared/StatusModal'
 import QuizModal from '../../components/shared/QuizModal'
 import PreAuditResult from '../../components/consultant/PreAuditResult'
-import { calculerPreAudit } from '../AuditPrototype/referentiel'
+import { calculerPreAudit, cleMatriceCategorie, eliminatoiresPourType, CAT } from '../AuditPrototype/referentiel'
 import { jsPDF } from 'jspdf'
 
 const isInitialAudit = (type) => {
@@ -539,6 +539,7 @@ export default function ClientDashboard() {
     // Determine current page from URL
     const isMessages = location.pathname === '/client/messages'
     const isSessions = location.pathname === '/client/sessions'
+    const isAudit = location.pathname === '/client/audit'
     const isCriterion = location.pathname.startsWith('/client/criterion/')
     const criterionId = isCriterion ? location.pathname.split('/').pop() : null
 
@@ -722,7 +723,7 @@ export default function ClientDashboard() {
                 const tenantIds = tenantsData.map(t => t.id)
                 const { data: casesData } = await supabase
                     .from('cases')
-                    .select('id, tenant_id, audit_type, training_categories, consultant_id, created_at, preaudit_shared')
+                    .select('id, tenant_id, audit_type, training_categories, consultant_id, created_at, preaudit_shared, eliminatoires')
                     .in('tenant_id', tenantIds)
 
                 const caseData = casesData?.sort((a, b) => {
@@ -1237,8 +1238,69 @@ export default function ClientDashboard() {
         })
         const verdicts = {}
         Object.entries(byInd).forEach(([id, s]) => { verdicts[id] = s.consultant_verdict || 'to_do' })
-        return calculerPreAudit(verdicts)
+
+        // Matrice categories
+        const categoriesMatrice = [...new Set((myCase?.training_categories || []).map(cleMatriceCategorie))]
+        const cats = categoriesMatrice.length ? categoriesMatrice : [null]
+
+        // Eliminatoires
+        const statuts = (myCase?.eliminatoires || {})[String(selectedAudit || 'initial').trim()] || {}
+        const elim = eliminatoiresPourType(selectedAudit || 'initial', statuts)
+
+        // Compute per category
+        const perimetres = cats.map(cat => ({ cat, result: calculerPreAudit(verdicts, cat, elim) }))
+
+        // Return the worst / most severe result
+        const SEVERITE_AVIS = { FAVORABLE: 0, RESERVE: 1, DEFAVORABLE: 2 }
+        const worstResult = perimetres.reduce(
+            (worst, p) => (SEVERITE_AVIS[p.result.avis.cle] > SEVERITE_AVIS[worst.avis.cle] ? p.result : worst),
+            perimetres[0].result
+        )
+        return worstResult
     })()
+
+    // Avis de pré-audit pour chaque type d'audit
+    const clientAuditResults = useMemo(() => {
+        if (!myCase) return []
+        const rawTypes = Array.isArray(myCase.audit_type) ? myCase.audit_type : [myCase.audit_type || 'Initial']
+        const types = sortAuditTypes(rawTypes)
+
+        return types.map(type => {
+            const norm = normalizeAudit(type)
+            const byInd = {}
+            allStatesData.forEach(s => {
+                if (normalizeAudit(s.audit_type || 'initial') !== norm) return
+                const prev = byInd[s.indicator_id]
+                if (!prev || new Date(s.updated_at || 0) > new Date(prev.updated_at || 0)) byInd[s.indicator_id] = s
+            })
+            const verdicts = {}
+            Object.entries(byInd).forEach(([id, s]) => { verdicts[id] = s.consultant_verdict || 'to_do' })
+
+            // Matrice categories
+            const categoriesMatrice = [...new Set((myCase?.training_categories || []).map(cleMatriceCategorie))]
+            const cats = categoriesMatrice.length ? categoriesMatrice : [null]
+
+            // Eliminatoires
+            const statuts = (myCase?.eliminatoires || {})[String(type).trim()] || {}
+            const elim = eliminatoiresPourType(type, statuts)
+
+            // Compute per category
+            const perimetres = cats.map(cat => ({ cat, result: calculerPreAudit(verdicts, cat, elim) }))
+
+            // Return the worst / most severe result
+            const SEVERITE_AVIS = { FAVORABLE: 0, RESERVE: 1, DEFAVORABLE: 2 }
+            const worstResult = perimetres.reduce(
+                (worst, p) => (SEVERITE_AVIS[p.result.avis.cle] > SEVERITE_AVIS[worst.avis.cle] ? p.result : worst),
+                perimetres[0].result
+            )
+            
+            return {
+                type,
+                result: worstResult,
+                perimetres
+            }
+        })
+    }, [myCase, allStatesData])
 
     // Group indicators by criterion
     const criteriaMap = {}
@@ -1415,6 +1477,120 @@ export default function ClientDashboard() {
                         </div>
                     </main>
 
+                </div>
+            </div>
+        )
+    }
+
+    // ─── AUDIT VIEW ─────────────────────────────────────────────────────────────
+    if (isAudit) {
+        return (
+            <div className="bg-gray-50 min-h-screen flex font-sans">
+                <ClientSidebar
+                    caseData={myCase}
+                    indicators={indicators}
+                    indicatorStates={indicatorStates}
+                    consultantName={consultantName}
+                    unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
+                    upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
+                    isOpen={showMobileMenu}
+                    onClose={() => setShowMobileMenu(false)}
+                />
+                <div className="flex-1 flex flex-col min-w-0">
+                    <ClientTopBar
+                        breadcrumbs={[
+                            { label: 'Formation', path: '/client/dashboard' },
+                            { label: 'Synthèse pré-audit' }
+                        ]}
+                        consultantName={consultantName}
+                        onContact={() => navigate('/client/messages')}
+                        setShowMobileMenu={setShowMobileMenu}
+                    />
+
+                    {globalMessage && (
+                        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] animate-in slide-in-from-top duration-300">
+                             <div className={`px-6 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 ${globalMessage.includes('ERREUR') || globalMessage.includes('Erreur') ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                                <CheckCircle className="h-5 w-5" />
+                                <span className="text-sm font-black uppercase tracking-wider">{globalMessage}</span>
+                             </div>
+                        </div>
+                    )}
+                    <main className="flex-1 flex items-center justify-center p-8">
+                        <div className="w-full max-w-4xl bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all">
+                            {/* Header */}
+                            <div className="p-10 text-center border-b border-gray-50">
+                                <div className="h-20 w-20 rounded-3xl bg-[#faf1ec] flex items-center justify-center mx-auto mb-6 shadow-md">
+                                    <Award className="h-10 w-10 text-[#cc6d3e]" />
+                                </div>
+                                <h2 className="text-3xl font-black text-gray-900 mb-3">Synthèse pré-audit</h2>
+                                <p className="text-sm text-gray-500 max-w-lg mx-auto leading-relaxed">
+                                    Retrouvez ici la synthèse et les conclusions de votre audit blanc pour chaque périmètre de certification Qualiopi.
+                                </p>
+                            </div>
+
+                            {/* Audit Results */}
+                            <div className="p-10 bg-gray-50 min-h-[300px]">
+                                {!myCase?.preaudit_shared ? (
+                                    <div className="text-center py-10 flex flex-col items-center">
+                                        <div className="h-12 w-12 rounded-full bg-amber-50 flex items-center justify-center mb-4">
+                                            <AlertCircle className="h-6 w-6 text-amber-500" />
+                                        </div>
+                                        <p className="text-gray-600 font-bold text-base mb-1">Résultat non partagé</p>
+                                        <p className="text-gray-400 font-medium text-xs max-w-xs leading-relaxed">
+                                            Votre consultant n'a pas encore partagé le résultat de l'audit. Revenez plus tard ou contactez-le directement.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-8">
+                                        {clientAuditResults.map((auditItem, idx) => (
+                                            <div key={idx} className="space-y-4 bg-white rounded-3xl p-6 border border-gray-200 shadow-sm">
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`h-2.5 w-2.5 rounded-full bg-[#cc6d3e]`} />
+                                                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-wide">
+                                                        Audit {auditItem.type}
+                                                    </h3>
+                                                </div>
+                                                <PreAuditResult result={auditItem.result} auditType={auditItem.type} />
+                                                
+                                                {/* Details by categories if multiple */}
+                                                {auditItem.perimetres.length > 1 && (
+                                                    <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
+                                                        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Détail par catégorie d'action :</p>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            {auditItem.perimetres.map((p, pIdx) => (
+                                                                <div key={pIdx} className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                                                                    <p className="text-xs font-bold text-gray-700 mb-2 truncate">
+                                                                        {p.cat ? CAT[p.cat] : "Général"}
+                                                                    </p>
+                                                                    <div className="flex items-center justify-between text-xs">
+                                                                        <span className="font-semibold" style={{ color: p.result.avis.couleur }}>
+                                                                            Avis : {p.result.avis.label}
+                                                                        </span>
+                                                                        <span className="text-gray-400">
+                                                                            {p.result.conforme} / {p.result.applicables} Conformes
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-6 text-center border-t border-gray-50 bg-white">
+                                <button
+                                    onClick={() => navigate('/client/dashboard')}
+                                    className="text-sm text-gray-400 hover:text-gray-900 font-bold transition-colors py-2 px-4"
+                                >
+                                    Retour
+                                </button>
+                            </div>
+                        </div>
+                    </main>
                 </div>
             </div>
         )
@@ -1620,66 +1796,6 @@ export default function ClientDashboard() {
                         </div>
                     )}
                     <main className="flex-1 p-6 lg:p-8 w-full max-w-[1300px] mx-auto">
-                        {/* Phase Selector in Detail View */}
-                        {/* Audit Selection Tabs (Consistent with Dashboard) */}
-                        <div className="flex flex-wrap justify-center gap-3 mb-10">
-                            {casesData?.flatMap((c) => {
-                                const rawTypes = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
-                                const types = sortAuditTypes(rawTypes);
-                                return types.map((type, typeIdx) => {
-                                    const isActive = selectedAudit === type;
-                                    const cleanType = type.replace(/audit/gi, '').trim();
-                                    
-                                    const getColors = (t) => {
-                                        const typeStr = t.toLowerCase();
-                                        if (typeStr.includes('initial')) return { 
-                                            active: 'bg-[#fdf6f0] text-[#cc6d3e] border-[#cc6d3e] shadow-[#cc6d3e]/10', 
-                                            inactive: 'hover:border-[#cc6d3e]/30 hover:bg-[#cc6d3e]/5 text-slate-600 border-slate-200/80',
-                                            dot: 'bg-[#cc6d3e]' 
-                                        };
-                                        if (typeStr.includes('surveillance')) return { 
-                                            active: 'bg-[#f0f7ff] text-[#2563eb] border-[#2563eb] shadow-blue-600/10', 
-                                            inactive: 'hover:border-blue-600/30 hover:bg-blue-600/5 text-slate-600 border-slate-200/80',
-                                            dot: 'bg-[#2563eb]' 
-                                        };
-                                        if (typeStr.includes('renouvellement')) return { 
-                                            active: 'bg-[#f0fdf4] text-[#16a34a] border-[#16a34a] shadow-emerald-600/10', 
-                                            inactive: 'hover:border-emerald-600/30 hover:bg-emerald-600/5 text-slate-600 border-slate-200/80',
-                                            dot: 'bg-[#16a34a]' 
-                                        };
-                                        return { active: 'bg-slate-50 text-slate-700 border-slate-300', inactive: 'text-slate-600 border-slate-200/80', dot: 'bg-slate-400' };
-                                    };
-                                    
-                                    const colors = getColors(type);
-
-                                    return (
-                                        <button
-                                            key={`${c.id}-${typeIdx}`}
-                                            onClick={() => {
-                                                setMyCase(c);
-                                                setSelectedAudit(type);
-                                                localStorage.setItem('clientSelectedAudit', type);
-                                            }}
-                                            className={`font-poppins flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-bold uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
-                                                isActive 
-                                                    ? `${colors.active} scale-105 z-10` 
-                                                    : `bg-white ${colors.inactive} shadow-sm translate-y-0`
-                                            } hover:-translate-y-1 active:scale-95`}
-                                        >
-                                            <div className={`h-2.5 w-2.5 rounded-full shadow-inner ${colors.dot} ${isActive ? 'animate-pulse scale-110' : ''} transition-all duration-500`} />
-                                            AUDIT {cleanType}
-                                        </button>
-                                    );
-                                });
-                            })}
-                        </div>
-
-                        {/* Avis de pré-audit partagé par le consultant */}
-                        {clientPreAudit && (
-                            <div className="mb-6">
-                                <PreAuditResult result={clientPreAudit} auditType={selectedAudit} />
-                            </div>
-                        )}
 
                         {/* Criterion Header */}
                         <div className="mb-6">
@@ -1691,15 +1807,6 @@ export default function ClientDashboard() {
                             </div>
                             <h1 className="text-2xl font-black text-gray-900 flex items-center gap-3">
                                 {currentCriterion.label}
-                                <span className={`font-poppins px-3 py-1 border rounded-full text-[10px] font-bold uppercase tracking-widest translate-y-[1px] ${
-                                    (selectedAudit || 'Initial').toLowerCase().includes('initial')
-                                        ? 'bg-[#fdf6f0] text-[#cc6d3e] border-[#cc6d3e]/20'
-                                        : (selectedAudit || 'Initial').toLowerCase().includes('surveillance')
-                                        ? 'bg-[#f0f7ff] text-[#2563eb] border-[#2563eb]/20'
-                                        : 'bg-[#f0fdf4] text-[#16a34a] border-[#16a34a]/20'
-                                }`}>
-                                    {selectedAudit || 'Initial'}
-                                </span>
                             </h1>
                             <p className="text-sm text-gray-500 mt-1">
                                 Découvrez comment communiquer de manière transparente et exhaustive sur votre offre de formation vers vos publics cibles.
@@ -2498,6 +2605,13 @@ export default function ClientDashboard() {
                             })}
                         </div>
                     </div>
+
+                    {/* Avis de pré-audit partagé par le consultant */}
+                    {clientPreAudit && (
+                        <div className="mb-6">
+                            <PreAuditResult result={clientPreAudit} auditType={selectedAudit} />
+                        </div>
+                    )}
 
                     {/* Stats cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">

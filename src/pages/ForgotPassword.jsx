@@ -23,6 +23,13 @@ export default function ForgotPassword() {
         }
     }, [maintenanceMode, roleParam, navigate])
 
+    // Save role to localStorage to preserve theme during redirect
+    useEffect(() => {
+        if (roleParam) {
+            localStorage.setItem('eq_forgot_password_role', roleParam)
+        }
+    }, [roleParam])
+
     const config = useMemo(() => {
         switch (roleParam) {
             case 'admin':

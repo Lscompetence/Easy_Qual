@@ -7,7 +7,7 @@ import Logo from '../components/Logo'
 
 export default function UpdatePassword() {
     const [searchParams] = useSearchParams()
-    const roleParam = searchParams.get('role') || 'client'
+    const roleParam = searchParams.get('role') || localStorage.getItem('eq_forgot_password_role') || 'client'
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
     const [loading, setLoading] = useState(false)

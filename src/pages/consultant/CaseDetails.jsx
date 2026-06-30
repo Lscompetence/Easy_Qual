@@ -1576,9 +1576,9 @@ export default function CaseDetails() {
                     </div>
 
                     <div className="flex items-center gap-8 border-b border-gray-200 mb-8">
-                        {['Détail de l\'Audit', 'Planification', 'Messagerie', 'Pré-audit'].map((tab) => {
+                        {['Détail de l\'Audit', 'Planification', 'Messagerie', 'Synthèse pré-audit'].map((tab) => {
                             const key = tab === 'Détail de l\'Audit' ? 'suivi_rno'
-                                : tab === 'Pré-audit' ? 'preaudit'
+                                : tab === 'Synthèse pré-audit' ? 'preaudit'
                                 : tab.toLowerCase().replace(' ', '_').replace('é', 'e')
                             const isActive = activeTab === key
 
@@ -1723,7 +1723,7 @@ export default function CaseDetails() {
                         <div className="space-y-6">
                             <div className="flex items-center justify-between flex-wrap gap-3">
                                 <div>
-                                    <h2 className="text-lg font-black text-gray-900">Résultat du pré-audit</h2>
+                                    <h2 className="text-lg font-black text-gray-900">Résultat Synthèse de Pré-audit</h2>
                                     <p className="text-sm text-gray-500 font-medium">
                                         Avis calculé selon le moteur de l'audit blanc, à partir de vos verdicts (Conforme / Non conforme / Non applicable).
                                     </p>
@@ -1798,7 +1798,7 @@ export default function CaseDetails() {
                             <div className="mb-8 space-y-3">
                                 <div className="flex items-center justify-between flex-wrap gap-2">
                                     <h3 className="text-sm font-black text-gray-700 uppercase tracking-wide flex items-center gap-2">
-                                        <ShieldCheck className="h-4 w-4 text-indigo-500" /> Pré-audit · {selectedAudit}
+                                        <ShieldCheck className="h-4 w-4 text-indigo-500" /> Synthèse pré-audit · {selectedAudit}
                                     </h3>
                                     <button
                                         onClick={handleTogglePreAuditShare}

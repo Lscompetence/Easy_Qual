@@ -9,7 +9,7 @@ export default function Login({ forceRole }) {
     const location = useLocation()
     
     // Block the URL parameter 'role=admin' to force the use of the secret route
-    let roleParam = forceRole || searchParams.get('role') || 'client';
+    let roleParam = forceRole || searchParams.get('role') || localStorage.getItem('eq_forgot_password_role') || 'client';
     if (!forceRole && roleParam === 'admin') {
         roleParam = 'client'; // Fallback to client if someone tries to guess the admin URL
     }
@@ -28,6 +28,43 @@ export default function Login({ forceRole }) {
             navigate('/maintenance')
         }
     }, [maintenanceMode, roleParam, navigate])
+
+    // Detect recovery session or link error hash from email click
+    useEffect(() => {
+        const handleAuthCallback = async () => {
+            const hash = window.location.hash
+            
+            // 1. Detect if it's an error callback (e.g. OTP link expired)
+            if (hash.includes('error=') || hash.includes('error_code=')) {
+                const params = new URLSearchParams(hash.substring(1)) // Remove '#'
+                const errorDesc = params.get('error_description') || 'Le lien de réinitialisation est invalide ou a expiré.'
+                const decodedDesc = decodeURIComponent(errorDesc.replace(/\+/g, ' '))
+                setError(`Erreur de réinitialisation : ${decodedDesc}`)
+                window.history.replaceState(null, null, window.location.pathname + window.location.search)
+                return
+            }
+
+            // 2. Detect password recovery callback
+            if (hash.includes('type=recovery') || hash.includes('access_token')) {
+                const { data: { session } } = await supabase.auth.getSession()
+                if (session?.user) {
+                    const metaRole = session.user.user_metadata?.role || session.user.app_metadata?.role
+                    let finalRole = metaRole || 'client'
+                    
+                    if (!metaRole) {
+                        const { data: prof } = await supabase
+                            .from('profiles')
+                            .select('role')
+                            .eq('id', session.user.id)
+                            .maybeSingle()
+                        if (prof?.role) finalRole = prof.role
+                    }
+                    navigate(`/update-password?role=${finalRole === 'of' ? 'client' : finalRole}`)
+                }
+            }
+        }
+        handleAuthCallback()
+    }, [location.hash, navigate])
 
     const getRoleConfig = () => {
         switch (roleParam) {

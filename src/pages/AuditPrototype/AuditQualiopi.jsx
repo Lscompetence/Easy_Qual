@@ -183,7 +183,6 @@ export default function App() {
           <div style={s.configHead}>
             <div style={s.logo}>EQ</div>
             <div>
-              <div style={{fontWeight:700,fontSize:15}}>Easy'Qual — Audit Qualiopi</div>
               <div style={{fontSize:12,color:"#7a7a85"}}>Paramétrez la mission, puis générez les grilles d'audit</div>
             </div>
           </div>
