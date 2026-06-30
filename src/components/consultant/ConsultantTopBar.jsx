@@ -275,7 +275,7 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
                                 
                                 let toastType = 'info';
                                 if (payload.new.type.includes('success')) toastType = 'success';
-                                else if (payload.new.type.includes('failure')) toastType = 'warning';
+                                else if (payload.new.type.includes('failure') || payload.new.type.includes('failed')) toastType = 'warning';
                                 else if (payload.new.type === 'client_file_upload') toastType = 'success';
                                 
                                 showToast(payload.new.content, toastType, { clientName, case_id: payload.new.case_id, targetUrl })

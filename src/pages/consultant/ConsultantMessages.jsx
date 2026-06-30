@@ -134,7 +134,7 @@ export default function ConsultantMessages() {
                             filteredConvs.map((conv) => (
                                 <div 
                                     key={conv.case_id}
-                                    onClick={() => navigate(`/consultant/case/${conv.case_id}`)}
+                                    onClick={() => navigate(`/consultant/case/${conv.case_id}?tab=messagerie`)}
                                     className="group bg-white p-6 rounded-[32px] border-2 border-transparent hover:border-purple-100 shadow-sm hover:shadow-xl hover:shadow-purple-500/5 transition-all cursor-pointer flex items-center gap-5 relative overflow-hidden"
                                 >
                                     {/* Unread Indicator */}

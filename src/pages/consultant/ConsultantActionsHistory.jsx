@@ -46,6 +46,20 @@ export default function ConsultantActionsHistory() {
         }
     }
 
+    // Détermine la destination exacte d'une action (dossier + bon onglet)
+    const resolveTarget = (t) => {
+        if (t.targetUrl) return t.targetUrl
+        if (!t.case_id) return null
+        const msg = (t.message || '').toLowerCase()
+        let tab = ''
+        if (msg.includes('indicateur') || msg.includes('document') || msg.includes('quiz') || msg.includes('fichier')) {
+            tab = 'suivi_rno'
+        } else if (msg.includes('message')) {
+            tab = 'messagerie'
+        }
+        return `/consultant/case/${t.case_id}${tab ? `?tab=${tab}` : ''}`
+    }
+
     return (
         <div className="bg-gray-50 min-h-screen flex font-sans">
             <ConsultantSidebar isOpen={showMobileMenu} onClose={() => setShowMobileMenu(false)} />
@@ -116,15 +130,13 @@ export default function ConsultantActionsHistory() {
                                 const icon = iconMap[t.type] || iconMap.info
                                 const timeStr = t.created_at ? new Date(t.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
                                 const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '';
+                                const target = resolveTarget(t)
 
                                 return (
-                                    <div 
+                                    <div
                                         key={t.id}
-                                        onClick={() => {
-                                            if (t.targetUrl) navigate(t.targetUrl)
-                                            else if (t.case_id) navigate(`/consultant/case/${t.case_id}`)
-                                        }}
-                                        className={`group relative overflow-hidden bg-white rounded-3xl border-2 transition-all hover:scale-[1.01] hover:shadow-2xl hover:shadow-purple-100 border-gray-50 ${(t.targetUrl || t.case_id) ? 'cursor-pointer' : ''}`}
+                                        onClick={() => { if (target) navigate(target) }}
+                                        className={`group relative overflow-hidden bg-white rounded-3xl border-2 transition-all hover:scale-[1.01] hover:shadow-2xl hover:shadow-purple-100 border-gray-50 ${target ? 'cursor-pointer' : ''}`}
                                     >
                                         <div className="p-6 flex items-start gap-4">
                                             <div className={`h-12 w-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${theme.bg} ${theme.text}`}>
@@ -152,7 +164,7 @@ export default function ConsultantActionsHistory() {
                                                 </div>
                                             </div>
                                             
-                                            {t.targetUrl && (
+                                            {target && (
                                                 <div className="absolute right-6 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 opacity-0 group-hover:opacity-100 transition-all group-hover:bg-purple-100 group-hover:text-purple-600">
                                                     <ArrowRight className="h-5 w-5" />
                                                 </div>

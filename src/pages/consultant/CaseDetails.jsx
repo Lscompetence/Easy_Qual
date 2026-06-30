@@ -250,10 +250,6 @@ export default function CaseDetails() {
         )
     }
 
-    const handleInitiateSendEmail = () => {
-        setShowEmailConfirmModal(true)
-    }
-
     const handleResendAccess = async () => {
         if (!caseData || !caseData.tenants || !caseData.tenants.client_email) {
             showToast("Email client manquant dans ce dossier.", "error")
@@ -1498,9 +1494,21 @@ export default function CaseDetails() {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
-                                    <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                                    <div
+                                        className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-100"
+                                        title={caseData.created_at ? new Date(caseData.created_at).toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' }) : ''}
+                                    >
                                         <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                        <span>Modifié hier</span>
+                                        <span>{(() => {
+                                            if (!caseData.created_at) return 'Date inconnue'
+                                            const d = new Date(caseData.created_at)
+                                            const startOfDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate())
+                                            const diffDays = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000)
+                                            if (diffDays === 0) return "Modifié aujourd'hui"
+                                            if (diffDays === 1) return 'Modifié hier'
+                                            if (diffDays < 7) return `Modifié il y a ${diffDays} jours`
+                                            return `Modifié le ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                                        })()}</span>
                                     </div>
                                     <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">ID:</span>
@@ -1556,15 +1564,6 @@ export default function CaseDetails() {
 
                             {/* Action Buttons */}
                             <div className="flex sm:flex-col gap-3 w-full sm:w-auto print:hidden">
-                                {caseData?.tenants?.client_email && (
-                                    <button
-                                        onClick={handleInitiateSendEmail}
-                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs uppercase tracking-wide rounded-xl transition-all shadow-sm active:scale-95 border border-indigo-100/50"
-                                    >
-                                        <Mail className="h-4 w-4" />
-                                        Renvoyer l'accès
-                                    </button>
-                                )}
                                 <button
                                     onClick={handleGenerateReport}
                                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs uppercase tracking-wide rounded-xl transition-all shadow-sm active:scale-95 border border-slate-200"
@@ -1577,7 +1576,7 @@ export default function CaseDetails() {
                     </div>
 
                     <div className="flex items-center gap-8 border-b border-gray-200 mb-8">
-                        {['Détail de l\'Audit', 'Pré-audit', 'Planification', 'Messagerie'].map((tab) => {
+                        {['Détail de l\'Audit', 'Planification', 'Messagerie', 'Pré-audit'].map((tab) => {
                             const key = tab === 'Détail de l\'Audit' ? 'suivi_rno'
                                 : tab === 'Pré-audit' ? 'preaudit'
                                 : tab.toLowerCase().replace(' ', '_').replace('é', 'e')
