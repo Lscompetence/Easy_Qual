@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell, Menu, ShieldAlert, Settings } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { Users, CreditCard, Building, LogOut, Plus, AlertCircle, CheckCircle, X, Check, Activity, Mail, MoreHorizontal, Edit2, XCircle, Trash2, Bell, Menu, ShieldAlert, Settings, LifeBuoy, MessageSquare, AlertTriangle, Sparkles, Filter, Search, ChevronRight, Paperclip } from 'lucide-react'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Logo from '../../components/Logo'
+import DeleteModal from '../../components/DeleteModal'
+import AdminQuestionnairesTab from '../../components/admin/AdminQuestionnairesTab'
 
 const COUNTRY_CODES = [
     { code: '+33', label: 'FR', flag: '🇫🇷' },
@@ -106,10 +108,27 @@ export default function AdminDashboard() {
     const [maintenanceLoading, setMaintenanceLoading] = useState(false)
     const [showMaintenanceConfirmModal, setShowMaintenanceConfirmModal] = useState(false)
 
+    // Reclamations State
+    const [reclamations, setReclamations] = useState([])
+    const [ticketsLoading, setTicketsLoading] = useState(false)
+    const [unreadQuestionnairesCount, setUnreadQuestionnairesCount] = useState(0)
+    const [activeTab, setActiveTab] = useState('consultants')
+    const [ticketFilterType, setTicketFilterType] = useState('all')
+    const [ticketFilterStatus, setTicketFilterStatus] = useState('all')
+    const [ticketFilterRole, setTicketFilterRole] = useState('all')
+    const [ticketSearch, setTicketSearch] = useState('')
+    const [selectedTicketForDetail, setSelectedTicketForDetail] = useState(null)
+    const [showDeleteTicketConfirmModal, setShowDeleteTicketConfirmModal] = useState(false)
+    const [showDeleteTicketSuccessModal, setShowDeleteTicketSuccessModal] = useState(false)
+    const [ticketToDelete, setTicketToDelete] = useState(null)
+    const [isDeletingTicket, setIsDeletingTicket] = useState(false)
+
     useEffect(() => {
         fetchDashboardData()
         fetchNotifications()
         fetchMaintenanceStatus()
+        fetchReclamations()
+        fetchQuestionnairesCount()
 
         // Subscribe to real-time notifications
         const channel = supabase
@@ -119,7 +138,7 @@ export default function AdminDashboard() {
                 schema: 'public',
                 table: 'admin_notifications'
             }, (payload) => {
-                console.log('🔔 New Admin Notification:', payload.new);
+
                 setNotifications(prev => [payload.new, ...prev].slice(0, 20)); // Keep latest 20
                 // Optional: Show a toast or sound
             })
@@ -130,6 +149,32 @@ export default function AdminDashboard() {
         }
     }, [])
 
+    const fetchQuestionnairesCount = async () => {
+        try {
+            const { count, error } = await supabase
+                .from('questionnaires_results')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'new')
+            
+            if (!error) {
+                // Check if user has locally cleared questionnaires count recently
+                const clearedLocal = localStorage.getItem('questionnaires_cleared_at');
+                // We'll just trust local storage if they clicked it in this session or ever.
+                // If the count fetched is > 0, we only show it if they haven't cleared it.
+                // But what if NEW ones arrive? We can store the last count they cleared.
+                const lastClearedCount = parseInt(localStorage.getItem('questionnaires_cleared_count') || '0', 10);
+                
+                if (count > lastClearedCount) {
+                    setUnreadQuestionnairesCount(count - lastClearedCount);
+                } else {
+                    setUnreadQuestionnairesCount(0);
+                }
+            }
+        } catch (err) {
+            console.error(err)
+        }
+    }
+
     const fetchNotifications = async () => {
         const { data, error } = await supabase
             .from('admin_notifications')
@@ -138,7 +183,13 @@ export default function AdminDashboard() {
             .limit(10);
 
         if (!error && data) {
-            setNotifications(data);
+            // Respect local storage read IDs
+            const localReadIds = JSON.parse(localStorage.getItem('read_admin_notifs') || '[]');
+            const processedData = data.map(n => ({
+                ...n,
+                is_read: n.is_read || localReadIds.includes(n.id)
+            }));
+            setNotifications(processedData);
         }
     }
 
@@ -151,6 +202,96 @@ export default function AdminDashboard() {
 
         if (!error && data) {
             setMaintenanceMode(data.value === true)
+        }
+    }
+
+    const fetchReclamations = async () => {
+        try {
+            setTicketsLoading(true)
+            const { data, error } = await supabase
+                .from('reclamations')
+                .select(`
+                    id,
+                    user_id,
+                    type,
+                    title,
+                    content,
+                    status,
+                    created_at,
+                    attachment_url,
+                    profiles (
+                        id,
+                        first_name,
+                        last_name,
+                        email,
+                        role,
+                        commercial_name,
+                        phone
+                    )
+                `)
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+            setReclamations(data || [])
+        } catch (err) {
+            console.error('Error fetching reclamations:', err)
+        } finally {
+            setTicketsLoading(false)
+        }
+    }
+
+    const handleUpdateTicketStatus = async (ticketId, newStatus) => {
+        try {
+            const { error } = await supabase
+                .from('reclamations')
+                .update({ status: newStatus, updated_at: new Date().toISOString() })
+                .eq('id', ticketId)
+
+            if (error) throw error
+
+            setReclamations(prev => prev.map(t => t.id === ticketId ? { ...t, status: newStatus } : t))
+            if (selectedTicketForDetail && selectedTicketForDetail.id === ticketId) {
+                setSelectedTicketForDetail(prev => prev ? { ...prev, status: newStatus } : null)
+            }
+            setSuccessMsg(`Statut mis à jour en "${newStatus === 'resolved' ? 'Résolu' : 'Ignoré'}"`)
+            setSuccessMsgType('success')
+            setTimeout(() => setSuccessMsg(null), 3000)
+        } catch (err) {
+            console.error('Error updating ticket status:', err)
+            alert('Impossible de modifier le statut de la réclamation')
+        }
+    }
+
+    const handleDeleteTicketClick = (ticketId) => {
+        setTicketToDelete(ticketId)
+        setShowDeleteTicketConfirmModal(true)
+    }
+
+    const confirmDeleteTicket = async () => {
+        if (!ticketToDelete) return
+        
+        setIsDeletingTicket(true)
+        try {
+            const { error } = await supabase
+                .from('reclamations')
+                .delete()
+                .eq('id', ticketToDelete)
+
+            if (error) throw error
+
+            setReclamations(prev => prev.filter(t => t.id !== ticketToDelete))
+            if (selectedTicketForDetail && selectedTicketForDetail.id === ticketToDelete) {
+                setSelectedTicketForDetail(null)
+            }
+            
+            setShowDeleteTicketConfirmModal(false)
+            setShowDeleteTicketSuccessModal(true)
+            setTicketToDelete(null)
+        } catch (err) {
+            console.error('Error deleting ticket:', err)
+            alert('Impossible de supprimer la réclamation')
+        } finally {
+            setIsDeletingTicket(false)
         }
     }
 
@@ -196,6 +337,7 @@ export default function AdminDashboard() {
                         first_name, 
                         last_name, 
                         email, 
+                        avatar_url,
                         created_at,
                         temp_password,
                         commercial_name,
@@ -228,7 +370,7 @@ export default function AdminDashboard() {
             }
 
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Timeout')), 8000)
+                setTimeout(() => reject(new Error('Timeout')), 15000)
             )
 
             const { consultantsData, tenantsCount, casesCount } = await Promise.race([
@@ -238,8 +380,8 @@ export default function AdminDashboard() {
 
             // Force React to detect the change by creating a new array
             setConsultants([...(consultantsData || [])])
-            console.log('📊 Consultants updated:', consultantsData?.length, 'consultants')
-            console.log('📋 First consultant is_active:', consultantsData?.[0]?.is_active, 'Email:', consultantsData?.[0]?.email)
+
+
             setStats({
                 consultants: consultantsData?.length || 0,
                 tenants: tenantsCount || 0,
@@ -291,7 +433,7 @@ export default function AdminDashboard() {
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
             const msg = error.message === 'Timeout'
-                ? 'Le chargement prend trop de temps ( > 8s). Veuillez actualiser la page.'
+                ? 'Le chargement prend trop de temps ( > 15s). Veuillez actualiser la page.'
                 : error.message
             setError(msg)
         } finally {
@@ -311,7 +453,7 @@ export default function AdminDashboard() {
         const currentStatus = consultantToToggle.is_active
 
         try {
-            console.log('🔄 Toggling status for consultant:', consultantId, 'Current status:', currentStatus)
+
             setShowStatusConfirmModal(false)
             setTogglingConsultantId(consultantId)
 
@@ -322,7 +464,7 @@ export default function AdminDashboard() {
 
             if (error) throw error
 
-            console.log('✅ Database updated successfully')
+
 
             // Immediately update the local state to force UI refresh
             setConsultants(prev => prev.map(c =>
@@ -335,7 +477,7 @@ export default function AdminDashboard() {
             // Refresh data from database to ensure persistence (silent mode to keep table visible)
             await fetchDashboardData(true)
 
-            console.log('✅ Data refreshed from database')
+
 
             const statusMessage = !currentStatus
                 ? "Ce consultant est maintenant ACTIF."
@@ -497,69 +639,24 @@ export default function AdminDashboard() {
         setError(null)
 
         try {
-            // --- SOLUTION DE CONTOURNEMENT TEMPORAIRE ---
-            // Puisque votre PC bloque le déploiement de la Edge Function (Device Guard),
-            // nous utilisons exceptionnellement la clé d'administration directement ici.
-            // Cela permet de créer le compte avec LE BON MOT DE PASSE garanti !
-            const TEMP_URL = 'https://gxworwhpcyfuqwuxocxx.supabase.co'
-            const TEMP_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4d29yd2hwY3lmdXF3dXhvY3h4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTU5MDAxOCwiZXhwIjoyMDg1MTY2MDE4fQ.-2V0Fr7H54IyJxzgAglYLolrDuF0CH8kN1G3NHjaS_k'
-            
-            // On importe dynamiquement createClient
-            const { createClient } = await import('@supabase/supabase-js');
-            const rootAdmin = createClient(TEMP_URL, TEMP_KEY);
-
-            const { data: authData, error: authError } = await rootAdmin.auth.admin.createUser({
-                email: newConsultant.email,
-                password: newConsultant.password,
-                email_confirm: true,
-                user_metadata: { first_name: newConsultant.firstName, last_name: newConsultant.lastName, role: 'consultant' }
-            });
-
-            if (authError) {
-                if (authError.message.includes('already used')) {
-                    throw new Error("Désolé, cet email existe déjà. Veuillez essayer une autre adresse email correcte.")
+            const { data: funcData, error: funcError } = await supabase.functions.invoke('admin_create_consultant', {
+                body: {
+                    action: 'create_consultant',
+                    email: newConsultant.email,
+                    password: newConsultant.password,
+                    firstName: newConsultant.firstName,
+                    lastName: newConsultant.lastName,
+                    commercialName: newConsultant.commercialName || '',
+                    siret: newConsultant.siret || '',
+                    phone: `${newConsultant.countryCode || '+33'}${newConsultant.phone || ''}`,
+                    initialCredits: newConsultant.initialCredits !== undefined ? newConsultant.initialCredits : 10
                 }
-                throw authError;
-            }
+            })
 
-            const responseData = { user: authData.user, success: true };
-            // ---------------------------------------------
+            if (funcError) throw funcError
+            if (funcData && funcData.success === false) throw new Error(funcData.error)
 
-            console.log('Consultant created successfully:', responseData)
 
-            // --- LOCAL WORKAROUND: Save temp password from frontend ---
-            // Because the edge function couldn't be deployed due to Device Guard, 
-            // the old edge function runs but it doesn't save the temp_password to the database.
-            // Since you are Admin, we can securely update the profile from the frontend here.
-            const userId = responseData?.user?.id 
-            if (userId) {
-                const { error: pwdErr } = await rootAdmin
-                    .from('profiles')
-                    .update({ 
-                        temp_password: newConsultant.password,
-                        commercial_name: newConsultant.commercialName || '',
-                        siret: newConsultant.siret || '',
-                        phone: `${newConsultant.countryCode || '+33'}${newConsultant.phone || ''}`
-                    })
-                    .eq('id', userId)
-                
-                // Sauvegarde séparée des crédits dans la bonne table 'credits_wallet'
-                const initialBal = newConsultant.initialCredits !== undefined ? newConsultant.initialCredits : 10;
-                await rootAdmin.from('credits_wallet').upsert({ consultant_id: userId, balance: initialBal });
-                
-                if (pwdErr) console.warn("Impossible de sauvegarder le profil :", pwdErr)
-            } else {
-                // Si l'ID n'est pas dans la rep, on cherche par email
-                 await rootAdmin
-                    .from('profiles')
-                    .update({ 
-                        temp_password: newConsultant.password,
-                        commercial_name: newConsultant.commercialName || '',
-                        siret: newConsultant.siret || '',
-                        phone: `${newConsultant.countryCode || '+33'}${newConsultant.phone || ''}`
-                    })
-                    .eq('email', newConsultant.email)
-            }
 
             // --- UI UPDATE ---
             setCreatedConsultantParams({ ...newConsultant })
@@ -588,7 +685,7 @@ export default function AdminDashboard() {
 
             // If the error is an object without a standard message, stringify it
             if (typeof error === 'object' && !error.message) {
-                try { errMsg = JSON.stringify(error) } catch(e) {}
+                try { errMsg = JSON.stringify(error) } catch { /* ignore */ }
             }
 
             if (errMsg?.includes('401') || error.status === 401) {
@@ -647,9 +744,7 @@ export default function AdminDashboard() {
         }
     }
 
-    const handleSendCredentials = (consultant) => {
-        handleInitiateSendEmail(consultant)
-    }
+
 
     const handleInitiateSendEmail = (consultant) => {
         setSelectedConsultantForEmail(consultant)
@@ -704,28 +799,28 @@ export default function AdminDashboard() {
     const handleLogout = async () => {
         try {
             await logout()
-            navigate('/login?role=admin')
+            navigate('/admin-lsc-secure')
         } catch (error) {
             console.error('Failed to logout', error)
         }
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
+        <div className="min-h-screen bg-[#f8fafc] flex flex-col font-sans">
             {/* Navbar */}
-            <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-[60]">
+            <header className="bg-white/80 backdrop-blur-md shadow-[0_1px_3px_rgba(0,0,0,0.02)] border-b border-slate-100 sticky top-0 z-[60]">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center gap-2 sm:gap-4">
                             {/* Mobile Menu Toggle */}
                             <button
                                 onClick={() => setShowMobileMenu(!showMobileMenu)}
-                                className="lg:hidden p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                                className="lg:hidden p-2 text-slate-400 hover:text-blue-600 transition-colors"
                             >
                                 <Menu className="h-6 w-6" />
                             </button>
                             <Logo size="small" />
-                            <span className="hidden xs:inline-block px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                            <span className="hidden xs:inline-block px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-black uppercase tracking-wider border border-blue-100">
                                 Admin
                             </span>
                         </div>
@@ -734,18 +829,18 @@ export default function AdminDashboard() {
                         <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:flex items-center gap-3">
                             <button
                                 onClick={() => navigate('/profile')}
-                                className="group flex items-center gap-3 p-1.5 px-3 rounded-xl hover:bg-blue-50 transition-all border border-transparent hover:border-blue-100"
+                                className="group flex items-center gap-3 p-1.5 px-3 rounded-xl hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100"
                             >
                                 {profile?.avatar_url && (
                                     <img
                                         src={profile.avatar_url}
                                         alt="Avatar"
-                                        className="h-8 w-8 rounded-full border border-blue-100 object-cover shadow-sm bg-blue-50 group-hover:scale-110 transition-transform"
+                                        className="h-8 w-8 rounded-full border border-blue-100 object-cover shadow-sm bg-blue-50 group-hover:scale-105 transition-transform"
                                     />
                                 )}
                                 <div className="text-left">
-                                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest leading-none mb-1">Administrateur</p>
-                                    <span className="text-sm font-black text-gray-900 group-hover:text-blue-600 transition-colors">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Administrateur</p>
+                                    <span className="text-sm font-black text-slate-800 group-hover:text-blue-600 transition-colors">
                                         {profile?.first_name} {profile?.last_name}
                                     </span>
                                 </div>
@@ -760,11 +855,11 @@ export default function AdminDashboard() {
                                 className={`group flex items-center gap-2.5 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 border ${
                                     maintenanceMode 
                                     ? 'bg-amber-500 text-white border-amber-400 shadow-lg shadow-amber-200 animate-pulse' 
-                                    : 'bg-white text-gray-400 border-gray-100 hover:border-blue-200 hover:text-blue-600 hover:shadow-md'
+                                    : 'bg-white text-slate-400 border-slate-100 hover:border-blue-200 hover:text-blue-600 hover:shadow-md'
                                 }`}
                             >
-                                <div className={`p-1 rounded-md ${maintenanceMode ? 'bg-white/20' : 'bg-gray-50 group-hover:bg-blue-50'}`}>
-                                    <ShieldAlert className={`h-3.5 w-3.5 ${maintenanceMode ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
+                                <div className={`p-1 rounded-md ${maintenanceMode ? 'bg-white/20' : 'bg-slate-50 group-hover:bg-blue-50'}`}>
+                                    <ShieldAlert className={`h-3.5 w-3.5 ${maintenanceMode ? 'text-white' : 'text-slate-400 group-hover:text-blue-500'}`} />
                                 </div>
                                 <span className="hidden lg:inline">{maintenanceMode ? 'Mode Maintenance Actif' : 'Maintenance'}</span>
                                 {maintenanceMode && <span className="flex h-2 w-2 rounded-full bg-white animate-ping"></span>}
@@ -772,20 +867,80 @@ export default function AdminDashboard() {
 
                             <div className="relative">
                                 <button
-                                    onClick={() => setShowNotifications(!showNotifications)}
-                                    className="p-2 text-gray-400 hover:text-blue-600 transition-colors relative"
+                                    onClick={async () => {
+                                        setShowNotifications(!showNotifications);
+                                        const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+                                        if (unreadIds.length > 0) {
+                                            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+                                            
+                                            // Fallback: save to localStorage to ensure they stay read locally
+                                            const existingReadIds = JSON.parse(localStorage.getItem('read_admin_notifs') || '[]');
+                                            localStorage.setItem('read_admin_notifs', JSON.stringify([...new Set([...existingReadIds, ...unreadIds])]));
+                                            
+                                            try {
+                                                for (const id of unreadIds) {
+                                                    const { error } = await supabase
+                                                        .from('admin_notifications')
+                                                        .update({ is_read: true })
+                                                        .eq('id', id);
+                                                    if (error) console.error('Error updating notif:', id, error);
+                                                }
+                                            } catch (err) {
+                                                console.error('Error marking notifications as read:', err);
+                                            }
+                                        }
+                                    }}
+                                    className="p-2 text-slate-400 hover:text-blue-600 transition-colors relative"
                                 >
                                     <Bell className="h-6 w-6" />
-                                    {notifications.length > 0 && notifications.some(n => !n.is_read) && (
-                                        <span className="absolute top-2 right-2 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white shadow-sm"></span>
+                                    {notifications.filter(n => !n.is_read).length > 0 && (
+                                        <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full flex items-center justify-center text-[10px] font-black text-white border-2 border-white shadow-sm transform translate-x-1 -translate-y-1">
+                                            {notifications.filter(n => !n.is_read).length}
+                                        </span>
                                     )}
                                 </button>
+
+                                {showNotifications && (
+                                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-100 z-[100] overflow-hidden flex flex-col">
+                                        <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                                            <h4 className="font-bold text-slate-800 text-sm">Notifications</h4>
+                                            {notifications.filter(n => !n.is_read).length > 0 && (
+                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                                                    {notifications.filter(n => !n.is_read).length} non lues
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="max-h-72 overflow-y-auto">
+                                            {notifications.length === 0 ? (
+                                                <div className="p-6 text-center text-slate-400 text-sm">Aucune notification</div>
+                                            ) : (
+                                                notifications.slice(0, 5).map(notif => (
+                                                    <div key={notif.id} className={`p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors ${!notif.is_read ? 'bg-blue-50/30' : ''}`}>
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <span className="text-xs font-bold text-slate-800">{notif.title}</span>
+                                                            <span className="text-[10px] text-slate-400 whitespace-nowrap ml-2">
+                                                                {new Date(notif.created_at).toLocaleDateString()}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[11px] text-slate-500 line-clamp-2">{notif.content}</p>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                        <button 
+                                            onClick={() => { setShowNotifications(false); navigate('/admin/activities'); }}
+                                            className="p-3 text-xs font-bold text-blue-600 hover:text-blue-700 bg-slate-50 text-center transition-colors border-t border-slate-100 w-full"
+                                        >
+                                            Voir tout l'historique
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <button
                                 onClick={handleLogout}
-                                className="flex items-center text-gray-600 hover:text-red-600 font-medium transition-colors"
+                                className="flex items-center text-slate-600 hover:text-red-600 font-bold transition-colors text-sm"
                             >
-                                <LogOut className="h-5 w-5 mr-2" />
+                                <LogOut className="h-4 w-4 mr-2" />
                                 <span className="hidden sm:inline">Déconnexion</span>
                             </button>
                         </div>
@@ -793,17 +948,17 @@ export default function AdminDashboard() {
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
 
                 {/* Messages */}
                 {error && (
-                    <div className="mb-4 p-4 rounded-md bg-red-50 border border-red-200 flex items-center text-red-700">
+                    <div className="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 flex items-center text-red-700 text-sm">
                         <AlertCircle className="h-5 w-5 mr-3" />
                         {error}
                     </div>
                 )}
                 {successMsg && (
-                    <div className={`mb-4 p-4 rounded-md border flex items-center ${successMsgType === 'error'
+                    <div className={`mb-4 p-4 rounded-xl border flex items-center text-sm ${successMsgType === 'error'
                         ? 'bg-red-50 border-red-200 text-red-700'
                         : 'bg-green-50 border-green-200 text-green-700'
                         }`}>
@@ -819,105 +974,122 @@ export default function AdminDashboard() {
                 {/* KPI Cards & Diagnostics */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     {/* Consultants Actifs */}
-                    <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 flex items-center hover:shadow-md transition-shadow">
-                        <div className="p-3.5 rounded-2xl bg-blue-50 text-blue-600">
+                    <div className="bg-white rounded-2xl shadow-sm hover:shadow-md border border-slate-100 p-6 flex items-center transition-all duration-300 transform hover:-translate-y-0.5">
+                        <div className="p-3 rounded-xl bg-blue-50/70 text-blue-600 border border-blue-100/50">
                             <Users className="h-6 w-6" />
                         </div>
                         <div className="ml-5">
-                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Consultants Actifs</h3>
-                            <p className="text-2xl font-black text-gray-900 leading-none">{stats.consultants}</p>
+                            <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Consultants Actifs</h3>
+                            <p className="text-2xl font-black text-slate-800 leading-none">{stats.consultants}</p>
                         </div>
                     </div>
 
                     {/* Dossiers en cours */}
-                    <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 flex items-center hover:shadow-md transition-shadow">
-                        <div className="p-3.5 rounded-2xl bg-teal-50 text-teal-600">
+                    <div className="bg-white rounded-2xl shadow-sm hover:shadow-md border border-slate-100 p-6 flex items-center transition-all duration-300 transform hover:-translate-y-0.5">
+                        <div className="p-3 rounded-xl bg-emerald-50/70 text-emerald-600 border border-emerald-100/50">
                             <CheckCircle className="h-6 w-6" />
                         </div>
                         <div className="ml-5">
-                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Dossiers en cours</h3>
-                            <p className="text-2xl font-black text-gray-900 leading-none">{stats.activeCases}</p>
+                            <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Dossiers en cours</h3>
+                            <p className="text-2xl font-black text-slate-800 leading-none">{stats.activeCases}</p>
                         </div>
                     </div>
 
-                    {/* Crédits Distribués - NOUVEAU */}
-                    <div className="bg-gradient-to-br from-indigo-500 to-blue-700 rounded-2xl shadow-lg p-6 text-white flex items-center transform hover:scale-[1.02] transition-transform">
-                        <div className="p-3.5 rounded-2xl bg-white/20 backdrop-blur-sm">
+                    {/* Volume Distribué */}
+                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl shadow-md hover:shadow-lg p-6 text-white flex items-center transition-all duration-300 transform hover:-translate-y-0.5">
+                        <div className="p-3 rounded-xl bg-white/10 border border-white/20 backdrop-blur-md">
                             <Activity className="h-6 w-6 text-white" />
                         </div>
                         <div className="ml-5">
-                            <h3 className="text-[10px] font-black text-white/70 uppercase tracking-widest mb-1">Volume Distribué</h3>
-                            <p className="text-2xl font-black text-white leading-none">{financialStats.totalDistributed} <span className="text-[12px] opacity-70">Cr.</span></p>
-                            <p className="text-[9px] font-bold text-white/50 mt-1 italic">Somme des soldes actuels</p>
+                            <h3 className="text-[9px] font-extrabold text-blue-100/80 uppercase tracking-widest mb-1">Volume Distribué</h3>
+                            <p className="text-2xl font-black text-white leading-none">
+                                {financialStats.totalDistributed} <span className="text-xs font-bold text-blue-200">Cr.</span>
+                            </p>
+                            <p className="text-[9px] text-blue-200/60 mt-1 font-medium">Somme des soldes actuels</p>
                         </div>
                     </div>
 
-                    {/* Recharges Totales - NOUVEAU */}
-                    <div className="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-l-amber-500 border border-gray-100 flex items-center hover:shadow-md transition-shadow">
-                        <div className="p-3.5 rounded-2xl bg-amber-50 text-amber-600">
+                    {/* Total Acheté */}
+                    <div className="bg-white rounded-2xl shadow-sm hover:shadow-md border border-slate-100 p-6 flex items-center transition-all duration-300 transform hover:-translate-y-0.5">
+                        <div className="p-3 rounded-xl bg-amber-50/70 text-amber-600 border border-amber-100/50">
                             <CreditCard className="h-6 w-6" />
                         </div>
                         <div className="ml-5">
-                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Acheté</h3>
-                            <p className="text-2xl font-black text-gray-900 leading-none">{financialStats.totalPurchased} <span className="text-[12px] text-gray-400">Cr.</span></p>
-                            <p className="text-[9px] font-bold text-amber-600 mt-1 uppercase tracking-tighter">Volume des recharges</p>
+                            <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Total Acheté</h3>
+                            <p className="text-2xl font-black text-slate-800 leading-none">
+                                {financialStats.totalPurchased} <span className="text-xs font-bold text-slate-400">Cr.</span>
+                            </p>
+                            <p className="text-[9px] text-amber-600/70 font-semibold mt-1 uppercase tracking-wider">Volume des recharges</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Graph Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                         <div className="flex items-center justify-between mb-6">
                             <div>
-                                <h3 className="text-lg font-bold text-gray-900">Évolution des Consultants</h3>
-                                <p className="text-sm text-gray-500">Nouveaux inscrits par mois</p>
+                                <h3 className="text-lg font-bold text-slate-850">Évolution des Consultants</h3>
+                                <p className="text-sm text-slate-500">Nouveaux inscrits par mois</p>
                             </div>
-                            <div className="p-2 bg-blue-50 rounded-lg">
-                                <Activity className="h-5 w-5 text-blue-600" />
+                            <div className="p-2 bg-blue-50/70 border border-blue-100/30 rounded-xl text-blue-600">
+                                <Activity className="h-5 w-5" />
                             </div>
                         </div>
                         <div className="h-64 w-full">
                             <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={chartData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                <AreaChart data={chartData}>
+                                    <defs>
+                                        <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#2563EB" stopOpacity={0.2}/>
+                                            <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                     <XAxis
                                         dataKey="name"
                                         axisLine={false}
                                         tickLine={false}
-                                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                                        tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 500 }}
                                         dy={10}
                                     />
                                     <YAxis
                                         axisLine={false}
                                         tickLine={false}
-                                        tick={{ fill: '#6B7280', fontSize: 12 }}
+                                        tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 500 }}
                                         allowDecimals={false}
                                     />
                                     <Tooltip
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        contentStyle={{ 
+                                            borderRadius: '12px', 
+                                            border: '1px solid #e2e8f0', 
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                                            fontSize: '12px'
+                                        }}
                                     />
-                                    <Line
+                                    <Area
                                         type="monotone"
                                         dataKey="total"
                                         stroke="#2563EB"
                                         strokeWidth={3}
+                                        fillOpacity={1}
+                                        fill="url(#colorTotal)"
                                         dot={{ fill: '#2563EB', strokeWidth: 2, r: 4, stroke: '#fff' }}
                                         activeDot={{ r: 6 }}
                                     />
-                                </LineChart>
+                                </AreaChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
 
                     {/* Activity Feed and Messages */}
-                    <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100 flex flex-col">
+                    <div className="bg-white rounded-2xl shadow-sm p-6 border border-slate-100 flex flex-col">
                         <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                            <h3 className="text-lg font-bold text-slate-850 flex items-center gap-2">
                                 <Mail className="h-5 w-5 text-blue-500" />
                                 Messages & Activité
                             </h3>
-                            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold uppercase tracking-wider">
+                            <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold uppercase tracking-wider border border-blue-100/30">
                                 Temps réel
                             </span>
                         </div>
@@ -929,26 +1101,50 @@ export default function AdminDashboard() {
                                     <p className="text-sm text-gray-400">Aucun message pour le moment.</p>
                                 </div>
                             ) : (
-                                notifications.map((notif) => (
-                                    <div key={notif.id} className="p-3 rounded-lg bg-gray-50 border border-gray-100 hover:border-blue-100 transition-colors">
-                                        <div className="flex justify-between items-start mb-1">
-                                            <span className="text-xs font-bold text-gray-900">{notif.title}</span>
-                                            <span className="text-[10px] text-gray-400 font-medium">
-                                                {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            </span>
+                                notifications.map((notif) => {
+                                    const consultant = consultants.find(c => c.id === notif.metadata?.consultant_id)
+                                    return (
+                                        <div key={notif.id} className="p-3.5 rounded-xl bg-slate-50/50 border border-slate-100 hover:border-blue-100 hover:bg-white hover:shadow-sm transition-all duration-200 flex gap-3.5 items-start">
+                                            {/* Avatar or Icon */}
+                                            {consultant ? (
+                                                consultant.avatar_url ? (
+                                                    <img 
+                                                        src={consultant.avatar_url} 
+                                                        alt="Avatar" 
+                                                        className="h-8.5 w-8.5 rounded-full border border-slate-100 object-cover bg-blue-50 flex-shrink-0"
+                                                    />
+                                                ) : (
+                                                    <div className="h-8.5 w-8.5 rounded-full bg-gradient-to-br from-blue-500 to-indigo-650 text-white font-black text-[9px] flex items-center justify-center flex-shrink-0 shadow-sm shadow-blue-100">
+                                                        {consultant.first_name?.[0]}{consultant.last_name?.[0] || consultant.email[0].toUpperCase()}
+                                                    </div>
+                                                )
+                                            ) : (
+                                                <div className="h-8.5 w-8.5 rounded-full bg-slate-100/80 text-slate-500 border border-slate-200/40 flex items-center justify-center flex-shrink-0">
+                                                    <Bell className="h-4 w-4" />
+                                                </div>
+                                            )}
+                                            
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-start mb-1 gap-2">
+                                                    <span className="text-xs font-black text-slate-800 truncate">{notif.title}</span>
+                                                    <span className="text-[9px] text-slate-400 font-extrabold whitespace-nowrap">
+                                                        {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-500 leading-normal font-medium">
+                                                    {notif.content}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <p className="text-xs text-gray-500 leading-tight">
-                                            {notif.content}
-                                        </p>
-                                    </div>
-                                ))
+                                    )
+                                })
                             )}
                         </div>
 
                         <div className="mt-4 pt-4 border-t border-gray-50">
                             <button
-                                onClick={fetchNotifications}
-                                className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest flex items-center gap-2"
+                                onClick={() => navigate('/admin/activities')}
+                                className="w-full justify-center text-xs font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:bg-blue-100 px-3 py-2 rounded-lg transition-colors uppercase tracking-widest flex items-center gap-2"
                             >
                                 <Plus className="h-3 w-3" /> Voir tout l'historique
                             </button>
@@ -956,16 +1152,92 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Consultants Section */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                {/* Tab Switcher */}
+                <div className="flex gap-6 mb-6 border-b border-slate-100 pb-px">
+                    <button
+                        onClick={() => setActiveTab('consultants')}
+                        className={`pb-4 px-1 text-sm font-black border-b-2 transition-all relative ${
+                            activeTab === 'consultants'
+                                ? 'border-blue-600 text-blue-650'
+                                : 'border-transparent text-slate-400 hover:text-slate-600'
+                        }`}
+                    >
+                        Gestion des Consultants
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('reclamations')}
+                        className={`pb-4 px-1 text-sm font-black border-b-2 transition-all relative flex items-center gap-2 ${
+                            activeTab === 'reclamations'
+                                ? 'border-blue-600 text-blue-650'
+                                : 'border-transparent text-slate-400 hover:text-slate-600'
+                        }`}
+                    >
+                        <span>Panier des réclamations</span>
+                        {reclamations.filter(r => r.status === 'pending').length > 0 && (
+                            <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse">
+                                {reclamations.filter(r => r.status === 'pending').length}
+                            </span>
+                        )}
+                    </button>
+                    <button
+                        onClick={async () => {
+                            setActiveTab('questionnaires');
+                            if (unreadQuestionnairesCount > 0) {
+                                // Save locally to prevent them coming back on refresh
+                                const lastCleared = parseInt(localStorage.getItem('questionnaires_cleared_count') || '0', 10);
+                                localStorage.setItem('questionnaires_cleared_count', (lastCleared + unreadQuestionnairesCount).toString());
+                                setUnreadQuestionnairesCount(0);
+                                
+                                try {
+                                    // Fetch the unread ids first
+                                    const { data: unread } = await supabase
+                                        .from('questionnaires_results')
+                                        .select('id')
+                                        .eq('status', 'new');
+                                        
+                                    if (unread && unread.length > 0) {
+                                        for (const item of unread) {
+                                            const { error } = await supabase
+                                                .from('questionnaires_results')
+                                                .update({ status: 'reviewed' })
+                                                .eq('id', item.id);
+                                            if (error) console.error('Error updating questionnaire:', item.id, error);
+                                        }
+                                    }
+                                } catch (err) {
+                                    console.error('Exception updating questionnaires:', err);
+                                }
+                            }
+                        }}
+                        className={`pb-4 px-1 text-sm font-black border-b-2 transition-all relative flex items-center gap-2 ${
+                            activeTab === 'questionnaires'
+                                ? 'border-blue-600 text-blue-650'
+                                : 'border-transparent text-slate-400 hover:text-slate-600'
+                        }`}
+                    >
+                        <span>Résultats Questionnaires</span>
+                        {unreadQuestionnairesCount > 0 && (
+                            <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black animate-pulse">
+                                {unreadQuestionnairesCount}
+                            </span>
+                        )}
+                    </button>
+                </div>
+
+                {activeTab === 'questionnaires' && (
+                    <AdminQuestionnairesTab />
+                )}
+
+                {activeTab === 'consultants' && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                         <div>
-                            <h2 className="text-lg font-bold text-gray-900">Gestion des Consultants</h2>
-                            <p className="text-sm text-gray-500">Gérez les accès et le statut de vos partenaires.</p>
+                            <h2 className="text-lg font-black text-slate-800">Gestion des Consultants</h2>
+                            <p className="text-sm text-slate-500">Gérez les accès, crédits et le statut de vos partenaires.</p>
                         </div>
                         <button
                             onClick={() => setShowCreateModal(true)}
-                            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all"
+                            className="inline-flex items-center px-4 py-2.5 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all shadow-blue-600/10"
                         >
                             <Plus className="h-5 w-5 mr-2" />
                             Nouveau Consultant
@@ -973,15 +1245,15 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                        <table className="min-w-full divide-y divide-slate-100">
+                            <thead className="bg-slate-50/70 border-b border-slate-100">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Consultant</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Solde Crédits</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date d'inscription</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mot de passe</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Consultant</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Statut</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Solde Crédits</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Date d'inscription</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Mot de passe</th>
+                                    <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -995,23 +1267,37 @@ export default function AdminDashboard() {
                                     </tr>
                                 ) : (
                                     consultants.map((consultant) => (
-                                        <tr key={consultant.id} className={`hover:bg-gray-50 transition-colors ${!consultant.is_active ? 'bg-gray-50/50' : ''}`}>
+                                        <tr key={consultant.id} className={`hover:bg-slate-50/50 transition-colors ${!consultant.is_active ? 'bg-slate-50/20' : ''}`}>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
-                                                    <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold ${!consultant.is_active ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-600'}`}>
-                                                        {consultant.first_name?.[0]}{consultant.last_name?.[0] || consultant.email[0].toUpperCase()}
-                                                    </div>
+                                                    {consultant.avatar_url ? (
+                                                        <img
+                                                            src={consultant.avatar_url}
+                                                            alt="Avatar"
+                                                            className={`h-10 w-10 rounded-full object-cover shadow-sm ${
+                                                                !consultant.is_active ? 'opacity-55 grayscale border border-slate-200' : 'border border-slate-100'
+                                                            }`}
+                                                        />
+                                                    ) : (
+                                                        <div className={`h-10 w-10 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${
+                                                            !consultant.is_active 
+                                                                ? 'bg-slate-100 text-slate-400 border border-slate-200' 
+                                                                : 'bg-gradient-to-br from-blue-500 to-indigo-650 text-white shadow-blue-100'
+                                                        }`}>
+                                                            {consultant.first_name?.[0]}{consultant.last_name?.[0] || consultant.email[0].toUpperCase()}
+                                                        </div>
+                                                    )}
                                                     <div className="ml-4">
-                                                        <div className="text-sm font-medium text-gray-900 flex items-center">
+                                                        <div className="text-sm font-extrabold text-slate-800 flex items-center">
                                                             {consultant.first_name || 'Non renseigné'} {consultant.last_name || ''}
                                                             {!consultant.is_active && (
-                                                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest bg-amber-50 text-amber-600 border border-amber-200 shadow-sm animate-pulse">
+                                                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest bg-amber-50 text-amber-600 border border-amber-200 shadow-sm animate-pulse">
                                                                     Gelé
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <div className="text-sm text-gray-500">{consultant.email}</div>
-                                                        <div className="text-xs text-gray-400 mt-0.5">
+                                                        <div className="text-xs text-slate-500 mt-0.5 font-medium">{consultant.email}</div>
+                                                        <div className="inline-flex text-[10px] font-bold text-slate-500 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md mt-1">
                                                             {consultant.commercial_name || 'Aucune société'}
                                                         </div>
                                                     </div>
@@ -1021,37 +1307,44 @@ export default function AdminDashboard() {
                                                 <button
                                                     onClick={() => openStatusConfirmModal(consultant)}
                                                     disabled={togglingConsultantId === consultant.id}
-                                                    className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full border transition-all ${togglingConsultantId === consultant.id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${consultant.is_active
-                                                        ? 'bg-green-100 text-green-800 border-green-200 hover:bg-green-200'
-                                                        : 'bg-red-100 text-red-800 border-red-200 hover:bg-red-200'
-                                                        }`}
+                                                    className={`px-3 py-1 inline-flex text-[11px] leading-4 font-bold rounded-full border transition-all ${
+                                                        togglingConsultantId === consultant.id ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer shadow-sm'
+                                                    } ${consultant.is_active
+                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100'
+                                                        : 'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-100'
+                                                    }`}
                                                 >
                                                     {togglingConsultantId === consultant.id ? 'Chargement...' : (consultant.is_active ? 'Actif' : 'Suspendu')}
                                                 </button>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
-                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${(consultant.credits_wallet?.balance || 0) >= 5
-                                                        ? 'bg-green-100 text-green-800 border-green-200'
-                                                        : 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                                                        }`}>
-                                                        {(() => {
-                                                            const wallet = consultant.credits_wallet;
-                                                            return Array.isArray(wallet) ? (wallet[0]?.balance || 0) : (wallet?.balance || 0);
-                                                        })()} Crédits
-                                                    </span>
+                                                    {(() => {
+                                                        const wallet = consultant.credits_wallet;
+                                                        const balance = Array.isArray(wallet) ? (wallet[0]?.balance || 0) : (wallet?.balance || 0);
+                                                        const isLow = balance < 5;
+                                                        return (
+                                                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold border shadow-sm ${
+                                                                isLow
+                                                                    ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                                                    : 'bg-amber-50 text-amber-700 border-amber-100'
+                                                            }`}>
+                                                                {balance} Crédits
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-medium">
                                                 {new Date(consultant.created_at).toLocaleDateString()}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                <code className="bg-gray-50 px-2 py-1 rounded border border-gray-200 text-xs font-mono text-gray-600 select-all">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                                <code className="bg-slate-50/80 px-2.5 py-1 rounded-lg border border-slate-200/60 text-xs font-mono text-slate-700 select-all shadow-inner">
                                                     {consultant.temp_password || '•••••'}
                                                 </code>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <div className="flex items-center justify-end space-x-3">
+                                                <div className="flex items-center justify-end gap-2.5">
                                                     {/* Edit Button */}
                                                     <button
                                                         onClick={() => {
@@ -1061,47 +1354,54 @@ export default function AdminDashboard() {
                                                             setShowEditModal(true)
                                                         }}
                                                         disabled={!consultant.is_active}
-                                                        className={`transition-colors ${consultant.is_active ? 'text-gray-400 hover:text-blue-600' : 'text-gray-200 cursor-not-allowed'}`}
+                                                        className={`p-2 rounded-xl transition-all border ${
+                                                            consultant.is_active 
+                                                                ? 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-100 hover:shadow-sm' 
+                                                                : 'bg-slate-50/50 text-slate-300 border-slate-100/50 cursor-not-allowed'
+                                                        }`}
                                                         title={consultant.is_active ? "Modifier" : "Compte suspendu : modification impossible"}
                                                     >
                                                         <Edit2 className="h-4 w-4" />
                                                     </button>
 
-                                                    {/* Credits Button - Fixed Width */}
-                                                    <div className="w-24">
-                                                        {consultant.is_active ? (
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSelectedConsultant(consultant)
-                                                                    setShowCreditModal(true)
-                                                                }}
-                                                                className="inline-flex items-center text-blue-600 hover:text-blue-900 font-semibold"
-                                                            >
-                                                                <CreditCard className="h-4 w-4 mr-1" />
-                                                                + Crédits
-                                                            </button>
-                                                        ) : (
-                                                            <span className="inline-flex items-center text-gray-300 cursor-not-allowed" title="Compte suspendu : impossible d'ajouter des crédits">
-                                                                <CreditCard className="h-4 w-4 mr-1" />
-                                                                + Crédits
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Send Credentials Button (Email Icon) */}
+                                                    {/* Credits Button */}
                                                     {consultant.is_active ? (
                                                         <button
-                                                            onClick={() => handleInitiateSendEmail(consultant)}
-                                                            className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                            title="Envoyer les identifiants par email"
+                                                            onClick={() => {
+                                                                setSelectedConsultant(consultant)
+                                                                setShowCreditModal(true)
+                                                            }}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100/50 hover:border-blue-200 font-bold text-xs rounded-xl transition-all shadow-sm"
                                                         >
-                                                            <Mail className="h-4 w-4" />
+                                                            <CreditCard className="h-3.5 w-3.5" />
+                                                            + Crédits
                                                         </button>
                                                     ) : (
-                                                        <span className="text-gray-300 cursor-not-allowed" title="Compte suspendu : impossible d'envoyer l'email">
-                                                            <Mail className="h-4 w-4" />
+                                                        <span 
+                                                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-50 text-slate-300 border border-slate-100/50 font-bold text-xs rounded-xl cursor-not-allowed" 
+                                                            title="Compte suspendu : impossible d'ajouter des crédits"
+                                                        >
+                                                            <CreditCard className="h-3.5 w-3.5" />
+                                                            + Crédits
                                                         </span>
                                                     )}
+
+                                                    {/* Send Credentials Button (Email Icon) */}
+                                                    <button
+                                                        onClick={() => {
+                                                            if (!consultant.is_active) return
+                                                            handleInitiateSendEmail(consultant)
+                                                        }}
+                                                        disabled={!consultant.is_active}
+                                                        className={`p-2 rounded-xl transition-all border ${
+                                                            consultant.is_active 
+                                                                ? 'bg-slate-50 text-slate-500 border-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 hover:shadow-sm' 
+                                                                : 'bg-slate-50/50 text-slate-300 border-slate-100/50 cursor-not-allowed'
+                                                        }`}
+                                                        title={consultant.is_active ? "Envoyer les identifiants par email" : "Compte suspendu : impossible d'envoyer l'email"}
+                                                    >
+                                                        <Mail className="h-4 w-4" />
+                                                    </button>
 
                                                     {/* Delete Button */}
                                                     <button
@@ -1111,7 +1411,11 @@ export default function AdminDashboard() {
                                                             setShowDeleteConfirmModal(true)
                                                         }}
                                                         disabled={!consultant.is_active}
-                                                        className={`transition-colors ${consultant.is_active ? 'text-gray-400 hover:text-red-600' : 'text-gray-200 cursor-not-allowed'}`}
+                                                        className={`p-2 rounded-xl transition-all border ${
+                                                            consultant.is_active 
+                                                                ? 'bg-slate-50 text-slate-550 border-slate-100 hover:bg-red-50 hover:text-red-650 hover:border-red-100 hover:shadow-sm' 
+                                                                : 'bg-slate-50/50 text-slate-300 border-slate-100/50 cursor-not-allowed'
+                                                        }`}
                                                         title={consultant.is_active ? "Supprimer ce consultant" : "Compte suspendu : suppression impossible"}
                                                     >
                                                         <Trash2 className="h-4 w-4" />
@@ -1125,6 +1429,265 @@ export default function AdminDashboard() {
                         </table>
                     </div>
                 </div>
+                )}
+
+                {activeTab === 'reclamations' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in duration-200">
+                        {/* Header & Filters */}
+                        <div className="p-6 border-b border-gray-100 bg-slate-50/50 flex flex-col xl:flex-row xl:items-end justify-between gap-6">
+                            <div className="flex-1">
+                                <h2 className="text-xl font-black text-slate-900 tracking-tight">Panier des réclamations</h2>
+                                <p className="text-sm text-slate-500 mt-1">Consultez, filtrez et traitez les réclamations, bugs et avis soumis.</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+                                {/* Search */}
+                                <div className="relative flex-1 min-w-[200px] xl:max-w-[240px]">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Rechercher un ticket..."
+                                        value={ticketSearch}
+                                        onChange={(e) => setTicketSearch(e.target.value)}
+                                        className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all placeholder-slate-400 shadow-sm"
+                                    />
+                                </div>
+                                
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {/* Filter Type */}
+                                    <div className="relative">
+                                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                        <select
+                                            value={ticketFilterType}
+                                            onChange={(e) => setTicketFilterType(e.target.value)}
+                                            className="pl-8 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm appearance-none cursor-pointer"
+                                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1em' }}
+                                        >
+                                            <option value="all">Tous les types</option>
+                                            <option value="reclamation_insatisfaction">Réclamation (insatisfaction)</option>
+                                            <option value="dysfonctionnement">Dysfonctionnement technique</option>
+                                            <option value="alea">Aléa perturbant la prestation</option>
+                                            <option value="non_conformite">Non-conformité réglementaire</option>
+                                            <option value="suggestion">Suggestion d'amélioration</option>
+                                            <option value="autre">Autre signalement</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Filter Status */}
+                                    <select
+                                        value={ticketFilterStatus}
+                                        onChange={(e) => setTicketFilterStatus(e.target.value)}
+                                        className="px-3 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm appearance-none cursor-pointer"
+                                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1em' }}
+                                    >
+                                        <option value="all">Tous les statuts</option>
+                                        <option value="pending">En attente</option>
+                                        <option value="resolved">Résolus</option>
+                                        <option value="ignored">Ignorés</option>
+                                    </select>
+
+                                    {/* Filter Role */}
+                                    <select
+                                        value={ticketFilterRole}
+                                        onChange={(e) => setTicketFilterRole(e.target.value)}
+                                        className="px-3 pr-8 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm appearance-none cursor-pointer"
+                                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1em' }}
+                                    >
+                                        <option value="all">Tous les auteurs</option>
+                                        <option value="client">Client</option>
+                                        <option value="consultant">Consultant</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* List/Table of Tickets */}
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Auteur</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nature</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sujet</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {ticketsLoading ? (
+                                        <tr>
+                                            <td colSpan="6" className="px-6 py-12 text-center text-sm text-gray-500">
+                                                Chargement des réclamations...
+                                            </td>
+                                        </tr>
+                                    ) : reclamations.filter(t => {
+                                        const name = (t.profiles?.first_name || t.profiles?.last_name)
+                                            ? `${t.profiles.first_name || ''} ${t.profiles.last_name || ''}`.trim()
+                                            : t.profiles?.commercial_name || 'Utilisateur inconnu'
+                                        const matchesSearch = t.title.toLowerCase().includes(ticketSearch.toLowerCase()) || 
+                                            t.content.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+                                            t.profiles?.email?.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+                                            name.toLowerCase().includes(ticketSearch.toLowerCase());
+                                        const matchesType = ticketFilterType === 'all' || t.type === ticketFilterType;
+                                        const matchesStatus = ticketFilterStatus === 'all' || t.status === ticketFilterStatus;
+                                        const roleFilter = ticketFilterRole === 'all' || (ticketFilterRole === 'client' && t.profiles?.role === 'of') || (ticketFilterRole === 'consultant' && t.profiles?.role !== 'of');
+                                        return matchesSearch && matchesType && matchesStatus && roleFilter;
+                                    }).length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" className="px-6 py-12 text-center text-sm text-gray-400">
+                                                Aucune réclamation trouvée.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        reclamations.filter(t => {
+                                            const name = (t.profiles?.first_name || t.profiles?.last_name)
+                                                ? `${t.profiles.first_name || ''} ${t.profiles.last_name || ''}`.trim()
+                                                : t.profiles?.commercial_name || 'Utilisateur inconnu'
+                                            const matchesSearch = t.title.toLowerCase().includes(ticketSearch.toLowerCase()) || 
+                                                t.content.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+                                                t.profiles?.email?.toLowerCase().includes(ticketSearch.toLowerCase()) ||
+                                                name.toLowerCase().includes(ticketSearch.toLowerCase());
+                                            const matchesType = ticketFilterType === 'all' || t.type === ticketFilterType;
+                                            const matchesStatus = ticketFilterStatus === 'all' || t.status === ticketFilterStatus;
+                                            const roleFilter = ticketFilterRole === 'all' || (ticketFilterRole === 'client' && t.profiles?.role === 'of') || (ticketFilterRole === 'consultant' && t.profiles?.role !== 'of');
+                                            return matchesSearch && matchesType && matchesStatus && roleFilter;
+                                        }).map((ticket) => {
+                                            const name = (ticket.profiles?.first_name || ticket.profiles?.last_name)
+                                                ? `${ticket.profiles.first_name || ''} ${ticket.profiles.last_name || ''}`.trim()
+                                                : ticket.profiles?.commercial_name || 'Utilisateur inconnu'
+                                            const role = ticket.profiles?.role === 'of' ? 'Client' : 'Consultant'
+                                            
+                                            const typeColors = {
+                                                reclamation: 'bg-red-50 text-red-700 border-red-100',
+                                                avis: 'bg-amber-50 text-amber-700 border-amber-100',
+                                                bug: 'bg-blue-50 text-blue-700 border-blue-100',
+                                                reclamation_insatisfaction: 'bg-red-50 text-red-700 border-red-100',
+                                                dysfonctionnement: 'bg-blue-50 text-blue-700 border-blue-100',
+                                                alea: 'bg-orange-50 text-orange-700 border-orange-100',
+                                                non_conformite: 'bg-purple-50 text-purple-700 border-purple-100',
+                                                suggestion: 'bg-amber-50 text-amber-700 border-amber-100',
+                                                autre: 'bg-slate-50 text-slate-700 border-slate-100'
+                                            }
+
+                                            const typeLabels = {
+                                                reclamation: 'Réclamation',
+                                                avis: 'Avis / Idée',
+                                                bug: 'Bug Technique',
+                                                reclamation_insatisfaction: 'Réclamation',
+                                                dysfonctionnement: 'Dysfonctionnement',
+                                                alea: 'Aléa',
+                                                non_conformite: 'Non-conformité',
+                                                suggestion: 'Suggestion',
+                                                autre: 'Autre'
+                                            }
+
+                                            const statusColors = {
+                                                pending: 'bg-slate-100 text-slate-700 border-slate-200',
+                                                resolved: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+                                                ignored: 'bg-slate-50 text-slate-400 border-slate-100'
+                                            }
+
+                                            const statusLabels = {
+                                                pending: 'En attente',
+                                                resolved: 'Résolu',
+                                                ignored: 'Ignoré'
+                                            }
+
+                                            return (
+                                                <tr key={ticket.id} className="hover:bg-slate-50/50 transition-colors">
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold text-slate-800">{name}</span>
+                                                            <span className="text-[11px] text-slate-400">{ticket.profiles?.email}</span>
+                                                            <span className={`inline-flex w-fit items-center mt-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide uppercase ${
+                                                                ticket.profiles?.role === 'of'
+                                                                    ? 'bg-orange-100 text-orange-700'
+                                                                    : 'bg-purple-100 text-purple-700'
+                                                            }`}>
+                                                                {role}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${typeColors[ticket.type] || ''}`}>
+                                                            {typeLabels[ticket.type] || ticket.type}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 max-w-xs">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold text-slate-700 truncate">{ticket.title}</span>
+                                                            <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">{ticket.content}</p>
+                                                            <div className="mt-2 flex items-center gap-2">
+                                                                <button 
+                                                                    onClick={() => setSelectedTicketForDetail(ticket)}
+                                                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold rounded-lg transition-colors group uppercase tracking-wider"
+                                                                >
+                                                                    Voir détails
+                                                                    <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                                                </button>
+                                                                {ticket.attachment_url && (
+                                                                    <a 
+                                                                        href={ticket.attachment_url} 
+                                                                        target="_blank" 
+                                                                        rel="noopener noreferrer"
+                                                                        title="Voir la pièce jointe"
+                                                                        className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors"
+                                                                    >
+                                                                        <Paperclip className="h-3.5 w-3.5" />
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">
+                                                        {new Date(ticket.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border ${statusColors[ticket.status] || ''}`}>
+                                                            {statusLabels[ticket.status] || ticket.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                        <div className="flex items-center justify-end space-x-2">
+                                                            {ticket.status === 'pending' && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => handleUpdateTicketStatus(ticket.id, 'resolved')}
+                                                                        className="p-2 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
+                                                                        title="Marquer comme résolu"
+                                                                    >
+                                                                        <Check className="h-4 w-4" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleUpdateTicketStatus(ticket.id, 'ignored')}
+                                                                        className="p-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                                                                        title="Ignorer"
+                                                                    >
+                                                                        <X className="h-4 w-4" />
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                            <button
+                                                                onClick={() => {
+                                                                    setTicketToDelete(ticket.id)
+                                                                    setShowDeleteTicketConfirmModal(true)
+                                                                }}
+                                                                className="p-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors ml-2"
+                                                                title="Supprimer"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </main>
 
             {/* Modal: Create Consultant (Provisioning) */}
@@ -1933,6 +2496,299 @@ export default function AdminDashboard() {
                     </div>
                 </div>
             )}
+
+            {/* Modal Detail Ticket */}
+            {selectedTicketForDetail && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md overflow-y-auto h-full w-full flex items-center justify-center p-4 z-[999] animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200 flex flex-col">
+                        
+                        {/* Modal Header */}
+                        <div className="px-8 py-6 border-b border-slate-100 flex items-start justify-between bg-white relative">
+                            <div className="flex-1 pr-8">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <span className={`px-3 py-1 text-xs font-bold rounded-full border ${
+                                        selectedTicketForDetail.type === 'reclamation' || selectedTicketForDetail.type === 'reclamation_insatisfaction' ? 'bg-red-50 text-red-700 border-red-100' :
+                                        selectedTicketForDetail.type === 'avis' || selectedTicketForDetail.type === 'suggestion' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                        selectedTicketForDetail.type === 'bug' || selectedTicketForDetail.type === 'dysfonctionnement' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                        selectedTicketForDetail.type === 'alea' ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                                        selectedTicketForDetail.type === 'non_conformite' ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                                        'bg-slate-50 text-slate-700 border-slate-100'
+                                    }`}>
+                                        {selectedTicketForDetail.type === 'reclamation' || selectedTicketForDetail.type === 'reclamation_insatisfaction' ? 'Réclamation' : 
+                                         selectedTicketForDetail.type === 'avis' || selectedTicketForDetail.type === 'suggestion' ? 'Suggestion' : 
+                                         selectedTicketForDetail.type === 'bug' || selectedTicketForDetail.type === 'dysfonctionnement' ? 'Dysfonctionnement' : 
+                                         selectedTicketForDetail.type === 'alea' ? 'Aléa' : 
+                                         selectedTicketForDetail.type === 'non_conformite' ? 'Non-conformité' : 'Autre'}
+                                    </span>
+                                    <span className={`px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wider ${
+                                        selectedTicketForDetail.status === 'pending' ? 'bg-slate-100 text-slate-600' :
+                                        selectedTicketForDetail.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' :
+                                        'bg-slate-100 text-slate-400'
+                                    }`}>
+                                        {selectedTicketForDetail.status === 'pending' ? 'En attente' :
+                                         selectedTicketForDetail.status === 'resolved' ? 'Résolu' : 'Ignoré'}
+                                    </span>
+                                </div>
+                                <h3 className="text-2xl font-black text-slate-900 leading-tight">
+                                    {selectedTicketForDetail.title}
+                                </h3>
+                            </div>
+                            <button
+                                onClick={() => setSelectedTicketForDetail(null)}
+                                className="p-2 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-8 space-y-8 bg-slate-50/50">
+                            
+                            {/* Auteur Info Section */}
+                            <div>
+                                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <Users className="h-3.5 w-3.5" />
+                                    Informations Auteur
+                                </h4>
+                                <div className="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-y-5 gap-x-6">
+                                        <div className="flex items-start gap-3">
+                                            <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                <Users className="h-4 w-4 text-blue-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Nom complet</p>
+                                                <p className="text-sm font-extrabold text-slate-800">
+                                                    {selectedTicketForDetail.profiles?.first_name || ''} {selectedTicketForDetail.profiles?.last_name || ''}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-start gap-3">
+                                            <div className="h-8 w-8 rounded-full bg-purple-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                <Settings className="h-4 w-4 text-purple-600" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Rôle</p>
+                                                <p className="text-sm font-extrabold text-slate-800 uppercase">
+                                                    {selectedTicketForDetail.profiles?.role === 'of' ? 'Client' : 'Consultant'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-start gap-3">
+                                            <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                <Mail className="h-4 w-4 text-slate-500" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Email</p>
+                                                <p className="text-sm font-extrabold text-slate-800 truncate" title={selectedTicketForDetail.profiles?.email}>
+                                                    {selectedTicketForDetail.profiles?.email}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {selectedTicketForDetail.profiles?.phone && (
+                                            <div className="flex items-start gap-3">
+                                                <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    <AlertCircle className="h-4 w-4 text-slate-500" /> {/* Fallback icon, could use Phone */}
+                                                </div>
+                                                <div>
+                                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Téléphone</p>
+                                                    <p className="text-sm font-extrabold text-slate-800">
+                                                        {selectedTicketForDetail.profiles?.phone}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {selectedTicketForDetail.profiles?.commercial_name && (
+                                            <div className="col-span-1 md:col-span-2 flex items-start gap-3 border-t border-slate-100 pt-4">
+                                                <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    <Building className="h-4 w-4 text-slate-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Organisme / Nom Commercial</p>
+                                                    <p className="text-sm font-extrabold text-slate-800">
+                                                        {selectedTicketForDetail.profiles?.commercial_name}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Message / Content Section */}
+                            <div>
+                                <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <MessageSquare className="h-3.5 w-3.5" />
+                                    Description du signalement
+                                </h4>
+                                <div className="bg-white border border-slate-200/60 rounded-2xl p-6 shadow-sm">
+                                    <p className="text-[15px] text-slate-700 whitespace-pre-wrap leading-relaxed max-h-[250px] overflow-y-auto custom-scrollbar pr-2">
+                                        {selectedTicketForDetail.content}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {selectedTicketForDetail.attachment_url && (
+                                <div className="mb-6 px-8">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                        </svg>
+                                        Pièce jointe
+                                    </h4>
+                                    <a href={selectedTicketForDetail.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-sm font-medium text-blue-600 transition-colors shadow-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                        </svg>
+                                        Consulter le document
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer / Actions */}
+                        <div className="px-8 py-5 border-t border-slate-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-4">
+                            
+                            <div className="w-full sm:w-auto">
+                                <button
+                                    onClick={() => handleDeleteTicketClick(selectedTicketForDetail.id)}
+                                    className="w-full sm:w-auto px-5 py-2.5 bg-white border border-red-200 hover:bg-red-50 hover:border-red-300 text-red-600 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Trash2 className="h-4 w-4" /> Supprimer
+                                </button>
+                            </div>
+
+                            <div className="flex gap-3 w-full sm:w-auto">
+                                {selectedTicketForDetail.status === 'pending' && (
+                                    <>
+                                        <button
+                                            onClick={() => handleUpdateTicketStatus(selectedTicketForDetail.id, 'ignored')}
+                                            className="flex-1 sm:flex-none px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <X className="h-4 w-4" /> Ignorer
+                                        </button>
+                                        <button
+                                            onClick={() => handleUpdateTicketStatus(selectedTicketForDetail.id, 'resolved')}
+                                            className="flex-1 sm:flex-none px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <Check className="h-4 w-4" /> Marquer Résolu
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Ticket Delete Confirm Modal */}
+            {
+                showDeleteTicketConfirmModal && ticketToDelete && (
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[9999] animate-in fade-in duration-300">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-bounce-in border border-red-50">
+                            {/* Header Image/Icon area */}
+                            <div className="bg-red-50 p-8 flex flex-col items-center">
+                                <div className="h-24 w-24 bg-white rounded-full flex items-center justify-center shadow-xl border-4 border-red-100 relative">
+                                    <div className="absolute inset-0 bg-red-500/10 rounded-full animate-ping"></div>
+                                    <Trash2 className="h-10 w-10 text-red-600 stroke-[2.5]" />
+                                </div>
+                            </div>
+
+                            <div className="p-8">
+                                <h3 className="text-2xl font-black text-gray-900 text-center mb-2 tracking-tight">Supprimer la réclamation ?</h3>
+                                <p className="text-gray-500 text-center mb-8 leading-relaxed">
+                                    Vous êtes sur le point de retirer définitivement cet élément.
+                                    <br />Cette action ne peut pas être annulée.
+                                </p>
+
+                                <div className="bg-red-50 border-2 border-dashed border-red-200 rounded-2xl p-4 mb-8">
+                                    <div className="flex items-start gap-3">
+                                        <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="text-xs font-black text-red-700 uppercase tracking-widest mb-1">Attention Irréversible</p>
+                                            <p className="text-[11px] text-red-600 font-medium leading-normal italic">
+                                                Cette action supprimera également tous les fichiers et échanges liés à cette réclamation.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button
+                                        onClick={() => {
+                                            setShowDeleteTicketConfirmModal(false)
+                                            setTicketToDelete(null)
+                                        }}
+                                        className="px-6 py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl font-black transition-all active:scale-95 text-sm"
+                                        disabled={isDeletingTicket}
+                                    >
+                                        Annuler
+                                    </button>
+                                    <button
+                                        onClick={confirmDeleteTicket}
+                                        disabled={isDeletingTicket}
+                                        className="px-6 py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-black transition-all shadow-xl shadow-red-600/20 active:scale-95 flex items-center justify-center gap-2 text-sm"
+                                    >
+                                        {isDeletingTicket ? (
+                                            <>
+                                                <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                Patientez...
+                                            </>
+                                        ) : (
+                                            'Confirmer'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Ticket Delete Success Modal */}
+            {
+                showDeleteTicketSuccessModal && (
+                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-bounce-in">
+                            <div className="bg-red-500 p-6 flex justify-center relative overflow-hidden">
+                                {/* Graphic background circles */}
+                                <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                                <div className="absolute bottom-0 right-0 w-32 h-32 bg-black/5 rounded-full translate-x-1/3 translate-y-1/3"></div>
+
+                                <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-lg relative z-10">
+                                    <Trash2 className="h-10 w-10 text-red-500 stroke-[2.5]" />
+                                </div>
+                            </div>
+                            <div className="p-8 text-center">
+                                <h3 className="text-2xl font-bold text-gray-900 mb-2">Élément Supprimé</h3>
+                                <p className="text-gray-500 mb-6 text-sm">
+                                    La réclamation/avis a été retirée de la plateforme avec succès.
+                                </p>
+
+                                <div className="bg-gray-50 rounded-xl p-4 mb-8 text-left border border-gray-100 flex items-center space-x-3">
+                                    <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                        <Check className="h-4 w-4 text-green-600" />
+                                    </div>
+                                    <span className="text-xs text-gray-600 font-medium">Toutes les données associées ont été nettoyées.</span>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        setShowDeleteTicketSuccessModal(false)
+                                    }}
+                                    className="w-full py-3.5 px-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-all shadow-lg active:scale-95"
+                                >
+                                    Continuer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
         </div>
     )
 }

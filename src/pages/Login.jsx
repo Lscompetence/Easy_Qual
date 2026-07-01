@@ -1,20 +1,70 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom'
+import { supabase } from '../supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
 
-export default function Login() {
+export default function Login({ forceRole }) {
     const [searchParams] = useSearchParams()
     const location = useLocation()
-    const roleParam = searchParams.get('role') || 'admin'
+    
+    // Block the URL parameter 'role=admin' to force the use of the secret route
+    let roleParam = forceRole || searchParams.get('role') || localStorage.getItem('eq_forgot_password_role') || 'client';
+    if (!forceRole && roleParam === 'admin') {
+        roleParam = 'client'; // Fallback to client if someone tries to guess the admin URL
+    }
 
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(false)
 
-    const { login, logout } = useAuth()
+    const { login, logout, maintenanceMode } = useAuth()
     const navigate = useNavigate()
+
+    // 🛠️ MAINTENANCE REDIRECT
+    useEffect(() => {
+        if (maintenanceMode && roleParam !== 'admin') {
+            navigate('/maintenance')
+        }
+    }, [maintenanceMode, roleParam, navigate])
+
+    // Detect recovery session or link error hash from email click
+    useEffect(() => {
+        const handleAuthCallback = async () => {
+            const hash = window.location.hash
+            
+            // 1. Detect if it's an error callback (e.g. OTP link expired)
+            if (hash.includes('error=') || hash.includes('error_code=')) {
+                const params = new URLSearchParams(hash.substring(1)) // Remove '#'
+                const errorDesc = params.get('error_description') || 'Le lien de réinitialisation est invalide ou a expiré.'
+                const decodedDesc = decodeURIComponent(errorDesc.replace(/\+/g, ' '))
+                setError(`Erreur de réinitialisation : ${decodedDesc}`)
+                window.history.replaceState(null, null, window.location.pathname + window.location.search)
+                return
+            }
+
+            // 2. Detect password recovery callback
+            if (hash.includes('type=recovery') || hash.includes('access_token')) {
+                const { data: { session } } = await supabase.auth.getSession()
+                if (session?.user) {
+                    const metaRole = session.user.user_metadata?.role || session.user.app_metadata?.role
+                    let finalRole = metaRole || 'client'
+                    
+                    if (!metaRole) {
+                        const { data: prof } = await supabase
+                            .from('profiles')
+                            .select('role')
+                            .eq('id', session.user.id)
+                            .maybeSingle()
+                        if (prof?.role) finalRole = prof.role
+                    }
+                    navigate(`/update-password?role=${finalRole === 'of' ? 'client' : finalRole}`)
+                }
+            }
+        }
+        handleAuthCallback()
+    }, [location.hash, navigate])
 
     const getRoleConfig = () => {
         switch (roleParam) {
@@ -72,7 +122,7 @@ export default function Login() {
         const cleanEmail = email.trim().toLowerCase()
         const rawPassword = password
 
-        console.log('🔑 Tentative de connexion avec:', cleanEmail, '| longueur:', rawPassword.length)
+
 
         try {
             // Race between Login and a 30s Timeout
@@ -88,10 +138,10 @@ export default function Login() {
                 // 🛠️ SELF-HEALING LOGIC for CLIENTS
                 // If login fails and we are in the client space, let's check if the account exists in tenants but not in Auth
                 if (roleParam === 'client' && (err.status === 400 || err.message?.includes('Invalid login credentials'))) {
-                    console.log('🔍 Auth failed. Checking if this client needs a repair...');
+
 
                     // 1. Check if email exists in tenants table
-                    const { data: tenant, error: tErr } = await supabase
+                    const { data: tenant } = await supabase
                         .from('tenants')
                         .select('id, name, initial_password')
                         .eq('client_email', cleanEmail)
@@ -99,7 +149,7 @@ export default function Login() {
 
                     // 2. If found and the password matches the one in our records
                     if (tenant && tenant.initial_password === rawPassword) {
-                        console.log('🛠️ Client found in DB. Triggering auto-repair...');
+
 
                         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
                         const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -121,7 +171,7 @@ export default function Login() {
                         });
 
                         if (repairRes.ok) {
-                            console.log('✅ Auto-repair successful. Retrying login...');
+
                             // Try login again after repair
                             authResponse = await login(cleanEmail, rawPassword);
                         } else {

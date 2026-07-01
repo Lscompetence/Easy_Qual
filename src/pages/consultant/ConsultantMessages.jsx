@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -13,6 +13,55 @@ export default function ConsultantMessages() {
     const [conversations, setConversations] = useState([])
     const [showMobileMenu, setShowMobileMenu] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
+
+
+    const fetchConversations = useCallback(async () => {
+        try {
+            // Get all cases for this consultant
+            const { data: casesData } = await supabase
+                .from('cases')
+                .select('id, tenants(name)')
+            
+            if (!casesData) return
+
+            // For each case, fetch the last message and unread count (excluding system events)
+            const convs = await Promise.all(casesData.map(async (c) => {
+                const { data: lastMsg } = await supabase
+                    .from('case_messages')
+                    .select('content, created_at, sender_id, read_at')
+                    .eq('case_id', c.id)
+                    .not('content', 'ilike', '[SYSTEM]%')
+                    .not('content', 'ilike', '[Remarque%')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+
+                const { count: unreadCount } = await supabase
+                    .from('case_messages')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('case_id', c.id)
+                    .is('read_at', null)
+                    .neq('sender_id', user.id)
+                    .not('content', 'ilike', '[SYSTEM]%')
+                    .not('content', 'ilike', '[Remarque%')
+
+                return {
+                    case_id: c.id,
+                    clientName: c.tenants?.name || 'Client',
+                    lastMessage: lastMsg?.content || 'Aucun message encore.',
+                    lastTime: lastMsg?.created_at,
+                    unreadCount: unreadCount || 0
+                }
+            }))
+
+            // Sort by last message time
+            setConversations(convs.sort((a, b) => new Date(b.lastTime || 0) - new Date(a.lastTime || 0)))
+        } catch (err) {
+            console.error('Error fetching conversations:', err)
+        } finally {
+            setLoading(false)
+        }
+    }, [user])
 
     useEffect(() => {
         if (user) {
@@ -29,51 +78,8 @@ export default function ConsultantMessages() {
                 supabase.removeChannel(channel)
             }
         }
-    }, [user])
+    }, [user, fetchConversations])
 
-    const fetchConversations = async () => {
-        try {
-            // Get all cases for this consultant
-            const { data: casesData } = await supabase
-                .from('cases')
-                .select('id, tenants(commercial_name, first_name, last_name)')
-            
-            if (!casesData) return
-
-            // For each case, fetch the last message and unread count
-            const convs = await Promise.all(casesData.map(async (c) => {
-                const { data: lastMsg } = await supabase
-                    .from('case_messages')
-                    .select('content, created_at, sender_id, read_at')
-                    .eq('case_id', c.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .single()
-
-                const { count: unreadCount } = await supabase
-                    .from('case_messages')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('case_id', c.id)
-                    .is('read_at', null)
-                    .neq('sender_id', user.id)
-
-                return {
-                    case_id: c.id,
-                    clientName: c.tenants?.commercial_name || `${c.tenants?.first_name} ${c.tenants?.last_name}`,
-                    lastMessage: lastMsg?.content || 'Aucun message encore.',
-                    lastTime: lastMsg?.created_at,
-                    unreadCount: unreadCount || 0
-                }
-            }))
-
-            // Sort by last message time
-            setConversations(convs.sort((a, b) => new Date(b.lastTime || 0) - new Date(a.lastTime || 0)))
-        } catch (err) {
-            console.error('Error fetching conversations:', err)
-        } finally {
-            setLoading(false)
-        }
-    }
 
     const filteredConvs = conversations.filter(c => 
         c.clientName.toLowerCase().includes(searchQuery.toLowerCase())
@@ -128,7 +134,7 @@ export default function ConsultantMessages() {
                             filteredConvs.map((conv) => (
                                 <div 
                                     key={conv.case_id}
-                                    onClick={() => navigate(`/consultant/case/${conv.case_id}`)}
+                                    onClick={() => navigate(`/consultant/case/${conv.case_id}?tab=messagerie`)}
                                     className="group bg-white p-6 rounded-[32px] border-2 border-transparent hover:border-purple-100 shadow-sm hover:shadow-xl hover:shadow-purple-500/5 transition-all cursor-pointer flex items-center gap-5 relative overflow-hidden"
                                 >
                                     {/* Unread Indicator */}

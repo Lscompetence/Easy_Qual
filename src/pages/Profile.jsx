@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
@@ -179,6 +180,17 @@ export default function Profile() {
     // JSX Content Extracted - Centered & Equal Size
     const content = (
         <div className="w-full max-w-7xl mx-auto space-y-6 animate-fadeIn pb-12">
+            {/* Back Button */}
+            <div className="flex justify-start mb-2">
+                <button
+                    onClick={() => navigate(isConsultant ? '/consultant/dashboard' : (isAdmin ? '/admin/dashboard' : -1))}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-600 hover:text-indigo-600 border border-slate-200/60 rounded-xl text-xs font-bold transition-all shadow-sm shadow-slate-100 hover:shadow group"
+                >
+                    <ArrowLeft className="h-4 w-4 mr-1 group-hover:-translate-x-1 transition-transform" />
+                    Retour au Tableau de bord
+                </button>
+            </div>
+
             {/* 1. Header Card - Extends full width of container */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden relative group transition-all duration-300 hover:shadow-md hover:border-slate-200">
                 {/* Banner Gradient */}
@@ -415,26 +427,10 @@ export default function Profile() {
                     </div>
                 )}
 
-                <div className="flex-1 overflow-y-auto">
-                    <div className="min-h-full flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-                        <div className="w-full max-w-4xl space-y-8 animate-fadeIn">
-                            {/* Navigation Header for non-consultants or secondary navigation */}
-                            {!isConsultant && (
-                                <div className="flex items-center justify-between mb-8">
-                                    <button
-                                        onClick={() => navigate(-1)}
-                                        className="flex items-center text-gray-400 hover:text-indigo-600 transition-colors font-bold group bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100"
-                                    >
-                                        <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-                                        Retour
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* Center Profile Content */}
-                            {content}
-                        </div>
-                    </div>
+                <div className="flex-1 overflow-y-auto bg-slate-50/50">
+                    <main className="p-4 sm:p-6 lg:p-8 max-w-[2000px] mx-auto w-full">
+                        {content}
+                    </main>
                 </div>
             </div>
 

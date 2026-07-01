@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Easy'Qual · Questionnaire de satisfaction — Consultant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f4f6f5;
+    --surface:#ffffff;
+    --ink:#16201d;
+    --muted:#69756f;
+    --line:#e4e8e6;
+    --line-strong:#cfd6d3;
+    --accent:#9333ea;
+    --accent-weak:#f3e8fd;
+    --accent-ink:#7e22ce;
+    --danger:#c0392b;
+    --danger-weak:#fbecea;
+    --star:#e0a800;
+    --radius:14px;
+    --radius-sm:10px;
+    --shadow:0 1px 2px rgba(22,32,29,.04), 0 8px 24px -16px rgba(22,32,29,.18);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Hanken Grotesk",system-ui,sans-serif;
+    font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  }
+  .progress{position:sticky;top:0;z-index:30;height:4px;background:transparent}
+  .progress__bar{height:100%;width:0%;background:var(--accent);transition:width .35s ease}
+  .wrap{max-width:760px;margin:0 auto;padding:28px 20px 80px}
+  header.hero{padding:8px 4px 4px}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:22px}
+  .brand__mark{width:30px;height:30px;border-radius:9px;background:var(--accent);
+    display:grid;place-items:center;color:#fff;font-family:"Bricolage Grotesque";font-weight:700;font-size:16px}
+  .brand__name{font-family:"Bricolage Grotesque";font-weight:700;font-size:18px;letter-spacing:-.01em}
+  .badge{margin-left:auto;font-size:12px;font-weight:600;color:var(--accent-ink);
+    background:var(--accent-weak);padding:5px 11px;border-radius:999px}
+  h1{font-family:"Bricolage Grotesque";font-weight:700;font-size:clamp(24px,5vw,32px);
+    line-height:1.12;letter-spacing:-.02em;margin:4px 0 10px}
+  .intro{color:var(--muted);max-width:62ch;margin:0 0 8px}
+  .req-hint{font-size:13px;color:var(--muted);margin-top:14px}
+  .req-hint .star{color:var(--danger);font-weight:700}
+
+  form{margin-top:26px;display:flex;flex-direction:column;gap:18px}
+  .q{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px 22px 24px;box-shadow:var(--shadow);transition:border-color .2s}
+  .q.is-sub{margin-top:-8px;background:#fbfcfc;border-style:dashed}
+  .q.error{border-color:var(--danger)}
+  .q__head{display:flex;gap:10px;align-items:flex-start;margin-bottom:6px}
+  .q__num{font-family:"Bricolage Grotesque";font-weight:700;color:var(--accent);
+    font-size:15px;min-width:30px;padding-top:1px}
+  .q__label{font-weight:600;font-size:17px;letter-spacing:-.01em}
+  .q__label .star{color:var(--danger);margin-left:3px}
+  .q__sub{font-size:13px;color:var(--muted);margin:2px 0 0 40px}
+  .q__body{margin-top:16px;margin-left:40px}
+  @media(max-width:560px){.q__body,.q__sub{margin-left:0}}
+  .q__err{display:none;margin:12px 0 0 40px;color:var(--danger);font-size:13.5px;font-weight:600}
+  .q.error .q__err{display:block}
+  @media(max-width:560px){.q__err{margin-left:0}}
+
+  /* Étoiles (Score) */
+  .stars{display:flex;gap:8px}
+  .star-btn{background:none;border:none;cursor:pointer;padding:2px;line-height:0;color:var(--line-strong);
+    transition:transform .12s, color .12s}
+  .star-btn svg{width:38px;height:38px;display:block}
+  .star-btn:hover{transform:scale(1.08)}
+  .star-btn.on{color:var(--star)}
+  .stars-caption{margin-top:8px;font-size:13px;color:var(--muted);min-height:18px}
+
+  /* Note sur 10 (NPS) */
+  .nps{display:flex;flex-wrap:wrap;gap:8px}
+  .nps-btn{width:44px;height:44px;border-radius:50%;border:1.5px solid var(--line-strong);
+    background:var(--surface);color:var(--ink);font-weight:600;font-size:15px;cursor:pointer;
+    transition:all .15s}
+  .nps-btn:hover{border-color:var(--accent);color:var(--accent-ink)}
+  .nps-btn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .nps-scale{display:flex;justify-content:space-between;margin-top:9px;font-size:12.5px;color:var(--muted)}
+
+  /* Choix unique / multiple (pills) */
+  .opts{display:flex;flex-direction:column;gap:10px}
+  .opt{display:flex;align-items:center;gap:12px;border:1.5px solid var(--line);border-radius:var(--radius-sm);
+    padding:13px 15px;cursor:pointer;transition:all .15s;user-select:none}
+  .opt:hover{border-color:var(--line-strong);background:#fafbfb}
+  .opt.on{border-color:var(--accent);background:var(--accent-weak)}
+  .opt input{position:absolute;opacity:0;pointer-events:none}
+  .ind{width:20px;height:20px;flex:none;border:2px solid var(--line-strong);transition:all .15s;
+    display:grid;place-items:center}
+  .ind--radio{border-radius:50%}
+  .ind--check{border-radius:6px}
+  .opt.on .ind{border-color:var(--accent);background:var(--accent)}
+  .ind__dot{width:8px;height:8px;border-radius:50%;background:#fff;opacity:0;transition:opacity .15s}
+  .opt.on .ind--radio .ind__dot{opacity:1}
+  .ind__chk{width:11px;height:11px;opacity:0;transition:opacity .15s}
+  .opt.on .ind--check .ind__chk{opacity:1}
+  .opt__txt{font-size:15.5px}
+
+  /* Grille de choix */
+  .grid-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+  table.grid{border-collapse:collapse;width:100%;min-width:480px}
+  table.grid th,table.grid td{padding:10px 8px;text-align:center;vertical-align:middle}
+  table.grid th.rowhead,table.grid td.rowhead{text-align:left;font-weight:500;font-size:14.5px;
+    min-width:180px;padding-left:0;color:var(--ink)}
+  table.grid thead th{font-size:12.5px;font-weight:600;color:var(--muted);
+    border-bottom:1px solid var(--line);padding-bottom:12px;white-space:nowrap}
+  table.grid tbody tr{border-bottom:1px solid var(--line)}
+  table.grid tbody tr:last-child{border-bottom:none}
+  .cell-radio{width:22px;height:22px;border:2px solid var(--line-strong);border-radius:50%;
+    display:inline-grid;place-items:center;cursor:pointer;transition:all .15s}
+  .cell-radio:hover{border-color:var(--accent)}
+  .cell-radio.on{border-color:var(--accent);background:var(--accent)}
+  .cell-radio.on::after{content:"";width:8px;height:8px;border-radius:50%;background:#fff}
+  .grid-hint{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+
+  /* Texte libre */
+  textarea{width:100%;border:1.5px solid var(--line);border-radius:var(--radius-sm);
+    padding:13px 15px;font-family:inherit;font-size:15.5px;color:var(--ink);background:#fbfcfc;
+    resize:vertical;min-height:104px;transition:border-color .15s}
+  textarea:focus{outline:none;border-color:var(--accent);background:#fff}
+  .charcount{text-align:right;font-size:12px;color:var(--muted);margin-top:6px}
+
+  /* Conditionnel */
+  .cond{display:none}
+  .cond.show{display:block;animation:reveal .3s ease}
+  @keyframes reveal{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  /* Submit */
+  .actions{margin-top:8px;display:flex;flex-direction:column;gap:14px;align-items:flex-start}
+  .submit{background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);
+    font-family:"Bricolage Grotesque";font-weight:600;font-size:16px;padding:15px 30px;cursor:pointer;
+    transition:transform .12s, background .15s;box-shadow:var(--shadow)}
+  .submit:hover{background:var(--accent-ink);transform:translateY(-1px)}
+  .form-error{color:var(--danger);font-size:14px;font-weight:600;display:none}
+  .form-error.show{display:block}
+
+  /* Écran de confirmation */
+  .done{display:none;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:40px 28px;text-align:center;box-shadow:var(--shadow)}
+  .done.show{display:block}
+  .done__icon{width:64px;height:64px;margin:0 auto 18px;border-radius:50%;background:var(--accent-weak);
+    display:grid;place-items:center;color:var(--accent)}
+  .done h2{font-family:"Bricolage Grotesque";font-size:26px;margin:0 0 8px}
+  .done p{color:var(--muted);margin:0 auto 22px;max-width:46ch}
+  .done__row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .ghost{background:#fff;border:1.5px solid var(--line-strong);color:var(--ink);border-radius:var(--radius-sm);
+    font-weight:600;font-size:14.5px;padding:11px 18px;cursor:pointer;transition:all .15s;font-family:inherit}
+  .ghost:hover{border-color:var(--accent);color:var(--accent-ink)}
+  footer{margin-top:28px;font-size:12.5px;color:var(--muted);text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="progress"><div class="progress__bar" id="progressBar"></div></div>
+<div class="wrap">
+  <header class="hero">
+    <div class="brand" style="margin-bottom: 24px;">
+      <img src="/logo.png" alt="Easy'Qual" style="height: 38px; width: auto; object-fit: contain;" />
+    </div>
+    <h1>Votre satisfaction sur Easy'Qual</h1>
+    <p class="intro">Votre retour nous aide à améliorer l'application et l'accompagnement que nous vous proposons. Le questionnaire prend environ 3 minutes.</p>
+    <p class="req-hint"><span class="star">*</span> Champ obligatoire</p>
+  </header>
+
+  <form id="surveyForm" novalidate></form>
+
+  <section class="done" id="doneScreen">
+    <div class="done__icon">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+    </div>
+    <h2>Merci pour votre retour !</h2>
+    <p>Vos réponses ont bien été enregistrées. Elles seront analysées par l'équipe Easy'Qual dans le cadre de notre démarche d'amélioration continue.</p>
+    <div class="done__row">
+      <button class="ghost" id="dlBtn" type="button">Télécharger mes réponses (JSON)</button>
+      <button class="ghost" id="copyBtn" type="button">Copier le récapitulatif</button>
+    </div>
+  </section>
+
+  <footer>Données traitées dans le cadre de l'amélioration continue (RNQ&nbsp;— Critère&nbsp;7). Conformément au RGPD, vous disposez d'un droit d'accès et de rectification.</footer>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG D'INTÉGRATION
+   - SUBMIT_ENDPOINT : URL de votre API (POST JSON). Laisser "" pour
+     un fonctionnement local (confirmation + téléchargement/copie).
+   ============================================================ */
+const SUBMIT_ENDPOINT = "https://gxworwhpcyfuqwuxocxx.supabase.co/rest/v1/questionnaires_results";
+
+const SURVEY = {
+  id: "easyqual_consultant_satisfaction",
+  version: "1.0",
+  respondent: "consultant",
+  recipient: "admin",
+  collectionTiming: "a_chaud",
+  questions: [
+    { n: 'A', code: "respondent_name", type: "text", required: true,
+      label: "Votre nom et prénom :" },
+    { n: 'B', code: "consultant_name", type: "text", required: false,
+      label: "Client concerné (facultatif) :" },
+    { n: 1, code: "satisfaction_globale", type: "nps", required: true,
+      label: "De manière générale, quel est votre niveau de satisfaction concernant votre mission ou vos conditions d'intervention&nbsp;?",
+      minLabel: "Pas du tout satisfait", maxLabel: "Très satisfait" },
+    { n: 2, code:"app_quotidien", type:"grid", required:true,
+      label:"Comment évaluez-vous l'application au quotidien&nbsp;?",
+      columns:["Insatisfaisant","Moyen","Satisfaisant","Très satisfaisant"],
+      rows:[
+        { code:"prise_en_main", label:"Facilité de prise en main" },
+        { code:"stabilite", label:"Stabilité et fiabilité technique" },
+        { code:"tableaux_bord", label:"Clarté des tableaux de bord (appréciations, réclamations, améliorations)" },
+        { code:"support_rapidite", label:"Rapidité et utilité du support" }
+      ] },
+    { n: 3, code:"onboarding", type:"single", required:true,
+      label:"Comment jugez-vous l'accompagnement reçu lors de votre démarrage (onboarding)&nbsp;?",
+      options:["Très satisfaisant","Satisfaisant","Peu satisfaisant","Pas satisfaisant"] },
+    { n: 4, code:"contenus_apprenants", type:"grid", required:true,
+      label:"Concernant les contenus et ressources Easy'Qual que vous mobilisez auprès de vos apprenants&nbsp;:",
+      columns:["Pas du tout","Plutôt non","Plutôt oui","Tout à fait"],
+      rows:[
+        { code:"apprenants_montee_competence", label:"Les webinaires et contenus proposés aident mes apprenants à monter en compétence sur leur démarche Qualiopi" },
+        { code:"doc_claire", label:"La documentation mise à disposition est claire et exploitable" },
+        { code:"apprenants_reponses_questions", label:"Mes apprenants trouvent facilement des réponses à leurs questions sur la démarche Qualiopi" }
+      ] },
+    { n: 5, code:"ressources_utilisees", type:"multiple", required:false,
+      label:"Quelles ressources d'accompagnement utilisez-vous régulièrement&nbsp;? (plusieurs choix possibles)",
+      options:["Tutoriels vidéo","Webinaires","Documentation écrite","Support par mail / chat","Sessions individuelles"] },
+    { n: 6, code:"couverture_besoins", type:"single", required:true,
+      label:"Les fonctionnalités d'Easy'Qual couvrent-elles vos besoins pour piloter la démarche Qualiopi de vos clients&nbsp;?",
+      options:["Oui complètement","Partiellement","Non"] },
+    { n:"6.1", code:"couverture_precision", type:"text", required:false, sub:true,
+      label:"Si «&nbsp;Partiellement&nbsp;» ou «&nbsp;Non&nbsp;», précisez ce qui vous manque&nbsp;:",
+      maxlength:1000,
+      showIf:{ code:"couverture_besoins", values:["Partiellement","Non"] } },
+    { n: 7, code:"frequence_usage", type:"single", required:true,
+      label:"À quelle fréquence utilisez-vous Easy'Qual&nbsp;?",
+      options:["Tous les jours","Plusieurs fois par semaine","Une fois par semaine","Plus rarement"] },
+    { n: 8, code:"recommandation", type:"nps", required:true,
+      label:"Quelle est la probabilité que vous recommandiez Easy'Qual à un autre consultant&nbsp;?",
+      minLabel:"Pas du tout probable", maxLabel:"Très probable" },
+    { n: 9, code:"amelioration_prioritaire", type:"text", required:false,
+      label:"Quelle fonctionnalité ou amélioration vous ferait gagner le plus de temps&nbsp;?",
+      maxlength:1500 },
+    { n: 10, code:"expression_libre", type:"text", required:false, freeExpression:true,
+      label:"Espace d'expression libre&nbsp;: un sujet, une remarque ou une idée que vous souhaitez partager&nbsp;?",
+      maxlength:3000 }
+  ]
+};
+
+const state = {};
+const form = document.getElementById('surveyForm');
+const STAR_CAPTIONS = ["","Très insatisfait","Insatisfait","Correct","Satisfait","Très satisfait"];
+
+function el(tag, cls, html){ const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; }
+function starSVG(){ return '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 2.5l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 18.9 6.1 21l1.2-6.5L2.5 9.9l6.6-.9z"/></svg>'; }
+function checkSVG(){ return '<svg class="ind__chk" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'; }
+
+function buildQuestion(q){
+  const card = el('div','q' + (q.sub?' is-sub':''));
+  card.id = 'q_'+q.code;
+  card.dataset.code = q.code;
+  if(q.showIf){ card.classList.add('cond'); }
+
+  const head = el('div','q__head');
+  head.appendChild(el('span','q__num', String(q.n)));
+  head.appendChild(el('span','q__label', q.label + (q.required?' <span class="star">*</span>':'')));
+  card.appendChild(head);
+
+  const body = el('div','q__body');
+  body.appendChild(renderField(q));
+  card.appendChild(body);
+  card.appendChild(el('div','q__err','Merci de répondre à cette question.'));
+  return card;
+}
+
+function renderField(q){
+  if(q.type==='stars')    return fieldStars(q);
+  if(q.type==='nps')      return fieldNps(q);
+  if(q.type==='single')   return fieldChoice(q,false);
+  if(q.type==='multiple') return fieldChoice(q,true);
+  if(q.type==='grid')     return fieldGrid(q);
+  if(q.type==='text')     return fieldText(q);
+}
+
+function fieldStars(q){
+  const wrap = el('div');
+  const row = el('div','stars');
+  const cap = el('div','stars-caption','');
+  for(let i=1;i<=5;i++){
+    const b = el('button','star-btn'); b.type='button'; b.innerHTML=starSVG(); b.dataset.v=i;
+    b.setAttribute('aria-label', i+' / 5');
+    b.addEventListener('mouseenter',()=>paintStars(row,i));
+    b.addEventListener('mouseleave',()=>paintStars(row,state[q.code]||0));
+    b.addEventListener('click',()=>{ state[q.code]=i; paintStars(row,i); cap.textContent=STAR_CAPTIONS[i]; clearErr(q.code); updateProgress(); });
+    row.appendChild(b);
+  }
+  wrap.appendChild(row); wrap.appendChild(cap);
+  return wrap;
+}
+function paintStars(row,v){ [...row.children].forEach((b,idx)=>b.classList.toggle('on', idx<v)); }
+
+function fieldNps(q){
+  const wrap = el('div');
+  const row = el('div','nps');
+  for(let i=0;i<=10;i++){
+    const b = el('button','nps-btn',String(i)); b.type='button'; b.dataset.v=i;
+    b.addEventListener('click',()=>{ state[q.code]=i; [...row.children].forEach(x=>x.classList.toggle('on', +x.dataset.v===i)); clearErr(q.code); updateProgress(); });
+    row.appendChild(b);
+  }
+  wrap.appendChild(row);
+  const scale = el('div','nps-scale'); scale.appendChild(el('span',null,q.minLabel||'0')); scale.appendChild(el('span',null,q.maxLabel||'10'));
+  wrap.appendChild(scale);
+  return wrap;
+}
+
+function fieldChoice(q,multi){
+  const wrap = el('div','opts');
+  q.options.forEach(opt=>{
+    const lab = el('label','opt');
+    const input = el('input'); input.type = multi?'checkbox':'radio'; input.name=q.code; input.value=opt;
+    const ind = el('span','ind '+(multi?'ind--check':'ind--radio'));
+    ind.innerHTML = multi ? checkSVG() : '<span class="ind__dot"></span>';
+    lab.appendChild(input); lab.appendChild(ind); lab.appendChild(el('span','opt__txt',opt));
+    input.addEventListener('change',()=>{
+      if(multi){
+        const sel = [...wrap.querySelectorAll('input:checked')].map(i=>i.value);
+        state[q.code] = sel;
+        wrap.querySelectorAll('.opt').forEach(o=>o.classList.toggle('on', o.querySelector('input').checked));
+      } else {
+        state[q.code] = opt;
+        wrap.querySelectorAll('.opt').forEach(o=>o.classList.toggle('on', o.querySelector('input').checked));
+        handleConditional(q.code, opt);
+      }
+      clearErr(q.code); updateProgress();
+    });
+    wrap.appendChild(lab);
+  });
+  return wrap;
+}
+
+function fieldGrid(q){
+  const wrap = el('div');
+  wrap.appendChild(el('div','grid-hint','Les réponses ont une intensité croissante de gauche à droite.'));
+  const scroll = el('div','grid-scroll');
+  const table = el('table','grid');
+  const thead = el('thead'); const trh = el('tr'); trh.appendChild(el('th','rowhead',''));
+  q.columns.forEach(c=>trh.appendChild(el('th',null,c))); thead.appendChild(trh); table.appendChild(thead);
+  const tbody = el('tbody');
+  state[q.code] = state[q.code] || {};
+  q.rows.forEach(r=>{
+    const tr = el('tr'); tr.appendChild(el('td','rowhead',r.label));
+    q.columns.forEach(c=>{
+      const td = el('td');
+      const dot = el('span','cell-radio'); dot.setAttribute('role','radio'); dot.setAttribute('aria-label', r.label+' : '+c); dot.tabIndex=0;
+      const pick=()=>{ state[q.code][r.code]=c; tr.querySelectorAll('.cell-radio').forEach(d=>d.classList.remove('on')); dot.classList.add('on'); clearErr(q.code); updateProgress(); };
+      dot.addEventListener('click',pick);
+      dot.addEventListener('keydown',e=>{ if(e.key===' '||e.key==='Enter'){e.preventDefault();pick();} });
+      td.appendChild(dot); tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody); scroll.appendChild(table); wrap.appendChild(scroll);
+  return wrap;
+}
+
+function fieldText(q){
+  const wrap = el('div');
+  const ta = el('textarea'); ta.name=q.code; if(q.maxlength) ta.maxLength=q.maxlength;
+  ta.placeholder = q.freeExpression ? 'Exprimez-vous librement…' : 'Votre réponse…';
+  const cc = el('div','charcount', q.maxlength?('0 / '+q.maxlength):'');
+  ta.addEventListener('input',()=>{ state[q.code]=ta.value.trim()?ta.value:undefined; if(q.maxlength) cc.textContent=ta.value.length+' / '+q.maxlength; clearErr(q.code); updateProgress(); });
+  wrap.appendChild(ta); if(q.maxlength) wrap.appendChild(cc);
+  return wrap;
+}
+
+function handleConditional(sourceCode, value){
+  SURVEY.questions.forEach(q=>{
+    if(q.showIf && q.showIf.code===sourceCode){
+      const card = document.getElementById('q_'+q.code);
+      const show = q.showIf.values.includes(value);
+      card.classList.toggle('show', show);
+      if(!show){ const ta=card.querySelector('textarea'); if(ta){ta.value='';} state[q.code]=undefined; }
+    }
+  });
+}
+
+function isAnswered(q){
+  const v = state[q.code];
+  if(q.type==='grid'){ return v && Object.keys(v).length===q.rows.length; }
+  if(q.type==='multiple'){ return Array.isArray(v) && v.length>0; }
+  return v!==undefined && v!=='' && v!==null;
+}
+function visibleQuestions(){
+  return SURVEY.questions.filter(q=>{
+    if(!q.showIf) return true;
+    return q.showIf.values.includes(state[q.showIf.code]);
+  });
+}
+function updateProgress(){
+  const vis = visibleQuestions();
+  const done = vis.filter(isAnswered).length;
+  document.getElementById('progressBar').style.width = Math.round(done/vis.length*100)+'%';
+}
+
+function clearErr(code){ const c=document.getElementById('q_'+code); if(c) c.classList.remove('error'); }
+
+function validate(){
+  let firstErr=null;
+  visibleQuestions().forEach(q=>{
+    if(q.required && !isAnswered(q)){
+      const c=document.getElementById('q_'+q.code); c.classList.add('error'); if(!firstErr) firstErr=c;
+    }
+  });
+  return firstErr;
+}
+
+function buildPayload(){
+  const answers={};
+  visibleQuestions().forEach(q=>{ if(isAnswered(q)) answers[q.code]=state[q.code]; });
+  
+  let score = 0;
+  if (state.satisfaction_globale !== undefined) {
+      score = parseFloat(state.satisfaction_globale);
+  } else if (state.recommandation !== undefined) {
+      score = parseFloat(state.recommandation);
+  }
+
+  return {
+    type: SURVEY.respondent === 'consultant' ? 'consultant' : 'client',
+    respondent_name: state.respondent_name || 'Anonyme',
+    consultant_name: state.consultant_name || '',
+    score: score,
+    details: answers
+  };
+}
+
+let LAST_PAYLOAD=null;
+form.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const err=validate();
+  const banner=document.getElementById('formError');
+  if(err){ banner.classList.add('show'); err.scrollIntoView({behavior:'smooth',block:'center'}); return; }
+  banner.classList.remove('show');
+  LAST_PAYLOAD=buildPayload();
+
+  if(SUBMIT_ENDPOINT){
+    try{
+      await fetch(SUBMIT_ENDPOINT,{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4d29yd2hwY3lmdXF3dXhvY3h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1OTAwMTgsImV4cCI6MjA4NTE2NjAxOH0.VCD3Cs-syfEdTIAIms9VRBOsYI0PrRn8IxR9oXgOtQo',
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4d29yd2hwY3lmdXF3dXhvY3h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1OTAwMTgsImV4cCI6MjA4NTE2NjAxOH0.VCD3Cs-syfEdTIAIms9VRBOsYI0PrRn8IxR9oXgOtQo'
+        },
+        body:JSON.stringify(LAST_PAYLOAD)
+      });
+    }catch(_){ /* en cas d'échec réseau on affiche quand même la confirmation locale */ }
+  }
+  form.style.display='none';
+  document.querySelector('.req-hint').style.display='none';
+  const done=document.getElementById('doneScreen'); done.classList.add('show');
+  done.scrollIntoView({behavior:'smooth',block:'start'});
+  console.log('Easy\'Qual — réponses :', LAST_PAYLOAD);
+});
+
+document.getElementById('dlBtn').addEventListener('click',()=>{
+  const blob=new Blob([JSON.stringify(LAST_PAYLOAD,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='reponses_'+SURVEY.id+'.json'; a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById('copyBtn').addEventListener('click',async (e)=>{
+  try{ await navigator.clipboard.writeText(JSON.stringify(LAST_PAYLOAD,null,2)); e.target.textContent='Copié ✓'; setTimeout(()=>e.target.textContent='Copier le récapitulatif',1800);}catch(_){}
+});
+
+/* ===================== INIT ===================== */
+SURVEY.questions.forEach(q=> form.appendChild(buildQuestion(q)) );
+const actions=el('div','actions');
+const errBanner=el('div','form-error'); errBanner.id='formError'; errBanner.textContent='Certaines questions obligatoires sont incomplètes — elles sont signalées en rouge.';
+const submit=el('button','submit','Envoyer mes réponses'); submit.type='submit';
+actions.appendChild(errBanner); actions.appendChild(submit);
+form.appendChild(actions);
+updateProgress();
+</script>
+</body>
+</html>

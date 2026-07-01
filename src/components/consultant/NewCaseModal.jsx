@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../../supabaseClient'
-import { Building, Mail, CheckCircle, AlertCircle, Lock } from 'lucide-react'
+import { Building, Mail, CheckCircle, AlertCircle, Lock, X } from 'lucide-react'
 
 export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onSuccess }) {
     const [actionLoading, setActionLoading] = useState(false)
@@ -9,8 +9,10 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
     const [newCaseData, setNewCaseData] = useState({
         tenantName: '',
         siret: '',
+        clientFirstName: '', // Nouveau
+        clientLastName: '',  // Nouveau
         clientEmail: '',
-        password: '', // Nouveau champ
+        password: '',
         category: 'mono-site',
         auditTypes: [],
         trainingCategories: []
@@ -37,15 +39,22 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
             const cleanedTenantName = newCaseData.tenantName.trim()
 
             // 🔍 PRE-CHECK 1: SIRET and Email in database (Prevent spending credits for nothing)
+            const cleanedSiret = newCaseData.siret.trim()
+            // Build the filter safely: only check SIRET if it is provided, and
+            // escape any comma that would break the PostgREST .or() syntax.
+            const orFilters = [`client_email.eq.${cleanedEmail}`]
+            if (cleanedSiret) {
+                orFilters.unshift(`siret.eq.${cleanedSiret.replace(/,/g, '')}`)
+            }
             const { data: existingTenant, error: checkError } = await supabase
                 .from('tenants')
                 .select('id, siret, client_email')
-                .or(`siret.eq.${newCaseData.siret.trim()},client_email.eq.${cleanedEmail}`)
+                .or(orFilters.join(','))
                 .maybeSingle()
 
             if (checkError) console.warn("Pre-check failed:", checkError)
             if (existingTenant) {
-                if (existingTenant.siret === newCaseData.siret.trim()) throw new Error("Ce numéro SIRET est déjà utilisé par un autre dossier.")
+                if (cleanedSiret && existingTenant.siret === cleanedSiret) throw new Error("Ce numéro SIRET est déjà utilisé par un autre dossier.")
                 if (existingTenant.client_email === cleanedEmail) throw new Error("Cet email est déjà associé à un autre dossier client.")
             }
 
@@ -72,7 +81,7 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
 
             // 📧 PHASE 2: Auth account creation (Edge Function)
             try {
-                console.log("Calling invite-client for:", cleanedEmail);
+
                 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
                 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
                 const functionUrl = `${supabaseUrl}/functions/v1/invite-client`;
@@ -88,7 +97,9 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                         email: cleanedEmail,
                         password: cleanedPassword,
                         tenant_id: rpcData.tenant_id,
-                        tenant_name: cleanedTenantName
+                        tenant_name: cleanedTenantName,
+                        first_name: newCaseData.clientFirstName.trim(),
+                        last_name: newCaseData.clientLastName.trim()
                     })
                 });
 
@@ -105,6 +116,8 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 setNewCaseData({
                     tenantName: '',
                     siret: '',
+                    clientFirstName: '',
+                    clientLastName: '',
                     clientEmail: '',
                     password: '',
                     category: 'mono-site',
@@ -112,8 +125,8 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                     trainingCategories: []
                 })
 
-                if (onSuccess) onSuccess()
-                setTimeout(() => { setSuccessMsg(null); onClose(); }, 2500)
+                if (onSuccess) onSuccess(`Dossier créé et compte client activé pour ${cleanedEmail} !`)
+                setTimeout(() => { setSuccessMsg(null); onClose(); }, 2000)
 
             } catch (authErr) {
                 console.error('CRITICAL: Auth creation failed after DB creation. Rolling back...', authErr)
@@ -126,7 +139,7 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                         p_consultant_id: user.id,
                         p_cost: cost
                     })
-                    console.log("Rollback completed successfully.")
+
                 } catch (rollbackErr) {
                     console.error("Rollback failed!", rollbackErr)
                 }
@@ -154,9 +167,17 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
     if (!isOpen) return null
 
     return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center z-50 px-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg transform transition-all p-6">
-                <div className="mb-6 border-b border-gray-100 pb-4">
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm h-full w-full flex items-center justify-center z-50 px-4 py-8">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-full overflow-y-auto custom-scrollbar transform transition-all p-6 relative">
+                
+                <button
+                    onClick={onClose}
+                    className="absolute top-5 right-5 p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                    <X className="h-5 w-5" />
+                </button>
+
+                <div className="mb-6 border-b border-gray-100 pb-4 pr-10">
                     <h3 className="text-xl font-bold text-gray-900">Nouveau Dossier Qualiopi</h3>
                     <p className="text-sm text-gray-500 mt-1">
                         Cette action débitera votre compte de crédits.
@@ -225,6 +246,29 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                             />
                         </div>
 
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[13px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Prénom du Client</label>
+                                <input
+                                    type="text"
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all placeholder-gray-400 text-sm font-semibold"
+                                    placeholder="Prénom"
+                                    value={newCaseData.clientFirstName}
+                                    onChange={(e) => setNewCaseData({ ...newCaseData, clientFirstName: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[13px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Nom du Client</label>
+                                <input
+                                    type="text"
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all placeholder-gray-400 text-sm font-semibold"
+                                    placeholder="Nom"
+                                    value={newCaseData.clientLastName}
+                                    onChange={(e) => setNewCaseData({ ...newCaseData, clientLastName: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
                         <div>
                             <label className="block text-[13px] font-bold text-gray-700 mb-2 uppercase tracking-wide">Numéro SIRET</label>
                             <input
@@ -249,7 +293,12 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                                             const updated = current.includes(type)
                                                 ? current.filter(t => t !== type)
                                                 : [...current, type]
-                                            setNewCaseData({ ...newCaseData, auditTypes: updated })
+                                            
+                                            // Sort consistently
+                                            const order = ['Audit Initial', 'Audit Surveillance', 'Audit Renouvellement']
+                                            const sorted = updated.sort((a, b) => order.indexOf(a) - order.indexOf(b))
+
+                                            setNewCaseData({ ...newCaseData, auditTypes: sorted })
                                         }}
                                         className={`px-2 py-2 text-[10px] sm:text-xs font-bold rounded-lg border-2 transition-all ${newCaseData.auditTypes.includes(type)
                                             ? 'border-purple-600 bg-purple-50 text-purple-700'

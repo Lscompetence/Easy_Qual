@@ -4,7 +4,7 @@ import { Loader2, AlertCircle } from 'lucide-react';
 
 const getYoutubeId = (url) => {
     if (!url) return null;
-    const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+    const regExp = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/;
     const match = url.match(regExp);
     return (match && match[1]) ? match[1] : null;
 };
@@ -31,6 +31,14 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
         return t
     }
 
+    const getBadgeColors = (type) => {
+        const t = String(type || '').toLowerCase();
+        if (t.includes('initial')) return 'bg-[#fdf6f0] text-[#cc6d3e] border-[#cc6d3e]/20';
+        if (t.includes('surveillance')) return 'bg-[#f0f7ff] text-[#2563eb] border-[#2563eb]/20';
+        if (t.includes('renouvellement')) return 'bg-[#f0fdf4] text-[#16a34a] border-[#16a34a]/20';
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    };
+
     useEffect(() => {
         if (!indicatorId) return;
 
@@ -40,7 +48,7 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
             setSignedUrl(null);
             try {
                 const normAudit = normalizeAudit(auditType);
-                console.log(`[UniversalPlayer] Target: Ind=${indicatorId}, Audit=${normAudit}, Consultant=${consultantId}`);
+
                 
                 const { data, error: fetchError } = await supabase
                     .from('consultant_resources')
@@ -55,7 +63,7 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
                 if (data) {
                     setResource(data);
                     if (data.source_type === 'upload' && data.file_path) {
-                        console.log(`[UniversalPlayer] Attempting to sign path: ${data.file_path}`);
+
                         const { data: signData, error: signError } = await supabase.storage
                             .from('consultant-assets')
                             .createSignedUrl(data.file_path, 3600);
@@ -116,7 +124,7 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
                     src={signedUrl}
                     preload="metadata"
                 />
-                <div className="absolute top-6 left-6 bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-xl border border-white/20">
+                <div className={`absolute top-6 left-6 font-poppins text-[10px] px-4 py-2 rounded-full font-bold uppercase tracking-widest shadow-xl border ${getBadgeColors(auditType)}`}>
                     Vidéo Consultant ({auditType.toUpperCase()})
                 </div>
             </div>
@@ -135,7 +143,7 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                         allowFullScreen className="w-full h-full"
                     ></iframe>
-                    <div className="absolute top-6 left-6 bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-xl border border-white/20">
+                    <div className={`absolute top-6 left-6 font-poppins text-[10px] px-4 py-2 rounded-full font-bold uppercase tracking-widest shadow-xl border ${getBadgeColors(auditType)}`}>
                         EXTRAIT {auditType.toUpperCase()}
                     </div>
                 </div>
@@ -155,7 +163,7 @@ export default function UniversalPlayer({ indicatorId, consultantId, auditType =
                         allowFullScreen title="Vimeo player"
                         className="w-full h-full"
                     ></iframe>
-                    <div className="absolute top-6 left-6 bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-xl border border-white/20">
+                    <div className={`absolute top-6 left-6 font-poppins text-[10px] px-4 py-2 rounded-full font-bold uppercase tracking-widest shadow-xl border ${getBadgeColors(auditType)}`}>
                         VIMEO {auditType.toUpperCase()}
                     </div>
                 </div>

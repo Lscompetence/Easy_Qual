@@ -1,14 +1,82 @@
-import { useState, useEffect } from 'react'
+/* eslint-disable */
+import { useState, useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../supabaseClient'
-import { LogOut, ChevronDown, ChevronRight, CheckCircle, Circle, Video, MessageSquare, LayoutDashboard, GraduationCap, X } from 'lucide-react'
+import { LogOut, ChevronDown, ChevronRight, CheckCircle, Circle, Video, MessageSquare, LayoutDashboard, GraduationCap, X, LifeBuoy, Archive, FileText, ClipboardList, Award } from 'lucide-react'
+import FeedbackModal from '../shared/FeedbackModal'
+import { getCriterionColor } from '../../utils/theme'
 
 export default function ClientSidebar({ caseData, indicators, indicatorStates, consultantName = '', unreadCount = 0, upcomingCount = 0, isOpen, onClose }) {
     const { user, profile, logout } = useAuth()
     const location = useLocation()
     const navigate = useNavigate()
     const [formationOpen, setFormationOpen] = useState(true)
+    const [feedbackOpen, setFeedbackOpen] = useState(false)
+
+    // ─── Badge "Historique toasts" : notifications consultant non lues ──────────
+    const [unreadNotifs, setUnreadNotifs] = useState(0)
+    const pathRef = useRef(location.pathname)
+    pathRef.current = location.pathname
+    const seenKey = user ? `eq_client_notifs_seen_${user.id}` : null
+
+    useEffect(() => {
+        if (!user) return
+        let channel
+        let active = true
+
+        const computeUnread = async (cid) => {
+            const lastSeen = (seenKey && localStorage.getItem(seenKey)) || '1970-01-01T00:00:00Z'
+            const { count } = await supabase
+                .from('case_notifications')
+                .select('*', { count: 'exact', head: true })
+                .eq('case_id', cid)
+                .like('type', 'consultant_%')
+                .gt('created_at', lastSeen)
+            if (active) setUnreadNotifs(count || 0)
+        }
+
+        const init = async () => {
+            let caseId = caseData?.id
+            if (!caseId) {
+                const { data: tenants } = await supabase.from('tenants').select('id').eq('owner_id', user.id)
+                if (!tenants || tenants.length === 0) return
+                const { data: cases } = await supabase
+                    .from('cases').select('id')
+                    .eq('tenant_id', tenants[0].id)
+                    .order('created_at', { ascending: false }).limit(1)
+                if (!cases || cases.length === 0) return
+                caseId = cases[0].id
+            }
+            await computeUnread(caseId)
+
+            channel = supabase
+                .channel(`client_sidebar_notifs:${caseId}`)
+                .on('postgres_changes', {
+                    event: 'INSERT', schema: 'public', table: 'case_notifications',
+                    filter: `case_id=eq.${caseId}`
+                }, (payload) => {
+                    if (!payload.new.type?.startsWith('consultant_')) return
+                    // Si le client consulte déjà la page, on marque comme vu au lieu d'incrémenter
+                    if (pathRef.current === '/client/toasts-history') {
+                        if (seenKey) localStorage.setItem(seenKey, new Date().toISOString())
+                    } else {
+                        setUnreadNotifs(prev => prev + 1)
+                    }
+                })
+                .subscribe()
+        }
+        init()
+        return () => { active = false; if (channel) supabase.removeChannel(channel) }
+    }, [user, caseData?.id])
+
+    // Remise à zéro du badge dès que le client ouvre l'historique
+    useEffect(() => {
+        if (location.pathname === '/client/toasts-history' && seenKey) {
+            localStorage.setItem(seenKey, new Date().toISOString())
+            setUnreadNotifs(0)
+        }
+    }, [location.pathname, seenKey])
 
     // Group indicators by criterion
     const criteriaMap = {}
@@ -79,12 +147,9 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
             <aside className={`fixed inset-y-0 left-0 lg:sticky lg:top-0 w-[240px] bg-white h-screen flex flex-col z-50 flex-shrink-0 border-r border-gray-100 text-[13px] font-sans transition-transform duration-300 transform lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 {/* Logo */}
                 <div className="h-16 flex items-center px-6 border-b border-gray-100 justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 bg-[#cc6d3e] rounded-xl flex items-center justify-center shadow-lg shadow-[#cc6d3e]/20">
-                            <GraduationCap className="h-5 w-5 text-white" />
-                        </div>
-                        <span className="font-black text-gray-900 text-lg tracking-tight">Easy<span className="text-[#cc6d3e]">'</span>Qual</span>
-                    </div>
+                    <Link to="/client/dashboard" className="flex items-center">
+                        <img src="/logo.png" alt="Easy'Qual" className="h-8 w-auto object-contain" />
+                    </Link>
                     {/* Close button for mobile */}
                     <button onClick={onClose} className="lg:hidden p-2 text-gray-400 hover:text-gray-600">
                         <X className="h-5 w-5" />
@@ -103,6 +168,20 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
                         >
                             <LayoutDashboard className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/dashboard' ? 'text-[#cc6d3e]' : ''}`} />
                             Vue d'ensemble
+                        </Link>
+                    </div>
+
+                    {/* Résultat d'audit */}
+                    <div className="px-4 mb-2">
+                        <Link
+                            to="/client/audit"
+                            className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-bold transition-all ${location.pathname === '/client/audit'
+                                ? 'bg-[#faf1ec] text-[#cc6d3e] shadow-sm shadow-[#cc6d3e]/5 border border-[#f5e2d6]'
+                                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
+                        >
+                            <Award className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/audit' ? 'text-[#cc6d3e]' : 'text-gray-400'}`} />
+                            Synthèse pré-audit
                         </Link>
                     </div>
 
@@ -136,22 +215,20 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
                                         <Link
                                             key={criterion.id}
                                             to={`/client/criterion/${criterion.id}`}
-                                            className={`group flex items-center gap-3 px-3 py-2 rounded-xl transition-all relative ${isActive ? 'bg-[#faf1ec]/60 text-[#cc6d3e] border border-[#f5e2d6]/40' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                                                }`}
+                                            className={`group flex items-center gap-3 px-3 py-2 rounded-xl transition-all relative ${!isActive ? 'text-gray-500 hover:text-gray-900 hover:bg-gray-50' : ''}`}
+                                            style={isActive ? { backgroundColor: getCriterionColor(criterion.id).light, color: getCriterionColor(criterion.id).primary, borderColor: getCriterionColor(criterion.id).border, borderWidth: '1px' } : {}}
                                         >
                                             {/* Dot on line */}
                                             <div className={`absolute -left-[17.5px] h-2.5 w-2.5 rounded-full border-2 bg-white z-10 transition-colors ${allDone ? 'border-emerald-500' :
-                                                isActive ? 'border-[#cc6d3e]' : 'border-gray-200 group-hover:border-gray-300'
-                                                }`} />
+                                                (!isActive ? 'border-gray-200 group-hover:border-gray-300' : '')
+                                                }`} style={isActive && !allDone ? { borderColor: getCriterionColor(criterion.id).primary } : {}} />
 
                                             {allDone ? (
                                                 <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
                                             ) : (
-                                                <Circle className={`h-4 w-4 flex-shrink-0 ${isActive ? 'text-[#cc6d3e]' : 'text-gray-300 group-hover:text-gray-400'}`} />
+                                                <Circle className={`h-4 w-4 flex-shrink-0 ${!isActive ? 'text-gray-300 group-hover:text-gray-400' : ''}`} style={isActive ? { color: getCriterionColor(criterion.id).primary } : {}} />
                                             )}
-                                            <span className={`truncate text-xs font-bold ${allDone ? 'text-emerald-600' :
-                                                isActive ? 'text-[#cc6d3e]' : 'text-gray-500'
-                                                }`}>
+                                            <span className={`truncate text-xs font-bold ${allDone ? 'text-emerald-600' : (!isActive ? 'text-gray-500' : '')}`} style={isActive && !allDone ? { color: getCriterionColor(criterion.id).primary } : {}}>
                                                 C{criterion.id} : {criterion.label}
                                             </span>
                                         </Link>
@@ -193,6 +270,44 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
                                     </span>
                                 )}
                             </Link>
+
+                            <Link
+                                to="/client/reclamations"
+                                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-bold transition-all relative ${location.pathname === '/client/reclamations'
+                                    ? 'bg-[#faf1ec] text-[#cc6d3e] border border-[#f5e2d6]'
+                                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                                    }`}
+                            >
+                                <Archive className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/reclamations' ? 'text-[#cc6d3e]' : 'text-gray-400'}`} />
+                                <span className="flex-1">Mes Réclamations</span>
+                            </Link>
+
+                            <Link
+                                to="/client/questionnaires"
+                                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-bold transition-all relative ${location.pathname === '/client/questionnaires'
+                                    ? 'bg-[#faf1ec] text-[#cc6d3e] border border-[#f5e2d6]'
+                                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                                    }`}
+                            >
+                                <FileText className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/questionnaires' ? 'text-[#cc6d3e]' : 'text-gray-400'}`} />
+                                <span className="flex-1">Questionnaires</span>
+                            </Link>
+
+                            <Link
+                                to="/client/toasts-history"
+                                className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-bold transition-all relative ${location.pathname === '/client/toasts-history'
+                                    ? 'bg-[#faf1ec] text-[#cc6d3e] border border-[#f5e2d6]'
+                                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                                    }`}
+                            >
+                                <ClipboardList className={`h-5 w-5 flex-shrink-0 ${location.pathname === '/client/toasts-history' ? 'text-[#cc6d3e]' : 'text-gray-400'}`} />
+                                <span className="flex-1">Historique toasts</span>
+                                {unreadNotifs > 0 && (
+                                    <span className="h-5 min-w-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center shadow-lg shadow-red-500/20">
+                                        {unreadNotifs > 99 ? '99+' : unreadNotifs}
+                                    </span>
+                                )}
+                            </Link>
                         </div>
                     </div>
                 </div>
@@ -230,6 +345,7 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
                     </div>
                 </div>
             </aside>
+            <FeedbackModal isOpen={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
         </>
     )
 }

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { useNavigate } from 'react-router-dom'
-import { Search, Filter, Plus, FileText, CheckCircle, AlertTriangle, MoreVertical, Building, Mail, Lock, RefreshCw } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { Search, Filter, Plus, FileText, CheckCircle, AlertTriangle, MoreVertical, Building, Mail, Lock, RefreshCw, X, XCircle, Info } from 'lucide-react'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
 import NewCaseModal from '../../components/consultant/NewCaseModal'
@@ -12,10 +12,14 @@ import DeleteModal from '../../components/DeleteModal'
 export default function ConsultantCases() {
     const { user } = useAuth()
     const navigate = useNavigate()
+    const location = useLocation()
 
     const [cases, setCases] = useState([])
     const [loading, setLoading] = useState(true)
-    const [searchQuery, setSearchQuery] = useState('')
+    const [searchQuery, setSearchQuery] = useState(() => {
+        const params = new URLSearchParams(location.search)
+        return params.get('search') || ''
+    })
     const [filterStatus, setFilterStatus] = useState('all')
     const [showMobileMenu, setShowMobileMenu] = useState(false)
 
@@ -33,6 +37,127 @@ export default function ConsultantCases() {
     // Update Modal State
     const [updateModalOpen, setUpdateModalOpen] = useState(false)
     const [caseToUpdate, setCaseToUpdate] = useState(null)
+
+    // Email Access Modal State
+    const [showEmailConfirmModal, setShowEmailConfirmModal] = useState(false)
+    const [selectedCaseForEmail, setSelectedCaseForEmail] = useState(null)
+    const [emailSending, setEmailSending] = useState(false)
+    const [toasts, setToasts] = useState([])
+
+    const showToast = useCallback((message, type = 'success') => {
+        const id = Date.now() + Math.random().toString(36).substr(2, 9)
+        setToasts(prev => [...prev, { id, message, type, created_at: new Date().toISOString() }])
+        setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id))
+        }, 4000)
+    }, [])
+
+    const renderLocalToasts = () => {
+        return (
+            <div className="fixed top-20 right-5 z-[9999] flex flex-col gap-3 max-w-sm pointer-events-none">
+                {toasts.map(t => {
+                    const iconMap = {
+                        success: <CheckCircle className="h-5 w-5 text-emerald-400" />,
+                        error: <XCircle className="h-5 w-5 text-rose-400" />,
+                        warning: <AlertTriangle className="h-5 w-5 text-amber-400" />,
+                        info: <Info className="h-5 w-5 text-indigo-400" />
+                    }
+                    const borderMap = {
+                        success: 'border-l-4 border-l-emerald-500 border-slate-800/80',
+                        error: 'border-l-4 border-l-rose-500 border-slate-800/80',
+                        warning: 'border-l-4 border-l-amber-500 border-slate-800/80',
+                        info: 'border-l-4 border-l-indigo-500 border-slate-800/80'
+                    }
+                    const titleMap = {
+                        success: 'Succès',
+                        error: 'Erreur',
+                        warning: 'Avertissement',
+                        info: 'Notification'
+                    }
+                    const icon = iconMap[t.type] || iconMap.info
+                    const borderClass = borderMap[t.type] || borderMap.info
+                    const title = titleMap[t.type] || titleMap.info
+                    const timeStr = t.created_at ? new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+                    return (
+                        <div
+                            key={t.id}
+                            className={`pointer-events-auto flex gap-4 bg-slate-900/95 text-white p-4 rounded-xl shadow-2xl border border-slate-800/50 backdrop-blur-md animate-in slide-in-from-top duration-300 w-80 sm:w-96 transition-all ${borderClass}`}
+                        >
+                            <div className="flex-shrink-0 mt-0.5">
+                                {icon}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                    <span className="text-sm font-bold tracking-wide text-slate-200">
+                                        {title}
+                                    </span>
+                                    {timeStr && (
+                                        <span className="text-[10px] text-slate-500 font-medium">
+                                            {timeStr}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-line font-medium break-words">
+                                    {t.message}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
+                                className="flex-shrink-0 text-slate-500 hover:text-slate-200 transition-colors p-1 rounded-lg hover:bg-slate-800"
+                                aria-label="Fermer"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    )
+                })}
+            </div>
+        )
+    }
+
+    const handleInitiateSendEmail = (caseItem) => {
+        setSelectedCaseForEmail(caseItem)
+        setShowEmailConfirmModal(true)
+        setOpenMenuId(null) // Close dropdown
+    }
+
+    const confirmSendEmail = async () => {
+        if (!selectedCaseForEmail) return
+
+        const tenant = selectedCaseForEmail.tenants
+        if (!tenant || !tenant.client_email) {
+            showToast("Email client manquant dans ce dossier.", "error")
+            return
+        }
+
+        try {
+            setEmailSending(true)
+            
+            const { data, error } = await supabase.functions.invoke('invite-client', {
+                body: {
+                    email: tenant.client_email,
+                    password: tenant.initial_password,
+                    tenant_id: selectedCaseForEmail.tenant_id,
+                    tenant_name: tenant.name,
+                    first_name: selectedCaseForEmail.client_first_name || '',
+                    last_name: selectedCaseForEmail.client_last_name || ''
+                }
+            })
+
+            if (error) throw error
+            if (data?.error) throw new Error(data.error)
+
+            showToast(`Les accès ont été envoyés avec succès à ${tenant.client_email} ✓`, "success")
+            setShowEmailConfirmModal(false)
+        } catch (err) {
+            console.error('Error sending credentials:', err)
+            showToast(`L'envoi des accès a échoué : ${err.message}`, "error")
+        } finally {
+            setEmailSending(false)
+            setSelectedCaseForEmail(null)
+        }
+    }
 
     const handleUpdateClick = (c) => {
         setCaseToUpdate(c)
@@ -83,48 +208,18 @@ export default function ConsultantCases() {
         }
     }
 
-    useEffect(() => {
-        if (user) {
-            fetchCases()
-            fetchWallet()
 
-            // Realtime subscription for cases list
-            const channel = supabase
-                .channel(`consultant_cases_${user.id}`)
-                .on('postgres_changes', {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'cases'
-                }, (payload) => {
-                    console.log('Case list realtime sync:', payload.new.id)
-                    setCases(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c))
-                })
-                .on('postgres_changes', {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'cases'
-                }, () => {
-                    // Refetch if a new case is added (to get relations correctly)
-                    fetchCases()
-                })
-                .subscribe()
 
-            return () => {
-                supabase.removeChannel(channel)
-            }
-        }
-    }, [user])
-
-    const fetchWallet = async () => {
+    const fetchWallet = useCallback(async () => {
         const { data } = await supabase
             .from('credits_wallet')
             .select('balance')
             .eq('consultant_id', user.id)
             .single()
         if (data) setWalletBalance(data.balance)
-    }
+    }, [user])
 
-    const fetchCases = async () => {
+    const fetchCases = useCallback(async () => {
         try {
             setLoading(true)
             const { data, error } = await supabase
@@ -142,7 +237,39 @@ export default function ConsultantCases() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
+
+    useEffect(() => {
+        if (user) {
+            fetchCases()
+            fetchWallet()
+
+            // Realtime subscription for cases list
+            const channel = supabase
+                .channel(`consultant_cases_${user.id}`)
+                .on('postgres_changes', {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'cases'
+                }, (payload) => {
+
+                    setCases(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c))
+                })
+                .on('postgres_changes', {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'cases'
+                }, () => {
+                    // Refetch if a new case is added (to get relations correctly)
+                    fetchCases()
+                })
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channel)
+            }
+        }
+    }, [user, fetchCases, fetchWallet])
 
     const filteredCases = cases.filter(c => {
         const matchesSearch = c.tenants?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -162,23 +289,7 @@ export default function ConsultantCases() {
         return matchesSearch && matchesStatus
     })
 
-    const getStatusColor = (status) => {
-        switch (status) {
-            case 'active': return 'bg-blue-50 text-blue-700'
-            case 'validated': return 'bg-green-50 text-green-700'
-            case 'draft': return 'bg-gray-100 text-gray-600'
-            default: return 'bg-amber-50 text-amber-700'
-        }
-    }
 
-    const getStatusLabel = (status) => {
-        switch (status) {
-            case 'active': return 'Non Terminé'
-            case 'validated': return 'Terminé'
-            case 'draft': return '—'
-            default: return '—'
-        }
-    }
 
     return (
         <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
@@ -302,6 +413,18 @@ export default function ConsultantCases() {
                                                                 {c.tenants?.initial_password || '—'}
                                                             </span>
                                                         </div>
+                                                        {c.tenants?.client_email && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleInitiateSendEmail(c);
+                                                                }}
+                                                                className="flex items-center justify-center gap-1.5 w-full bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/60 px-3 py-1.5 rounded-xl text-[10px] font-black transition-all active:scale-[0.98]"
+                                                            >
+                                                                <Mail className="h-3 w-3" />
+                                                                Renvoyer les accès
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 w-1/5" onClick={() => navigate(`/consultant/case/${c.id}`)}>
@@ -346,7 +469,19 @@ export default function ConsultantCases() {
                                                         </button>
 
                                                         {openMenuId === c.id && (
-                                                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-100 z-10 py-1 origin-top-right">
+                                                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-100 z-10 py-1 origin-top-right animate-in fade-in slide-in-from-top-1 duration-200">
+                                                                {c.tenants?.client_email && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation()
+                                                                            handleInitiateSendEmail(c)
+                                                                        }}
+                                                                        className="w-full text-left px-4 py-2 text-sm text-purple-700 hover:bg-purple-50 font-bold flex items-center gap-2 border-b border-gray-100 transition-colors"
+                                                                    >
+                                                                        <Mail className="h-4 w-4 text-purple-600" />
+                                                                        Renvoyer les accès
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation()
@@ -423,6 +558,48 @@ export default function ConsultantCases() {
                 caseData={caseToUpdate}
                 onSuccess={() => fetchCases()}
             />
+            {/* Modal: Email Confirmation */}
+            {showEmailConfirmModal && selectedCaseForEmail && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[999] animate-in fade-in duration-300">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-6 text-center">
+                            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-purple-100 mb-4">
+                                <Mail className="h-6 w-6 text-purple-600" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Envoyer les accès ?</h3>
+                            <p className="text-sm text-gray-500 mb-6 text-center">
+                                Êtes-vous sûr de vouloir envoyer les identifiants de connexion à <span className="font-bold">{selectedCaseForEmail.tenants?.name}</span> ({selectedCaseForEmail.tenants?.client_email}) ?
+                            </p>
+                            <div className="flex space-x-3">
+                                <button
+                                    onClick={() => {
+                                        setShowEmailConfirmModal(false)
+                                        setSelectedCaseForEmail(null)
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-colors text-sm"
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    onClick={confirmSendEmail}
+                                    disabled={emailSending}
+                                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-colors shadow-lg shadow-purple-500/30 flex items-center justify-center text-sm disabled:opacity-50"
+                                >
+                                    {emailSending ? (
+                                        <>
+                                            <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                                            Envoi...
+                                        </>
+                                    ) : (
+                                        'Envoyer'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {renderLocalToasts()}
         </div>
     )
 }

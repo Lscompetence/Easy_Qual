@@ -1,17 +1,18 @@
-import { useState, useEffect, useRef } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+/* eslint-disable react-hooks/exhaustive-deps */
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { getCriterionColor } from '../../utils/theme'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import {
-    CheckCircle, Clock, XCircle, CircleOff, AlertTriangle,
-    Upload, Download, FileText, ChevronDown, ChevronUp, Send, MessageSquare,
-    ArrowRight, CheckSquare, Check, Trash2, Video, Sun, Flag, Ban, PlayCircle, GraduationCap
-} from 'lucide-react'
+import { Sun, Flag, Ban, ChevronUp, ChevronDown, ChevronRight, AlertTriangle, Check, Trash2, Upload, Info, PlayCircle, FileText, CheckCircle, XCircle, ArrowRight, BookOpen, Clock, Play, Download, Search, AlertCircle, RefreshCw, Send, Image as ImageIcon, Link as LinkIcon, Paperclip, MoreVertical, ThumbsUp, MapPin, Building, Phone, Mail, Award, Users, Plus, Target, CheckSquare, Smile, MessageSquare, Menu, FileImage, Video, HelpCircle, FileCheck, CircleOff, Eye, X } from 'lucide-react'
 import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
+import SignatureModal from '../../components/shared/SignatureModal'
 import UniversalPlayer from '../../components/shared/UniversalPlayer'
 import StatusModal from '../../components/shared/StatusModal'
 import QuizModal from '../../components/shared/QuizModal'
+import PreAuditResult from '../../components/consultant/PreAuditResult'
+import { calculerPreAudit, cleMatriceCategorie, eliminatoiresPourType, CAT } from '../AuditPrototype/referentiel'
 import { jsPDF } from 'jspdf'
 
 const isInitialAudit = (type) => {
@@ -27,8 +28,428 @@ const normalizeAudit = (type) => {
     return str
 }
 
+const getAuditRank = (type) => {
+    const norm = normalizeAudit(type);
+    if (norm === 'initial') return 1;
+    if (norm === 'surveillance') return 2;
+    if (norm === 'renouvellement') return 3;
+    return 4;
+};
+
+const sortAuditTypes = (types) => {
+    return [...types].sort((a, b) => getAuditRank(a) - getAuditRank(b));
+};
+
+const getModalContent = (indId) => {
+    const sharedFiles = [
+        { name: "Bilan Annuel des Indicateurs de Résultats", file: "Modele_Bilan_Annuel_Indicateurs.xlsx" },
+        { name: "Checklist Site Internet & Communication", file: "Modele_Checklist_Site_Communication.xlsx" },
+        { name: "Correspondance RNCP & Indicateurs Certifiants", file: "Modele_Correspondance_RNCP.xlsx" },
+        { name: "Fiche de Certification Qualiopi (Partie Pédagogique)", file: "Modele_Fiche_Certification__Pedagogique.docx" },
+        { name: "Fiche de Certification Qualiopi (Partie Signature)", file: "Modele_Fiche_Certification__Signature.docx" },
+        { name: "Fiche de Prestation Web / Catalogue (Partie Pédagogique)", file: "Modele_Fiche_Prestation_Web__Pedagogique.docx" },
+        { name: "Fiche de Prestation Web / Catalogue (Partie Signature)", file: "Modele_Fiche_Prestation_Web__Signature.docx" },
+        { name: "Page internet \"Nos Résultats\" (Partie Pédagogique)", file: "Modele_Page_Nos_Resultats__Pedagogique.docx" },
+        { name: "Page internet \"Nos Résultats\" (Partie Signature/Mentions)", file: "Modele_Page_Nos_Resultats__Signature.docx" },
+        { name: "Programme de Formation Standard (Partie Pédagogique)", file: "Modele_Programme_Formation__Pedagogique.docx" },
+        { name: "Programme de Formation Standard (Partie Signature)", file: "Modele_Programme_Formation__Signature.docx" }
+    ];
+
+    if (indId === 2) {
+        return {
+            title: "Indicateurs de Résultats",
+            desc: "Indicateur 2 : Téléchargez le modèle type adapté à vos besoins pour diffuser les résultats de vos prestations.",
+            pathPrefix: "/ressources/Indicateur 2 et 3/",
+            files: sharedFiles
+        };
+    }
+    if (indId === 3) {
+        return {
+            title: "Information sur les Certifications",
+            desc: "Indicateur 3 : Téléchargez les modèles types pour informer vos publics sur les taux d'obtention et détails des certifications.",
+            pathPrefix: "/ressources/Indicateur 2 et 3/",
+            files: sharedFiles
+        };
+    }
+    if (indId === 4) {
+        return {
+            title: "Objectifs & Analyse des Besoins",
+            desc: "Indicateur 4 : Téléchargez les modèles types pour l'analyse des besoins et les chartes d'engagement.",
+            pathPrefix: "/ressources/Base Doc - Critère 2/Indicateur 4/",
+            files: [
+                { name: "Accord de Confidentialité BC (Partie Pédagogique)", file: "Modele_Accord_Confidentialite_BC__Pedagogique.docx" },
+                { name: "Accord de Confidentialité BC (Partie Signature)", file: "Modele_Accord_Confidentialite_BC__Signature.docx" },
+                { name: "Grille d'Analyse des Besoins (AF / CFA)", file: "Modele_Analyse_Besoin_AF_CFA.xlsx" },
+                { name: "Analyse des Besoins BC (Partie Pédagogique)", file: "Modele_Analyse_Besoin_BC__Pedagogique.docx" },
+                { name: "Analyse des Besoins BC (Partie Signature)", file: "Modele_Analyse_Besoin_BC__Signature.docx" },
+                { name: "Charte de Déontologie BC (Partie Pédagogique)", file: "Modele_Charte_Deontologie_BC__Pedagogique.docx" },
+                { name: "Charte de Déontologie BC (Partie Signature)", file: "Modele_Charte_Deontologie_BC__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 5) {
+        return {
+            title: "Définition des Objectifs Pédagogiques",
+            desc: "Indicateur 5 : Téléchargez les modèles types pour définir les objectifs opérationnels et pédagogiques.",
+            pathPrefix: "/ressources/Base Doc - Critère 2/Indicateur 5/",
+            files: [
+                { name: "Objectifs Pédagogiques & Contenus (Partie Pédagogique)", file: "Modele_Objectifs_Pedagogiques__Pedagogique.docx" },
+                { name: "Objectifs Pédagogiques & Contenus (Partie Signature)", file: "Modele_Objectifs_Pedagogiques__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 6) {
+        return {
+            title: "Adaptation des Profils & Parcours",
+            desc: "Indicateur 6 : Téléchargez la grille d'adaptation pour personnaliser les parcours de formation.",
+            pathPrefix: "/ressources/Base Doc - Critère 2/Indicateur 6/",
+            files: [
+                { name: "Grille d'Adaptation des Profils & Parcours", file: "Modele_Grille_Adaptation_Profil.xlsx" }
+            ]
+        };
+    }
+    if (indId === 7) {
+        return {
+            title: "Note de Conception Pédagogique",
+            desc: "Indicateur 7 : Téléchargez la note de conception pour formaliser l'ingénierie de vos formations.",
+            pathPrefix: "/ressources/Base Doc - Critère 2/Indicateur 7/",
+            files: [
+                { name: "Note de Conception Pédagogique (Partie Pédagogique)", file: "Modele_Note_Conception_Pedagogique__Pedagogique.docx" },
+                { name: "Note de Conception Pédagogique (Partie Signature)", file: "Modele_Note_Conception_Pedagogique__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 8) {
+        return {
+            title: "Tests & Synthèse de Positionnement",
+            desc: "Indicateur 8 : Téléchargez les modèles types pour évaluer et positionner les apprenants à l'entrée.",
+            pathPrefix: "/ressources/Base Doc - Critère 2/Indicateur 8/",
+            files: [
+                { name: "Synthèse de Positionnement (Partie Pédagogique)", file: "Modele_Synthese_Positionnement__Pedagogique.docx" },
+                { name: "Synthèse de Positionnement (Partie Signature)", file: "Modele_Synthese_Positionnement__Signature.docx" },
+                { name: "Test de Positionnement Standard (Partie Pédagogique)", file: "Modele_Test_Positionnement__Pedagogique.docx" },
+                { name: "Test de Positionnement Standard (Partie Signature)", file: "Modele_Test_Positionnement__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 9) {
+        return {
+            title: "Accès aux Prestations & Besoins Particuliers",
+            desc: "Indicateur 9 : Téléchargez les modèles types pour l'accès aux prestations, l'analyse des besoins et l'adaptation des locaux.",
+            pathPrefix: "/ressources/Base Doc - Critère 3/Indicateur 9 (17-19-26)/",
+            files: [
+                { name: "Checklist Session de Formation", file: "Modele_Checklist_Session.xlsx" },
+                { name: "Fiche Locaux & Moyens Techniques (Partie Pédagogique)", file: "Modele_Fiche_Locaux_Moyens__Pedagogique.docx" },
+                { name: "Fiche Locaux & Moyens Techniques (Partie Signature)", file: "Modele_Fiche_Locaux_Moyens__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 10) {
+        return {
+            title: "Adaptation de la Prestation et Suivi",
+            desc: "Indicateur 10 : Téléchargez les modèles types pour le suivi individuel et la personnalisation des prestations.",
+            pathPrefix: "/ressources/Base Doc - Critère 3/Indicateur 10 (11-6)/",
+            files: [
+                { name: "Suivi Individuel & Personnalisation (Partie Pédagogique)", file: "Modele_Suivi_Individuel__Pedagogique.docx" },
+                { name: "Suivi Individuel & Personnalisation (Partie Signature)", file: "Modele_Suivi_Individuel__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 11) {
+        return {
+            title: "Évaluation et Taux de Réussite",
+            desc: "Indicateur 11 : Téléchargez les modèles types pour l'évaluation des acquis, attestation de fin de formation et PV de jury.",
+            pathPrefix: "/ressources/Base Doc - Critère 3/Indicateur 11 (3)/",
+            files: [
+                { name: "Attestation de Fin de Formation (Partie Pédagogique)", file: "Modele_Attestation_Fin_Formation__Pedagogique.docx" },
+                { name: "Attestation de Fin de Formation (Partie Signature)", file: "Modele_Attestation_Fin_Formation__Signature.docx" },
+                { name: "Grille d'Évaluation des Acquis", file: "Modele_Grille_Evaluation_Acquis.xlsx" },
+                { name: "Procès-Verbal de Jury (Partie Pédagogique)", file: "Modele_PV_Jury__Pedagogique.docx" },
+                { name: "Procès-Verbal de Jury (Partie Signature)", file: "Modele_PV_Jury__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 12) {
+        return {
+            title: "Suivi de l'Assiduité et de l'Engagement",
+            desc: "Indicateur 12 : Téléchargez les modèles types pour le suivi d'assiduité, feuille d'émargement et certificat de réalisation.",
+            pathPrefix: "/ressources/Base Doc - Critère 3/Indicateur 12 (19)/",
+            files: [
+                { name: "Certificat de Réalisation (Partie Pédagogique)", file: "Modele_Certificat_Realisation__Pedagogique.docx" },
+                { name: "Certificat de Réalisation (Partie Signature)", file: "Modele_Certificat_Realisation__Signature.docx" },
+                { name: "Feuille d'Émargement (Partie Pédagogique)", file: "Modele_Feuille_Emargement__Pedagogique.docx" },
+                { name: "Feuille d'Émargement (Partie Signature)", file: "Modele_Feuille_Emargement__Signature.docx" },
+                { name: "Suivi de l'Assiduité et Gestion des Abandons", file: "Modele_Suivi_Assiduite_Abandon.xlsx" }
+            ]
+        };
+    }
+    if (indId === 13) {
+        return {
+            title: "Articulation CFA et Entreprise (Apprentis)",
+            desc: "Indicateur 13 : Téléchargez les modèles types pour la coordination entre le CFA et l'entreprise.",
+            pathPrefix: "/ressources/Indicateur manquant/Indicateur 13/",
+            files: [
+                { name: "Fiche Navette Mensuelle (Partie Pédagogique)", file: "Fiche_Navette_Mensuelle__Pedagogique.docx" },
+                { name: "Fiche Navette Mensuelle (Partie Signature)", file: "Fiche_Navette_Mensuelle__Signature.docx" },
+                { name: "Fiche Visite Entreprise (Partie Pédagogique)", file: "Fiche_Visite_Entreprise__Pedagogique.docx" },
+                { name: "Fiche Visite Entreprise (Partie Signature)", file: "Fiche_Visite_Entreprise__Signature.docx" },
+                { name: "Livret Suivi Apprenti (Partie Pédagogique)", file: "Livret_Suivi_Apprenti__Pedagogique.docx" },
+                { name: "Livret Suivi Apprenti (Partie Signature)", file: "Livret_Suivi_Apprenti__Signature.docx" },
+                { name: "Articulation CFA Entreprise (Partie Pédagogique)", file: "Modele_Articulation_CFA_Entreprise__Pedagogique.docx" },
+                { name: "Articulation CFA Entreprise (Partie Signature)", file: "Modele_Articulation_CFA_Entreprise__Signature.docx" },
+                { name: "Outils Articulation CFA", file: "Modele_Articulation_CFA_Outils.xlsx" }
+            ]
+        };
+    }
+    if (indId === 14) {
+        return {
+            title: "Accompagnement Social des Apprentis",
+            desc: "Indicateur 14 : Téléchargez les modèles types pour l'accompagnement social, éducatif et psychologique.",
+            pathPrefix: "/ressources/Indicateur manquant/Indicateur 14/",
+            files: [
+                { name: "Accompagnement Social Apprentis (Partie Pédagogique)", file: "Modele_Accompagnement_Social_Apprentis__Pedagogique.docx" },
+                { name: "Accompagnement Social Apprentis (Partie Signature)", file: "Modele_Accompagnement_Social_Apprentis__Signature.docx" },
+                { name: "Annuaire Accompagnement Apprentis", file: "Modele_Annuaire_Accompagnement_Apprentis.xlsx" }
+            ]
+        };
+    }
+    if (indId === 15) {
+        return {
+            title: "Droits, Devoirs et Citoyenneté (Apprentis)",
+            desc: "Indicateur 15 : Téléchargez les modèles types pour le module sur les droits et devoirs et l'engagement citoyen.",
+            pathPrefix: "/ressources/Indicateur manquant/Indicateur 15/",
+            files: [
+                { name: "Grille Émargement Module Citoyenneté (Partie Pédagogique)", file: "Grille_Emargement_Module_Citoyennete__Pedagogique.docx" },
+                { name: "Grille Émargement Module Citoyenneté (Partie Signature)", file: "Grille_Emargement_Module_Citoyennete__Signature.docx" },
+                { name: "Livret Apprenti Citoyenneté (Partie Pédagogique)", file: "Livret_Apprenti_Citoyennete__Pedagogique.docx" },
+                { name: "Livret Apprenti Citoyenneté (Partie Signature)", file: "Livret_Apprenti_Citoyennete__Signature.docx" },
+                { name: "Module Droits et Devoirs Citoyenneté (Partie Pédagogique)", file: "Modele_Module_Droits_Devoirs_Citoyennete__Pedagogique.docx" },
+                { name: "Module Droits et Devoirs Citoyenneté (Partie Signature)", file: "Modele_Module_Droits_Devoirs_Citoyennete__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 16) {
+        return {
+            title: "Conditions de Présentation aux Examens",
+            desc: "Indicateur 16 : Téléchargez les modèles types pour la procédure et l'organisation des examens de certification.",
+            pathPrefix: "/ressources/Indicateur manquant/Indicateur 16/",
+            files: [
+                { name: "Checklist Examen de Certification", file: "Modele_Checklist_Examen_Certification.xlsx" },
+                { name: "Procédure Examen Certification (Partie Pédagogique)", file: "Modele_Procedure_Examen_Certification__Pedagogique.docx" },
+                { name: "Procédure Examen Certification (Partie Signature)", file: "Modele_Procedure_Examen_Certification__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 17) {
+        return {
+            title: "Moyens Humains et Techniques",
+            desc: "Indicateur 17 : Téléchargez les modèles types pour l'inventaire du matériel, des équipements et des ressources techniques.",
+            pathPrefix: "/ressources/Base Doc - Critère 4/Indicateur 17/",
+            files: [
+                { name: "Inventaire du Matériel et des Équipements", file: "Modele_Inventaire_Materiel_Equipements.xlsx" }
+            ]
+        };
+    }
+    if (indId === 18) {
+        return {
+            title: "Coordination et Animation d'Équipe",
+            desc: "Indicateur 18 : Téléchargez les modèles types pour la note de coordination, l'animation d'équipe et le registre des comptes-rendus.",
+            pathPrefix: "/ressources/Base Doc - Critère 4/Indicateur 18/",
+            files: [
+                { name: "Note de Coordination d'Équipe (Partie Pédagogique)", file: "Modele_Note_Coordination_Equipe__Pedagogique.docx" },
+                { name: "Note de Coordination d'Équipe (Partie Signature)", file: "Modele_Note_Coordination_Equipe__Signature.docx" },
+                { name: "Registre et Comptes-Rendus de Réunions", file: "Modele_Registre_CR_Reunions.xlsx" }
+            ]
+        };
+    }
+    if (indId === 19) {
+        return {
+            title: "Supports et Ressources FOAD / Présentiel",
+            desc: "Indicateur 19 : Téléchargez les modèles types pour la charte et les ressources d'accompagnement FOAD et présentiel.",
+            pathPrefix: "/ressources/Base Doc - Critère 4/Indicateur 19/",
+            files: [
+                { name: "Charte FOAD & Présentiel (Partie Pédagogique)", file: "Modele_Charte_FOAD_Presentiel__Pedagogique.docx" },
+                { name: "Charte FOAD & Présentiel (Partie Signature)", file: "Modele_Charte_FOAD_Presentiel__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 20) {
+        return {
+            title: "Dispositif et Registre de Mobilité (CFA)",
+            desc: "Indicateur 20 : Téléchargez les modèles types pour le dispositif et le registre des mobilités nationales et internationales.",
+            pathPrefix: "/ressources/Base Doc - Critère 4/Indicateur 20/",
+            files: [
+                { name: "Dispositif de Mobilité CFA (Partie Pédagogique)", file: "Modele_Dispositif_Mobilite_CFA__Pedagogique.docx" },
+                { name: "Dispositif de Mobilité CFA (Partie Signature)", file: "Modele_Dispositif_Mobilite_CFA__Signature.docx" },
+                { name: "Registre des Mobilités (CFA)", file: "Modele_Registre_Mobilites_CFA.xlsx" }
+            ]
+        };
+    }
+    if (indId === 21) {
+        return {
+            title: "Qualification des Formateurs et Recrutement",
+            desc: "Indicateur 21 : Téléchargez les modèles types pour la sélection, le recrutement et l'évaluation des compétences des formateurs.",
+            pathPrefix: "/ressources/Base Doc - Critère 5/Indicateur 21 (27)/",
+            files: [
+                { name: "Convention de Prestation Formateur (Partie Pédagogique)", file: "Modele_Convention_Prestation_Formateur__Pedagogique.docx" },
+                { name: "Convention de Prestation Formateur (Partie Signature)", file: "Modele_Convention_Prestation_Formateur__Signature.docx" },
+                { name: "Fiche de Compétences Formateur (Partie Pédagogique)", file: "Modele_Fiche_Competences_Formateur__Pedagogique.docx" },
+                { name: "Fiche de Compétences Formateur (Partie Signature)", file: "Modele_Fiche_Competences_Formateur__Signature.docx" },
+                { name: "Matrice des Compétences de l'Équipe", file: "Modele_Matrice_Competences_Equipe.xlsx" },
+                { name: "Procédure de Recrutement Formateur (Partie Pédagogique)", file: "Modele_Procedure_Recrutement_Formateur__Pedagogique.docx" },
+                { name: "Procédure de Recrutement Formateur (Partie Signature)", file: "Modele_Procedure_Recrutement_Formateur__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 22) {
+        return {
+            title: "Plan de Développement des Compétences",
+            desc: "Indicateur 22 : Téléchargez le modèle de plan de développement des compétences et de suivi des entretiens professionnels.",
+            pathPrefix: "/ressources/Base Doc - Critère 5/Indicateur 22/",
+            files: [
+                { name: "Plan de Développement des Compétences & Entretiens Professionnels", file: "Modele_PDC_Entretiens_Professionnels.xlsx" }
+            ]
+        };
+    }
+    if (indId === 23) {
+        return {
+            title: "Veille Réglementaire",
+            desc: "Indicateur 23 : Téléchargez les modèles types pour la procédure de veille réglementaire et légale du secteur.",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 23-24-25/",
+            files: [
+                { name: "Procédure de Veille (Partie Pédagogique)", file: "Modele_Procedure_Veille__Pedagogique.docx" },
+                { name: "Procédure de Veille (Partie Signature)", file: "Modele_Procedure_Veille__Signature.docx" },
+                { name: "Tableau de Bord et Suivi de la Veille", file: "Modele_Tableau_Veille.xlsx" }
+            ]
+        };
+    }
+    if (indId === 24) {
+        return {
+            title: "Veille Métier et Innovations",
+            desc: "Indicateur 24 : Téléchargez les modèles types pour la procédure de veille sur les évolutions des compétences et des métiers.",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 23-24-25/",
+            files: [
+                { name: "Procédure de Veille (Partie Pédagogique)", file: "Modele_Procedure_Veille__Pedagogique.docx" },
+                { name: "Procédure de Veille (Partie Signature)", file: "Modele_Procedure_Veille__Signature.docx" },
+                { name: "Tableau de Bord et Suivi de la Veille", file: "Modele_Tableau_Veille.xlsx" }
+            ]
+        };
+    }
+    if (indId === 25) {
+        return {
+            title: "Veille Pédagogique et Technologique",
+            desc: "Indicateur 25 : Téléchargez les modèles types pour la procédure de veille sur les innovations pédagogiques et technologiques.",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 23-24-25/",
+            files: [
+                { name: "Procédure de Veille (Partie Pédagogique)", file: "Modele_Procedure_Veille__Pedagogique.docx" },
+                { name: "Procédure de Veille (Partie Signature)", file: "Modele_Procedure_Veille__Signature.docx" },
+                { name: "Tableau de Bord et Suivi de la Veille", file: "Modele_Tableau_Veille.xlsx" }
+            ]
+        };
+    }
+    if (indId === 26) {
+        return {
+            title: "Dispositif d'Accueil et d'Orientation Handicap",
+            desc: "Indicateur 26 : Téléchargez les modèles types pour l'accueil, l'accompagnement et l'orientation des publics en situation de handicap.",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 26/",
+            files: [
+                { name: "Annuaire du Réseau de Partenaires Handicap", file: "Modele_Annuaire_Reseau_Handicap.xlsx" },
+                { name: "Note d'Organisation du Dispositif Handicap (Partie Pédagogique)", file: "Modele_Note_Dispositif_Handicap__Pedagogique.docx" },
+                { name: "Note d'Organisation du Dispositif Handicap (Partie Signature)", file: "Modele_Note_Dispositif_Handicap__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 27) {
+        return {
+            title: "Recours à la Sous-Traitance",
+            desc: "Indicateur 27 : Téléchargez les modèles types pour la sous-traitance et le recrutement (identiques à l'indicateur 21).",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 27 (21)/",
+            files: [
+                { name: "Convention de Prestation Formateur (Partie Pédagogique)", file: "Modele_Convention_Prestation_Formateur__Pedagogique.docx" },
+                { name: "Convention de Prestation Formateur (Partie Signature)", file: "Modele_Convention_Prestation_Formateur__Signature.docx" },
+                { name: "Fiche de Compétences Formateur (Partie Pédagogique)", file: "Modele_Fiche_Competences_Formateur__Pedagogique.docx" },
+                { name: "Fiche de Compétences Formateur (Partie Signature)", file: "Modele_Fiche_Competences_Formateur__Signature.docx" },
+                { name: "Matrice des Compétences de l'Équipe", file: "Modele_Matrice_Competences_Equipe.xlsx" },
+                { name: "Procédure de Recrutement Formateur (Partie Pédagogique)", file: "Modele_Procedure_Recrutement_Formateur__Pedagogique.docx" },
+                { name: "Procédure de Recrutement Formateur (Partie Signature)", file: "Modele_Procedure_Recrutement_Formateur__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 28) {
+        return {
+            title: "Action de Formation en Situation de Travail (AFEST)",
+            desc: "Indicateur 28 : Téléchargez les modèles types pour la mise en œuvre de l'Action de Formation en Situation de Travail (AFEST).",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 28/",
+            files: [
+                { name: "Procédure AFEST (Partie Pédagogique)", file: "Modele_Procedure_AFEST__Pedagogique.docx" },
+                { name: "Procédure AFEST (Partie Signature)", file: "Modele_Procedure_AFEST__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 29) {
+        return {
+            title: "Insertion Professionnelle et Débouchés (CFA)",
+            desc: "Indicateur 29 : Téléchargez les modèles types pour le suivi des insertions professionnelles et les enquêtes de débouchés.",
+            pathPrefix: "/ressources/Base Doc - Critère 6/Indicateur 29/",
+            files: [
+                { name: "Enquête d'Insertion CFA (Partie Pédagogique)", file: "Modele_Enquete_Insertion_CFA__Pedagogique.docx" },
+                { name: "Enquête d'Insertion CFA (Partie Signature)", file: "Modele_Enquete_Insertion_CFA__Signature.docx" },
+                { name: "Registre de Suivi des Insertions Professionnelles", file: "Modele_Registre_Suivi_Insertions.xlsx" }
+            ]
+        };
+    }
+    if (indId === 30) {
+        return {
+            title: "Recueil des Appréciations",
+            desc: "Indicateur 30 : Téléchargez le modèle d'enquête et le cockpit d'analyse des appréciations des parties prenantes.",
+            pathPrefix: "/ressources/Base Doc - Critère 7/",
+            files: [
+                { name: "Cockpit de Suivi et Analyse des Appréciations", file: "Cockpit_Critere_7.xlsx" }
+            ]
+        };
+    }
+    if (indId === 31) {
+        return {
+            title: "Traitement des Réclamations et Dysfonctionnements",
+            desc: "Indicateur 31 : Téléchargez les modèles types pour la gestion et le traitement des réclamations et des dysfonctionnements.",
+            pathPrefix: "/ressources/Base Doc - Critère 7/",
+            files: [
+                { name: "Procédure de Réclamation (Partie Pédagogique)", file: "Modele_Procedure_Reclamations__Pedagogique.docx" },
+                { name: "Procédure de Réclamation (Partie Signature)", file: "Modele_Procedure_Reclamations__Signature.docx" }
+            ]
+        };
+    }
+    if (indId === 32) {
+        return {
+            title: "Conseil de Perfectionnement et Amélioration Continue",
+            desc: "Indicateur 32 : Téléchargez les modèles types pour le conseil de perfectionnement et les plans d'action d'amélioration continue.",
+            pathPrefix: "/ressources/Base Doc - Critère 7/",
+            files: [
+                { name: "Note du Conseil de Perfectionnement (Partie Pédagogique)", file: "Modele_Note_Conseil_Perfectionnement__Pedagogique.docx" },
+                { name: "Note du Conseil de Perfectionnement (Partie Signature)", file: "Modele_Note_Conseil_Perfectionnement__Signature.docx" },
+                { name: "Cockpit et Plan d'Actions d'Amélioration Continue", file: "Cockpit_Critere_7.xlsx" }
+            ]
+        };
+    }
+    return {
+        title: "Contrats & Conventions de Formation",
+        desc: "Indicateur 1 : Téléchargez le modèle type adapté à vos besoins pour le remplir, puis déposez-le comme preuve documentaire.",
+        pathPrefix: "/ressources/Indicateur 1 Contrat et convention de formation/",
+        files: [
+            { name: "Contrat de Formation Professionnelle FOAD (Partie Pédagogique)", file: "Modele_Contrat_Formation_Pro_FOAD__Pedagogique.docx" },
+            { name: "Contrat de Formation Professionnelle FOAD (Partie Signature)", file: "Modele_Contrat_Formation_Pro_FOAD__Signature.docx" },
+            { name: "Contrat de Formation Professionnelle Classique (Partie Pédagogique)", file: "Modele_Contrat_Formation_Pro__Pedagogique.docx" },
+            { name: "Contrat de Formation Professionnelle Classique (Partie Signature)", file: "Modele_Contrat_Formation_Pro__Signature.docx" },
+            { name: "Convention de Formation Professionnelle (Partie Pédagogique)", file: "Modele_Convention_Formation__Pedagogique.docx" },
+            { name: "Convention de Formation Professionnelle (Partie Signature)", file: "Modele_Convention_Formation__Signature.docx" },
+            { name: "Convention Tripartite CFA (Partie Pédagogique)", file: "Modele_Convention_Tripartite_CFA__Pedagogique.docx" },
+            { name: "Convention Tripartite CFA (Partie Signature)", file: "Modele_Convention_Tripartite_CFA__Signature.docx" }
+        ]
+    };
+};
+
 export default function ClientDashboard() {
-    const { user, profile } = useAuth()
+    const { user } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
 
@@ -53,11 +474,15 @@ export default function ClientDashboard() {
     const [sendingMsg, setSendingMsg] = useState(false)
     const [uploadingFor, setUploadingFor] = useState(null)
     const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
+
     const [consultantName, setConsultantName] = useState('')
     const fileInputRef = useRef(null)
     const [pendingCriterionId, setPendingCriterionId] = useState(null)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
+
+    // Signature State
+    const [showSignatureModal, setShowSignatureModal] = useState(false)
+    const [signatureEventId, setSignatureEventId] = useState(null)
     const [selectedVideoIndicator, setSelectedVideoIndicator] = useState(() => {
         const saved = localStorage.getItem('clientSelectedVideo')
         return saved ? JSON.parse(saved) : null
@@ -76,9 +501,11 @@ export default function ClientDashboard() {
         return saved ? JSON.parse(saved) : {}
     })
     const [allStatesData, setAllStatesData] = useState([])
-    const [allQuizData, setAllQuizData] = useState([])
+
     const [caseEvents, setCaseEvents] = useState([])
     const [isQuizOpen, setIsQuizOpen] = useState(false)
+    const [templateModalOpen, setTemplateModalOpen] = useState(false)
+    const [selectedTemplateIndicator, setSelectedTemplateIndicator] = useState(1)
 
     // Status Modal State
     const [statusModal, setStatusModal] = useState({
@@ -105,12 +532,23 @@ export default function ClientDashboard() {
         })
     }
 
+    const showToast = useCallback((message, type = 'info') => {
+        window.dispatchEvent(new CustomEvent('eq_show_client_toast', { detail: { message, type } }))
+    }, [])
+
     // Determine current page from URL
     const isMessages = location.pathname === '/client/messages'
     const isSessions = location.pathname === '/client/sessions'
+    const isAudit = location.pathname === '/client/audit'
     const isCriterion = location.pathname.startsWith('/client/criterion/')
     const criterionId = isCriterion ? location.pathname.split('/').pop() : null
 
+    const isMessagesRef = useRef(isMessages)
+    useEffect(() => {
+        isMessagesRef.current = isMessages
+    }, [isMessages])
+
+     
     useEffect(() => {
         const init = async () => {
             if (user) {
@@ -129,9 +567,35 @@ export default function ClientDashboard() {
         }
     }, [selectedVideoIndicator])
 
+     
     useEffect(() => {
         if (myCase?.id) fetchMessages()
-    }, [myCase?.id])
+    }, [myCase?.id, isMessages])
+
+    const markAllMessagesAsRead = async () => {
+        if (!myCase || !user) return
+        const unreadIds = messages
+            .filter(m => m.sender_id !== user?.id && !m.read_at)
+            .map(m => m.id)
+        
+        if (unreadIds.length === 0) return
+
+        const { error } = await supabase
+            .from('case_messages')
+            .update({ read_at: new Date().toISOString() })
+            .in('id', unreadIds)
+        
+        if (!error) {
+            setMessages(prev => prev.map(m => unreadIds.includes(m.id) ? { ...m, read_at: new Date().toISOString() } : m))
+        }
+    }
+
+     
+    useEffect(() => {
+        if (isMessages && messages.some(m => m.sender_id !== user?.id && !m.read_at)) {
+            markAllMessagesAsRead()
+        }
+    }, [isMessages, messages.length])
 
     useEffect(() => {
         // Use a small timeout to ensure DOM is rendered before scrolling
@@ -141,10 +605,11 @@ export default function ClientDashboard() {
         return () => clearTimeout(timer)
     }, [messages])
 
+     
     useEffect(() => {
         if (!myCase?.id) return
 
-        console.log("Setting up real-time for case:", myCase.id);
+
         const channel = supabase
             .channel(`client_realtime:${myCase.id}`)
             .on('postgres_changes', {
@@ -153,7 +618,7 @@ export default function ClientDashboard() {
                 table: 'case_events',
                 filter: `case_id=eq.${myCase.id}`
             }, (payload) => {
-                console.log("Real-time event:", payload);
+
                 if (payload.eventType === 'DELETE') {
                     setCaseEvents(prev => prev.filter(e => e.id !== payload.old.id))
                 } else if (payload.eventType === 'INSERT') {
@@ -168,8 +633,9 @@ export default function ClientDashboard() {
                 table: 'case_messages',
                 filter: `case_id=eq.${myCase.id}`
             }, (payload) => {
-                console.log("Real-time message received:", payload.new);
-                if (payload.new.content.startsWith('[SYSTEM]')) return
+                const isSystem = /^\s*\[(?:SYSTEM|Remarque)/i.test(payload.new.content || '')
+                if (isSystem) return
+
                 setMessages(prev => {
                     if (prev.some(m => m.id === payload.new.id)) return prev
                     const filtered = prev.filter(m => !String(m.id).startsWith('temp-') || m.content !== payload.new.content)
@@ -182,7 +648,7 @@ export default function ClientDashboard() {
                 table: 'cases',
                 filter: `tenant_id=eq.${myCase.tenant_id}`
             }, (payload) => {
-                console.log("Real-time case update:", payload);
+
                 if (payload.eventType === 'UPDATE') {
                     setCasesData(prev => prev.map(c => c.id === payload.new.id ? payload.new : c))
                     if (myCase?.id === payload.new.id) {
@@ -190,12 +656,12 @@ export default function ClientDashboard() {
                     }
                 }
             })
-            .subscribe((status) => {
-                console.log("Real-time subscription status:", status);
+            .subscribe(() => {
+
             })
 
         return () => {
-            console.log("Cleaning up real-time for case:", myCase.id);
+
             supabase.removeChannel(channel)
         }
     }, [myCase?.id])
@@ -213,10 +679,10 @@ export default function ClientDashboard() {
             return;
         }
 
-        // Filter out system messages for the chat
-        const userMessages = (data || []).filter(m => !m.content.startsWith('[SYSTEM]'))
-        console.log("Fetched messages:", userMessages.length);
-        setMessages(userMessages)
+        // Le fil de dialogue ne contient que du message humain : on exclut toute entrée système ([SYSTEM], [Remarque])
+        const filteredMessages = (data || []).filter(m => !/^\s*\[(?:SYSTEM|Remarque)/i.test(m.content || ''))
+
+        setMessages(filteredMessages)
     }
 
     const fetchClientData = async () => {
@@ -251,13 +717,13 @@ export default function ClientDashboard() {
             const { data: tenantsData } = await supabase
                 .from('tenants')
                 .select('id, name, logo_url, siret, nda, client_email, owner_id, created_by, created_at')
-                .or(`owner_id.eq.${user.id},client_email.eq.${user.email}`)
+                .or(`owner_id.eq.${user?.id},client_email.eq.${user?.email}`)
 
             if (tenantsData && tenantsData.length > 0) {
                 const tenantIds = tenantsData.map(t => t.id)
                 const { data: casesData } = await supabase
                     .from('cases')
-                    .select('id, tenant_id, audit_type, training_categories, consultant_id, created_at')
+                    .select('id, tenant_id, audit_type, training_categories, consultant_id, created_at, preaudit_shared, eliminatoires')
                     .in('tenant_id', tenantIds)
 
                 const caseData = casesData?.sort((a, b) => {
@@ -281,7 +747,7 @@ export default function ClientDashboard() {
                         localStorage.setItem('clientSelectedAudit', defaultAudit)
                     }
                     
-                    console.log("CLIENT CASE ID:", caseData.id)
+
 
                     // Fetch consultant name
                     const consultantIdToFetch = caseData.consultant_id || tenantData.created_by;
@@ -305,25 +771,41 @@ export default function ClientDashboard() {
                         .from('criterion_quiz_uploads')
                         .select('id, case_id, criterion_id, audit_type, file_name, file_url, uploaded_at')
                         .eq('case_id', caseData.id)
-                    setAllQuizData(quizData || [])
+
 
                     // 3. Fetch case events (sessions/visios)
                     const { data: eventsData } = await supabase
                         .from('case_events')
-                        .select('id, case_id, event_date, title, visio_link, event_type')
+                        .select('id, case_id, event_date, title, visio_link, event_type, status, description, consultant_signature, consultant_signature_date, consultant_signature_name, client_signature, client_signature_date, client_signature_name, actual_start_time, actual_end_time')
                         .eq('case_id', caseData.id)
                         .order('event_date', { ascending: true })
                     setCaseEvents(eventsData || [])
 
                     // Process initial mapping
-                    const currentAudit = selectedAudit || (caseData.audit_type?.[caseData.audit_type.length - 1] || 'initial')
+                    let currentAudit = selectedAudit;
+                    if (caseData.audit_type && caseData.audit_type.length > 0) {
+                        // Validate that currentAudit exists in this case's allowed audit types
+                        const isValid = currentAudit && caseData.audit_type.some(t => {
+                            const tNorm = String(t).trim().toLowerCase();
+                            const curNorm = String(currentAudit).trim().toLowerCase();
+                            return tNorm === curNorm || (tNorm.includes('initial') && curNorm.includes('initial')) || (tNorm.includes('surveillance') && curNorm.includes('surveillance'));
+                        });
+                        
+                        if (!isValid) {
+                            currentAudit = caseData.audit_type[0];
+                            setSelectedAudit(currentAudit);
+                            localStorage.setItem('clientSelectedAudit', currentAudit);
+                        }
+                    } else {
+                        currentAudit = currentAudit || 'initial';
+                    }
+                    
                     mapIndicatorStates(statesData || [], currentAudit)
                     mapQuizUploads(quizData || [])
                 }
             }
         } catch (err) {
             console.error('Error loading client data:', err)
-            setError(err.message)
         } finally {
             setLoading(false)
         }
@@ -369,6 +851,7 @@ export default function ClientDashboard() {
     }
 
     // Effect to re-map states when selectedAudit changes
+     
     useEffect(() => {
         if (allStatesData.length > 0 && selectedAudit) {
             mapIndicatorStates(allStatesData, selectedAudit)
@@ -388,14 +871,7 @@ export default function ClientDashboard() {
         setDirtyIndicators(prev => new Set(prev).add(indicatorId))
     }
 
-    const handleCommentChange = (indicatorId, comment) => {
-        if (!myCase) return
-        setIndicatorStates(prev => ({
-            ...prev,
-            [indicatorId]: { ...(prev[indicatorId] || {}), client_comment: comment }
-        }))
-        setDirtyIndicators(prev => new Set(prev).add(indicatorId))
-    }
+
 
     const handleFileSelect = (file, indicatorId) => {
         if (!file) return
@@ -484,12 +960,12 @@ export default function ClientDashboard() {
                 if (fileUploaded) msgContent += `📁 Document joint : ${pendingFile.name}\n`;
                 
                 try {
-                    const { error: msgErr } = await supabase.from('case_messages').insert({
+                    const { error: msgErr } = await supabase.from('case_notifications').insert({
                         case_id: myCase.id,
-                        sender_id: user.id,
-                        content: `[SYSTEM] ${msgContent}`
+                        type: 'client_indicator_update',
+                        content: msgContent
                     });
-                    if (msgErr) console.error("Failed to insert [SYSTEM] message:", msgErr);
+                    if (msgErr) console.error("Failed to insert notification:", msgErr);
                 } catch (e) { console.warn("Could not insert notification exception:", e); }
             }
 
@@ -518,7 +994,7 @@ export default function ClientDashboard() {
             });
 
             setSaveSuccess(prev => ({ ...prev, [indicatorId]: true }));
-            showStatus('success', 'Enregistré !', 'Les informations ont été sauvegardées et votre consultant a été notifié.');
+            showToast('Enregistré ! Les informations ont été sauvegardées et votre consultant a été notifié.', 'success');
             setTimeout(() => {
                 setSaveSuccess(prev => ({ ...prev, [indicatorId]: false }));
             }, 5000);
@@ -559,10 +1035,10 @@ export default function ClientDashboard() {
                 : targetKey === 'validation' ? 'Validation finale / Quiz' : `Ressource ${targetKey}`;
 
             try {
-                await supabase.from('case_messages').insert({
+                await supabase.from('case_notifications').insert({
                     case_id: myCase.id,
-                    sender_id: user.id,
-                    content: `[SYSTEM] 📁 Nouveau document déposé\n🎯 Cible : ${targetLabel.substring(0, 60)}...\n📄 Fichier : ${file.name}`
+                    type: 'client_file_upload',
+                    content: `📁 Nouveau document déposé\n🎯 Cible : ${targetLabel.substring(0, 60)}...\n📄 Fichier : ${file.name}`
                 });
             } catch (e) { console.warn("Could not insert notification:", e); }
 
@@ -577,7 +1053,7 @@ export default function ClientDashboard() {
                     }
                 }
             }));
-            showStatus('success', 'Fichier envoyé !', 'Votre document a été correctement téléchargé et votre consultant a été prévenu.');
+            showToast('Fichier envoyé ! Votre document a été correctement téléchargé et votre consultant a été prévenu.', 'success');
         } catch (err) {
             showStatus('error', 'Échec de l\'envoi', 'Une erreur est survenue : ' + err.message);
         } finally {
@@ -642,7 +1118,7 @@ export default function ClientDashboard() {
                     })
 
                     setStatusModal(prev => ({ ...prev, isOpen: false, isLoading: false }))
-                    showStatus('success', 'Fichier supprimé', 'Le document a été retiré avec succès.')
+                    showToast('Fichier supprimé ! Le document a été retiré avec succès.', 'success');
                 } catch (err) {
                     console.error('Delete error:', err)
                     setStatusModal(prev => ({ ...prev, isLoading: false }))
@@ -654,9 +1130,10 @@ export default function ClientDashboard() {
         )
     }
 
+     
     useEffect(() => {
         if (isMessages && myCase?.id) {
-            console.log("Entering messages view, fetching messages for case:", myCase.id);
+
             fetchMessages();
         }
     }, [isMessages, myCase?.id]);
@@ -669,7 +1146,7 @@ export default function ClientDashboard() {
             return
         }
         
-        console.log("Sending message to case:", myCase.id, "Content:", content);
+
         setSendingMsg(true)
         
         // 🚀 OPTIMISTIC UPDATE
@@ -677,7 +1154,7 @@ export default function ClientDashboard() {
         const optimisticMsg = {
             id: tempId,
             case_id: myCase.id,
-            sender_id: user.id,
+            sender_id: user?.id,
             content: content,
             created_at: new Date().toISOString(),
             is_read: false
@@ -687,9 +1164,9 @@ export default function ClientDashboard() {
         setNewMessage('')
 
         try {
-            const { data, error } = await supabase.from('case_messages').insert({
+            const { error } = await supabase.from('case_messages').insert({
                 case_id: myCase.id,
-                sender_id: user.id,
+                sender_id: user?.id,
                 content: content
             }).select()
             
@@ -699,7 +1176,7 @@ export default function ClientDashboard() {
                 throw error
             }
             
-            console.log("Message inserted successfully:", data);
+
             // We don't strictly need fetchMessages() here if real-time is working,
             // but it helps ensure consistency. We'll wait a bit to let DB settle.
             setTimeout(() => fetchMessages(), 500);
@@ -713,12 +1190,117 @@ export default function ClientDashboard() {
         }
     }
 
+    const handleConfirmSignature = async (sigData) => {
+        try {
+            const updateData = {
+                client_signature: sigData.signatureData,
+                client_signature_date: new Date().toISOString(),
+                client_signature_name: sigData.name,
+                actual_start_time: sigData.startTime,
+                actual_end_time: sigData.endTime
+            };
+
+            const { error } = await supabase
+                .from('case_events')
+                .update(updateData)
+                .eq('id', signatureEventId);
+
+            if (error) throw error;
+
+            // Update local state
+            setCaseEvents(prev => prev.map(e => e.id === signatureEventId ? { ...e, ...updateData } : e));
+
+            setShowSignatureModal(false);
+            setSignatureEventId(null);
+            showStatus('success', 'Succès', 'Votre émargement a été enregistré avec succès.');
+        } catch (err) {
+            console.error(err);
+            showStatus('error', 'Erreur', err.message || "Erreur lors de l'enregistrement.");
+        }
+    };
+
     // Stats
     const totalIndicators = indicators.length
     const validatedCount = Object.values(indicatorStates).filter(s => s?.status === 'done' || s?.status === 'not_applicable' || s?.status === 'non_applicable').length
-    const toTreatCount = Object.values(indicatorStates).filter(s => !s?.status || (s?.status !== 'done' && s?.status !== 'not_applicable' && s?.status !== 'non_applicable')).length
+
     const rejectedCount = Object.values(indicatorStates).filter(s => s?.consultant_verdict === 'non_conforme').length
     const progressPercent = totalIndicators > 0 ? Math.round((validatedCount / totalIndicators) * 100) : 0
+
+    // Avis de pré-audit (visible uniquement si le consultant l'a partagé) — même moteur
+    const clientPreAudit = (() => {
+        if (!myCase?.preaudit_shared) return null
+        const norm = normalizeAudit(selectedAudit || 'initial')
+        const byInd = {}
+        allStatesData.forEach(s => {
+            if (normalizeAudit(s.audit_type || 'initial') !== norm) return
+            const prev = byInd[s.indicator_id]
+            if (!prev || new Date(s.updated_at || 0) > new Date(prev.updated_at || 0)) byInd[s.indicator_id] = s
+        })
+        const verdicts = {}
+        Object.entries(byInd).forEach(([id, s]) => { verdicts[id] = s.consultant_verdict || 'to_do' })
+
+        // Matrice categories
+        const categoriesMatrice = [...new Set((myCase?.training_categories || []).map(cleMatriceCategorie))]
+        const cats = categoriesMatrice.length ? categoriesMatrice : [null]
+
+        // Eliminatoires
+        const statuts = (myCase?.eliminatoires || {})[String(selectedAudit || 'initial').trim()] || {}
+        const elim = eliminatoiresPourType(selectedAudit || 'initial', statuts)
+
+        // Compute per category
+        const perimetres = cats.map(cat => ({ cat, result: calculerPreAudit(verdicts, cat, elim) }))
+
+        // Return the worst / most severe result
+        const SEVERITE_AVIS = { FAVORABLE: 0, RESERVE: 1, DEFAVORABLE: 2 }
+        const worstResult = perimetres.reduce(
+            (worst, p) => (SEVERITE_AVIS[p.result.avis.cle] > SEVERITE_AVIS[worst.avis.cle] ? p.result : worst),
+            perimetres[0].result
+        )
+        return worstResult
+    })()
+
+    // Avis de pré-audit pour chaque type d'audit
+    const clientAuditResults = useMemo(() => {
+        if (!myCase) return []
+        const rawTypes = Array.isArray(myCase.audit_type) ? myCase.audit_type : [myCase.audit_type || 'Initial']
+        const types = sortAuditTypes(rawTypes)
+
+        return types.map(type => {
+            const norm = normalizeAudit(type)
+            const byInd = {}
+            allStatesData.forEach(s => {
+                if (normalizeAudit(s.audit_type || 'initial') !== norm) return
+                const prev = byInd[s.indicator_id]
+                if (!prev || new Date(s.updated_at || 0) > new Date(prev.updated_at || 0)) byInd[s.indicator_id] = s
+            })
+            const verdicts = {}
+            Object.entries(byInd).forEach(([id, s]) => { verdicts[id] = s.consultant_verdict || 'to_do' })
+
+            // Matrice categories
+            const categoriesMatrice = [...new Set((myCase?.training_categories || []).map(cleMatriceCategorie))]
+            const cats = categoriesMatrice.length ? categoriesMatrice : [null]
+
+            // Eliminatoires
+            const statuts = (myCase?.eliminatoires || {})[String(type).trim()] || {}
+            const elim = eliminatoiresPourType(type, statuts)
+
+            // Compute per category
+            const perimetres = cats.map(cat => ({ cat, result: calculerPreAudit(verdicts, cat, elim) }))
+
+            // Return the worst / most severe result
+            const SEVERITE_AVIS = { FAVORABLE: 0, RESERVE: 1, DEFAVORABLE: 2 }
+            const worstResult = perimetres.reduce(
+                (worst, p) => (SEVERITE_AVIS[p.result.avis.cle] > SEVERITE_AVIS[worst.avis.cle] ? p.result : worst),
+                perimetres[0].result
+            )
+            
+            return {
+                type,
+                result: worstResult,
+                perimetres
+            }
+        })
+    }, [myCase, allStatesData])
 
     // Group indicators by criterion
     const criteriaMap = {}
@@ -772,6 +1354,7 @@ export default function ClientDashboard() {
                     consultantName={consultantName}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
+                    unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                 />
                 <div className="flex-1 flex items-center justify-center">
@@ -790,7 +1373,7 @@ export default function ClientDashboard() {
                     indicators={indicators}
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
-                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
+                    unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
@@ -815,7 +1398,7 @@ export default function ClientDashboard() {
                         </div>
                     )}
                     <main className="flex-1 flex items-center justify-center p-8">
-                        <div className="w-full max-w-xl bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="w-full max-w-4xl bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                             {/* Header */}
                             <div className="p-8 text-center border-b border-gray-50">
                                 <div className="h-14 w-14 rounded-2xl bg-[#faf1ec] flex items-center justify-center mx-auto mb-4">
@@ -828,12 +1411,12 @@ export default function ClientDashboard() {
                             </div>
 
                             {/* Messages */}
-                            <div className="p-6 space-y-3 min-h-[200px] max-h-[340px] overflow-y-auto bg-gray-50/50">
+                            <div className="p-6 space-y-3 min-h-[400px] max-h-[600px] overflow-y-auto bg-gray-50/50">
                                 {messages.length === 0 ? (
                                     <p className="text-center text-sm text-gray-400 py-8">Aucun message. Commencez la discussion !</p>
                                 ) : (
                                     messages.map((msg) => {
-                                        const isMe = msg.sender_id === user.id
+                                        const isMe = msg.sender_id === user?.id
                                         const isTemp = String(msg.id).startsWith('temp-')
                                         return (
                                             <div key={msg.id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -855,7 +1438,7 @@ export default function ClientDashboard() {
                                                 </div>
                                                 {isMe && (
                                                     <div className="h-8 w-8 rounded-lg bg-[#faf1ec] flex items-center justify-center text-[10px] font-black text-[#cc6d3e] border border-white shadow-sm flex-shrink-0">
-                                                        {tenant?.name?.[0] || user.email?.[0]?.toUpperCase() || 'M'}
+                                                        {tenant?.name?.[0] || user?.email?.[0]?.toUpperCase() || 'M'}
                                                     </div>
                                                 )}
                                             </div>
@@ -893,6 +1476,121 @@ export default function ClientDashboard() {
                             </div>
                         </div>
                     </main>
+
+                </div>
+            </div>
+        )
+    }
+
+    // ─── AUDIT VIEW ─────────────────────────────────────────────────────────────
+    if (isAudit) {
+        return (
+            <div className="bg-gray-50 min-h-screen flex font-sans">
+                <ClientSidebar
+                    caseData={myCase}
+                    indicators={indicators}
+                    indicatorStates={indicatorStates}
+                    consultantName={consultantName}
+                    unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
+                    upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
+                    isOpen={showMobileMenu}
+                    onClose={() => setShowMobileMenu(false)}
+                />
+                <div className="flex-1 flex flex-col min-w-0">
+                    <ClientTopBar
+                        breadcrumbs={[
+                            { label: 'Formation', path: '/client/dashboard' },
+                            { label: 'Synthèse pré-audit' }
+                        ]}
+                        consultantName={consultantName}
+                        onContact={() => navigate('/client/messages')}
+                        setShowMobileMenu={setShowMobileMenu}
+                    />
+
+                    {globalMessage && (
+                        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] animate-in slide-in-from-top duration-300">
+                             <div className={`px-6 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 ${globalMessage.includes('ERREUR') || globalMessage.includes('Erreur') ? 'bg-red-50 border-red-100 text-red-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                                <CheckCircle className="h-5 w-5" />
+                                <span className="text-sm font-black uppercase tracking-wider">{globalMessage}</span>
+                             </div>
+                        </div>
+                    )}
+                    <main className="flex-1 flex items-center justify-center p-8">
+                        <div className="w-full max-w-4xl bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all">
+                            {/* Header */}
+                            <div className="p-10 text-center border-b border-gray-50">
+                                <div className="h-20 w-20 rounded-3xl bg-[#faf1ec] flex items-center justify-center mx-auto mb-6 shadow-md">
+                                    <Award className="h-10 w-10 text-[#cc6d3e]" />
+                                </div>
+                                <h2 className="text-3xl font-black text-gray-900 mb-3">Synthèse pré-audit</h2>
+                                <p className="text-sm text-gray-500 max-w-lg mx-auto leading-relaxed">
+                                    Retrouvez ici la synthèse et les conclusions de votre audit blanc pour chaque périmètre de certification Qualiopi.
+                                </p>
+                            </div>
+
+                            {/* Audit Results */}
+                            <div className="p-10 bg-gray-50 min-h-[300px]">
+                                {!myCase?.preaudit_shared ? (
+                                    <div className="text-center py-10 flex flex-col items-center">
+                                        <div className="h-12 w-12 rounded-full bg-amber-50 flex items-center justify-center mb-4">
+                                            <AlertCircle className="h-6 w-6 text-amber-500" />
+                                        </div>
+                                        <p className="text-gray-600 font-bold text-base mb-1">Résultat non partagé</p>
+                                        <p className="text-gray-400 font-medium text-xs max-w-xs leading-relaxed">
+                                            Votre consultant n'a pas encore partagé le résultat de l'audit. Revenez plus tard ou contactez-le directement.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-8">
+                                        {clientAuditResults.map((auditItem, idx) => (
+                                            <div key={idx} className="space-y-4 bg-white rounded-3xl p-6 border border-gray-200 shadow-sm">
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`h-2.5 w-2.5 rounded-full bg-[#cc6d3e]`} />
+                                                    <h3 className="text-lg font-black text-gray-900 uppercase tracking-wide">
+                                                        Audit {auditItem.type}
+                                                    </h3>
+                                                </div>
+                                                <PreAuditResult result={auditItem.result} auditType={auditItem.type} />
+                                                
+                                                {/* Details by categories if multiple */}
+                                                {auditItem.perimetres.length > 1 && (
+                                                    <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
+                                                        <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Détail par catégorie d'action :</p>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            {auditItem.perimetres.map((p, pIdx) => (
+                                                                <div key={pIdx} className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                                                                    <p className="text-xs font-bold text-gray-700 mb-2 truncate">
+                                                                        {p.cat ? CAT[p.cat] : "Général"}
+                                                                    </p>
+                                                                    <div className="flex items-center justify-between text-xs">
+                                                                        <span className="font-semibold" style={{ color: p.result.avis.couleur }}>
+                                                                            Avis : {p.result.avis.label}
+                                                                        </span>
+                                                                        <span className="text-gray-400">
+                                                                            {p.result.conforme} / {p.result.applicables} Conformes
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-6 text-center border-t border-gray-50 bg-white">
+                                <button
+                                    onClick={() => navigate('/client/dashboard')}
+                                    className="text-sm text-gray-400 hover:text-gray-900 font-bold transition-colors py-2 px-4"
+                                >
+                                    Retour
+                                </button>
+                            </div>
+                        </div>
+                    </main>
                 </div>
             </div>
         )
@@ -907,7 +1605,7 @@ export default function ClientDashboard() {
                     indicators={indicators}
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
-                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                    unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
@@ -932,67 +1630,99 @@ export default function ClientDashboard() {
                         </div>
                     )}
                     <main className="flex-1 flex items-center justify-center p-8">
-                        <div className="w-full max-w-xl bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all">
-                            <div className="p-10 text-center">
+                        <div className="w-full max-w-4xl bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all">
+                            <div className="p-10 text-center border-b border-gray-50">
                                 <div className="h-20 w-20 rounded-3xl bg-[#faf1ec] flex items-center justify-center mx-auto mb-6 transform -rotate-3 hover:rotate-0 transition-transform duration-300 shadow-md">
                                     <Video className="h-10 w-10 text-[#cc6d3e]" />
                                 </div>
-                                <h2 className="text-3xl font-black text-gray-900 mb-3">Vos Rendez-vous</h2>
+                                <h2 className="text-3xl font-black text-gray-900 mb-3">Vos Séances Programmées</h2>
                                 <p className="text-sm text-gray-500 max-w-sm mx-auto leading-relaxed">
-                                    Retrouvez ici le lien visio pour votre prochain point de mentoring avec <span className="text-[#cc6d3e] font-bold">{consultantName || 'votre consultant'}</span>.
+                                    Retrouvez ici toutes vos visios prévues avec <span className="text-[#cc6d3e] font-bold">{consultantName || 'votre consultant'}</span> et confirmez votre présence.
                                 </p>
                             </div>
 
-                            <div className="px-10 pb-10 space-y-4">
-                                {caseEvents.length === 0 ? (
-                                    <div className="bg-gray-50 rounded-2xl p-8 border border-dashed border-gray-200 text-center">
-                                        <p className="text-sm text-gray-400 italic">Aucun rendez-vous planifié pour le moment.</p>
-                                    </div>
-                                ) : (
-                                    caseEvents.map((event) => (
-                                        <div key={event.id} className="bg-[#faf1ec]/30 rounded-2xl p-6 border border-[#f5e2d6] flex flex-col sm:flex-row items-start sm:items-center justify-between group hover:bg-white hover:shadow-lg transition-all duration-300 gap-4">
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <p className="text-[10px] font-black text-[#cc6d3e] uppercase tracking-widest bg-white/80 px-2 py-0.5 rounded-full border border-[#f5e2d6]/40">
-                                                        {new Date(event.event_date) > new Date() ? 'Prochain RDV' : 'Passé'}
-                                                    </p>
-                                                    {event.event_type && (
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{event.event_type}</span>
+                            <div className="p-10 bg-gray-50 min-h-[300px]">
+                                {caseEvents && caseEvents.filter(e => e.event_type === 'meeting' || e.visio_link).length > 0 ? (
+                                    <div className="space-y-6">
+                                        {caseEvents.filter(e => e.event_type === 'meeting' || e.visio_link).map(event => (
+                                            <div key={event.id} className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm flex flex-col xl:flex-row gap-6">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100 flex items-center gap-1.5">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                            Planifié
+                                                        </span>
+                                                        <span className="text-xs text-gray-500 font-bold">
+                                                            {new Date(event.event_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                                        </span>
+                                                    </div>
+                                                    <h3 className="text-lg font-black text-gray-900 mb-2">{event.title}</h3>
+                                                    {event.visio_link && (
+                                                        <button
+                                                            onClick={() => window.open(event.visio_link, '_blank')}
+                                                            className="inline-flex items-center gap-2 px-4 py-2 mt-2 bg-indigo-50 text-indigo-700 text-sm font-bold border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-colors"
+                                                        >
+                                                            <Video className="h-4 w-4" /> Rejoindre la visio
+                                                        </button>
                                                     )}
                                                 </div>
-                                                <h3 className="text-lg font-black text-gray-900">{event.title || 'Session de suivi'}</h3>
-                                                <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
-                                                    <div className={`h-2 w-2 rounded-full ${new Date(event.event_date) > new Date() ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
-                                                    <span>
-                                                        {new Date(event.event_date).toLocaleString('fr-FR', {
-                                                            weekday: 'long',
-                                                            day: 'numeric',
-                                                            month: 'long',
-                                                            year: 'numeric',
-                                                            hour: '2-digit',
-                                                            minute: '2-digit'
-                                                        })}
-                                                    </span>
+
+                                                {/* Emargement Block */}
+                                                <div className="flex-1 flex flex-col md:flex-row gap-4 border-t xl:border-t-0 xl:border-l border-gray-100 pt-4 xl:pt-0 xl:pl-6">
+                                                    {/* Consultant Signature (Read-only for Client) */}
+                                                    <div className="flex-1">
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Émargement Consultant</p>
+                                                        {event.consultant_signature ? (
+                                                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                                                                <div className="flex items-center gap-2 text-gray-600 font-bold mb-2 text-xs">
+                                                                    <CheckCircle className="h-3 w-3" /> Émargé
+                                                                </div>
+                                                                <div className="bg-white rounded-lg p-2 border border-gray-100 inline-block">
+                                                                    <img src={event.consultant_signature} alt="Signature" className="h-8 object-contain" />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-center text-center h-full min-h-[80px] border-dashed">
+                                                                <p className="text-[10px] text-gray-400 font-medium">En attente du consultant</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Client Signature (Actionable) */}
+                                                    <div className="flex-1">
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Émargement Bénéficiaire</p>
+                                                        {event.client_signature ? (
+                                                            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                                                                <div className="flex items-center gap-2 text-emerald-700 font-bold mb-2 text-xs">
+                                                                    <CheckCircle className="h-3 w-3" /> Émargé
+                                                                </div>
+                                                                <div className="bg-white rounded-lg p-2 border border-emerald-100 inline-block">
+                                                                    <img src={event.client_signature} alt="Signature" className="h-8 object-contain" />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col items-center justify-center text-center h-full min-h-[80px]">
+                                                                <button 
+                                                                    onClick={() => { setSignatureEventId(event.id); setShowSignatureModal(true); }}
+                                                                    className="px-3 py-1.5 bg-slate-900 text-white text-[10px] uppercase font-bold rounded-lg shadow-sm hover:bg-slate-800 transition-colors w-full"
+                                                                >
+                                                                    Émarger ma présence
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                            
-                                            {event.visio_link ? (
-                                                <button
-                                                    onClick={() => window.open(event.visio_link, '_blank')}
-                                                    className="h-12 px-8 bg-[#cc6d3e] text-white rounded-xl text-sm font-bold shadow-lg shadow-[#cc6d3e]/20 hover:bg-[#b55d32] hover:scale-105 active:scale-95 transition-all w-full sm:w-auto flex items-center justify-center gap-2"
-                                                >
-                                                    <Video className="h-4 w-4" />
-                                                    Rejoindre
-                                                </button>
-                                            ) : (
-                                                <span className="text-xs font-bold text-gray-400 italic">Lien non disponible</span>
-                                            )}
-                                        </div>
-                                    ))
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-10">
+                                        <p className="text-gray-400 font-medium text-sm">Aucune séance ou visio planifiée pour le moment.</p>
+                                    </div>
                                 )}
                             </div>
 
-                            <div className="p-6 text-center border-t border-gray-50">
+                            <div className="p-6 text-center border-t border-gray-50 bg-white">
                                 <button
                                     onClick={() => navigate('/client/dashboard')}
                                     className="text-sm text-gray-400 hover:text-gray-900 font-bold transition-colors py-2 px-4"
@@ -1002,6 +1732,31 @@ export default function ClientDashboard() {
                             </div>
                         </div>
                     </main>
+
+                    <SignatureModal 
+                        isOpen={showSignatureModal}
+                        onClose={() => {
+                            setShowSignatureModal(false);
+                            setSignatureEventId(null);
+                        }}
+                        onConfirm={handleConfirmSignature}
+                        eventDetails={caseEvents?.find(e => e.id === signatureEventId)}
+                        role="client"
+                    />
+
+                    {/* MODALS */}
+                    <StatusModal
+                        isOpen={statusModal.isOpen}
+                        type={statusModal.type}
+                        title={statusModal.title}
+                        message={statusModal.message}
+                        onClose={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
+                        onConfirm={statusModal.onConfirm}
+                        confirmText={statusModal.confirmText}
+                        cancelText={statusModal.cancelText}
+                        isLoading={statusModal.isLoading}
+                    />
+
                 </div>
             </div>
         )
@@ -1016,7 +1771,7 @@ export default function ClientDashboard() {
                     indicators={indicators}
                     indicatorStates={indicatorStates}
                     consultantName={consultantName}
-                    unreadCount={messages.filter(m => m.sender_id !== user.id && !m.is_read).length}
+                    unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
                     upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                     isOpen={showMobileMenu}
                     onClose={() => setShowMobileMenu(false)}
@@ -1040,72 +1795,18 @@ export default function ClientDashboard() {
                              </div>
                         </div>
                     )}
-                    <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
-                        {/* Phase Selector in Detail View */}
-                        {/* Audit Selection Tabs (Consistent with Dashboard) */}
-                        <div className="flex flex-wrap gap-3 mb-10">
-                            {casesData?.flatMap((c) => {
-                                const types = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
-                                return types.map((type, typeIdx) => {
-                                    const isActive = selectedAudit === type;
-                                    const cleanType = type.replace(/audit/gi, '').trim();
-                                    
-                                    const getColors = (t) => {
-                                        const typeStr = t.toLowerCase();
-                                        if (typeStr.includes('initial')) return { 
-                                            active: 'bg-[#cc6d3e] text-white border-[#cc6d3e] shadow-[#cc6d3e]/30', 
-                                            inactive: 'hover:border-[#cc6d3e]/30 hover:bg-[#cc6d3e]/5 text-slate-400',
-                                            dot: 'bg-[#cc6d3e]' 
-                                        };
-                                        if (typeStr.includes('surveillance')) return { 
-                                            active: 'bg-blue-600 text-white border-blue-600 shadow-blue-600/30', 
-                                            inactive: 'hover:border-blue-600/30 hover:bg-blue-600/5 text-slate-400',
-                                            dot: 'bg-blue-600' 
-                                        };
-                                        if (typeStr.includes('renouvellement')) return { 
-                                            active: 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-600/30', 
-                                            inactive: 'hover:border-emerald-600/30 hover:bg-emerald-600/5 text-slate-400',
-                                            dot: 'bg-emerald-600' 
-                                        };
-                                        return { active: 'bg-slate-800 text-white', inactive: 'text-slate-400', dot: 'bg-slate-400' };
-                                    };
-                                    
-                                    const colors = getColors(type);
+                    <main className="flex-1 p-6 lg:p-8 w-full max-w-[1300px] mx-auto">
 
-                                    return (
-                                        <button
-                                            key={`${c.id}-${typeIdx}`}
-                                            onClick={() => {
-                                                setMyCase(c);
-                                                setSelectedAudit(type);
-                                                localStorage.setItem('clientSelectedAudit', type);
-                                            }}
-                                            className={`flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
-                                                isActive 
-                                                    ? `${colors.active} shadow-[0_10px_30px_-10px_rgba(0,0,0,0.3)] scale-105 z-10` 
-                                                    : `bg-white border-slate-50 ${colors.inactive} shadow-sm translate-y-0`
-                                            } hover:-translate-y-1 active:scale-95`}
-                                        >
-                                            <div className={`h-2.5 w-2.5 rounded-full shadow-inner ${isActive ? 'bg-white animate-pulse' : colors.dot} transition-colors duration-500`} />
-                                            AUDIT {cleanType}
-                                        </button>
-                                    );
-                                });
-                            })}
-                        </div>
                         {/* Criterion Header */}
                         <div className="mb-6">
                             <div className="flex items-center gap-3 mb-1">
-                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                                <p className="text-xs font-black uppercase tracking-widest" style={{ color: getCriterionColor(currentCriterion.id).primary }}>
                                     CRITÈRE {criterionIndex + 1}
                                 </p>
                                 <span className="px-1.5 py-0.5 rounded text-[8px] font-mono bg-gray-100 text-gray-400">ID: {myCase?.id?.substring(0,8)}</span>
                             </div>
                             <h1 className="text-2xl font-black text-gray-900 flex items-center gap-3">
                                 {currentCriterion.label}
-                                <span className="px-3 py-1 bg-[#cc6d3e]/10 text-[#cc6d3e] border border-[#cc6d3e]/20 rounded-full text-[10px] font-black uppercase tracking-widest translate-y-[1px]">
-                                    {selectedAudit || 'Initial'}
-                                </span>
                             </h1>
                             <p className="text-sm text-gray-500 mt-1">
                                 Découvrez comment communiquer de manière transparente et exhaustive sur votre offre de formation vers vos publics cibles.
@@ -1128,15 +1829,31 @@ export default function ClientDashboard() {
                                 {/* Resources */}
                                 <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
                                     <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Ressources</h3>
-                                    <div className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl hover:bg-[#faf1ec] transition-all cursor-pointer group">
-                                        <div className="h-8 w-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                            <FileText className="h-4 w-4 text-red-500" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-800">Référentiel_C{criterionIndex + 1}.pdf</p>
-                                            <p className="text-[10px] text-gray-400">Télécharger le fichier</p>
-                                        </div>
-                                    </div>
+                                    {(() => {
+                                        const pdfFiles = [
+                                            "Critere1_Information_du_public_pilote.pdf",
+                                            "Critere2_Conception_de_loffre.pdf",
+                                            "Critere3_Mise_en_oeuvre.pdf",
+                                            "Critere4_Moyens_pedagogiques.pdf",
+                                            "Critere5_Competences_equipe.pdf",
+                                            "Critere6_Environnement.pdf",
+                                            "Critere7_Amelioration_continue.pdf"
+                                        ];
+                                        const fileName = pdfFiles[criterionIndex] || `Référentiel_C${criterionIndex + 1}.pdf`;
+                                        const fileUrl = `/ressources/${fileName}`;
+                                        
+                                        return (
+                                            <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl hover:bg-[#faf1ec] transition-all cursor-pointer group">
+                                                <div className="h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform" style={{ backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary }}>
+                                                    <FileText className="h-4 w-4" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-bold text-gray-800 truncate" title={fileName}>{fileName}</p>
+                                                    <p className="text-[10px] text-gray-400 group-hover:text-[#cc6d3e] transition-colors">Télécharger le fichier</p>
+                                                </div>
+                                            </a>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Quiz / Ressource */}
@@ -1175,7 +1892,8 @@ export default function ClientDashboard() {
                                                     <div className="flex justify-between items-center px-1">
                                                         <button
                                                             onClick={() => { setPendingCriterionId('crit_' + currentCriterion.id); fileInputRef.current?.click() }}
-                                                            className="text-[10px] font-bold text-[#cc6d3e] hover:underline"
+                                                            className="text-[10px] font-bold hover:underline"
+                                                            style={{ color: getCriterionColor(currentCriterion.id).primary }}
                                                         >
                                                             Remplacer
                                                         </button>
@@ -1203,7 +1921,8 @@ export default function ClientDashboard() {
                                                 <button
                                                     onClick={() => setIsQuizOpen(true)}
                                                     disabled={uploadingFor === 'crit_' + currentCriterion.id}
-                                                    className="w-full py-2.5 bg-[#cc6d3e] text-white rounded-xl text-xs font-bold hover:bg-[#b35d32] transition-all shadow-md shadow-[#cc6d3e]/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                                                    className="w-full py-2.5 text-white rounded-xl text-xs font-bold hover:opacity-90 transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                                                    style={{ backgroundColor: getCriterionColor(currentCriterion.id).primary }}
                                                 >
                                                     <PlayCircle className="h-4 w-4" />
                                                     {failedScore !== undefined ? "Retenter le Quiz" : "Lancer le Quiz"}
@@ -1237,16 +1956,16 @@ export default function ClientDashboard() {
                                     doc.setFontSize(11);
                                     doc.setTextColor(100, 100, 100);
                                     doc.text(`Date : ${new Date().toLocaleString('fr-FR')}`, 20, 35);
-                                    doc.text(`Client : ${user.email}`, 20, 42);
+                                    doc.text(`Client : ${user?.email}`, 20, 42);
                                     doc.text(`Critère : ${currentCriterion.id} - ${currentCriterion.label}`, 20, 49);
                                     
                                     doc.setFontSize(14);
-                                    if (score >= 70) {
+                                    if (score >= 80) {
                                         doc.setTextColor(16, 185, 129); // Emerald
                                     } else {
                                         doc.setTextColor(225, 29, 72); // Rose
                                     }
-                                    doc.text(`Score Final : ${score}% - ${score >= 70 ? 'RÉUSSI' : 'ÉCHEC'}`, 20, 60);
+                                    doc.text(`Score Final : ${score}% - ${score >= 80 ? 'RÉUSSI' : 'ÉCHEC'}`, 20, 60);
                                     
                                     doc.setFontSize(12);
                                     doc.setTextColor(30, 41, 59);
@@ -1260,8 +1979,12 @@ export default function ClientDashboard() {
                                             doc.addPage();
                                             yPos = 20;
                                         }
-                                        const userAnswerIdx = details.answers[idx];
-                                        const isCorrect = userAnswerIdx === q.correct;
+                                        const userAnswers = details.answers[idx] || [];
+                                        const correctAnswers = q.correct;
+                                        
+                                        const isFullyCorrect = 
+                                            userAnswers.length === correctAnswers.length &&
+                                            userAnswers.every(a => correctAnswers.includes(a));
                                         
                                         doc.setFont("helvetica", "bold");
                                         doc.setTextColor(30, 41, 59);
@@ -1270,10 +1993,15 @@ export default function ClientDashboard() {
                                         yPos += splitTitle.length * 5 + 2;
                                         
                                         doc.setFont("helvetica", "normal");
-                                        doc.text(`Réponse donnée : ${q.options[userAnswerIdx] || 'Aucune'}`, 25, yPos);
-                                        yPos += 6;
+                                        const givenAnswersText = userAnswers.length > 0 
+                                            ? userAnswers.map(a => q.options[a]).join(", ") 
+                                            : "Aucune réponse";
                                         
-                                        if (isCorrect) {
+                                        const splitGiven = doc.splitTextToSize(`Réponse(s) donnée(s) : ${givenAnswersText}`, 160);
+                                        doc.text(splitGiven, 25, yPos);
+                                        yPos += splitGiven.length * 5 + 1;
+                                        
+                                        if (isFullyCorrect) {
                                             doc.setTextColor(16, 185, 129);
                                             doc.text(`Résultat : CORRECT`, 25, yPos);
                                         } else {
@@ -1282,10 +2010,12 @@ export default function ClientDashboard() {
                                         }
                                         yPos += 6;
                                         
-                                        if (!isCorrect) {
+                                        if (!isFullyCorrect) {
                                             doc.setTextColor(71, 85, 105);
-                                            doc.text(`Réponse attendue : ${q.options[q.correct]}`, 25, yPos);
-                                            yPos += 6;
+                                            const expectedAnswersText = correctAnswers.map(a => q.options[a]).join(", ");
+                                            const splitExpected = doc.splitTextToSize(`Réponse(s) attendue(s) : ${expectedAnswersText}`, 160);
+                                            doc.text(splitExpected, 25, yPos);
+                                            yPos += splitExpected.length * 5 + 1;
                                         }
                                         
                                         yPos += 4;
@@ -1295,6 +2025,14 @@ export default function ClientDashboard() {
                                     const fileName = `Rapport_Quiz_C${currentCriterion.id}_SCORE_${score}_${Date.now()}.pdf`;
                                     const blob = doc.output('blob');
                                     const file = new File([blob], fileName, { type: 'application/pdf' });
+
+                                    // Trigger download for client
+                                    const pdfUrl = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = pdfUrl;
+                                    a.download = fileName;
+                                    a.click();
+                                    URL.revokeObjectURL(pdfUrl);
 
                                     // 3. Upload to Storage
                                     const path = `${myCase.id}/${fileName}`;
@@ -1318,12 +2056,12 @@ export default function ClientDashboard() {
                                     if (dbError) throw dbError;
 
                                     // 5. Notify Consultant
-                                    const { error: msgErr } = await supabase.from('case_messages').insert({
+                                    const { error: msgErr } = await supabase.from('case_notifications').insert({
                                         case_id: myCase.id,
-                                        sender_id: user.id,
-                                        content: `[SYSTEM] 🏆 Quiz validé avec rapport détaillé !\n🎯 Critère ${currentCriterion.id}\n📊 Score : ${score}%\n📄 Fichier généré : ${fileName}`
+                                        type: 'client_quiz_success',
+                                        content: `🏆 Quiz validé avec rapport détaillé !\n🎯 Critère ${currentCriterion.id}\n📊 Score : ${score}%\n📄 Fichier généré : ${fileName}`
                                     });
-                                    if (msgErr) console.error("Quiz success message error:", msgErr);
+                                    if (msgErr) console.error("Quiz success notification error:", msgErr);
 
                                     // 6. Update local UI
                                     setQuizUploads(prev => ({
@@ -1339,13 +2077,13 @@ export default function ClientDashboard() {
                                         }
                                     }));
 
-                                    showStatus('success', 'Rapport généré !', `Votre score de ${score}% et le détail de vos réponses ont été transmis à votre consultant.`);
+                                    showToast(`Rapport généré ! Votre score de ${score}% et le détail de vos réponses ont été transmis à votre consultant.`, 'success');
                                 } catch (err) {
                                     console.error("Error saving detailed quiz score:", err);
                                     showStatus('error', 'Erreur', "Impossible de générer le rapport : " + err.message);
                                 }
                             }}
-                            onFail={async (score, details) => {
+                            onFail={async (score) => {
                                 try {
                                     const key = 'crit_' + currentCriterion.id;
                                     setLastFailedScores(prev => {
@@ -1355,12 +2093,14 @@ export default function ClientDashboard() {
                                     })
 
                                     // Notify Consultant of failed attempt
-                                    const { error: failErr } = await supabase.from('case_messages').insert({
+                                    const { error: failErr } = await supabase.from('case_notifications').insert({
                                         case_id: myCase.id,
-                                        sender_id: user.id,
-                                        content: `[SYSTEM] ❌ Tentative de quiz échouée (Score : ${score}%)\n🎯 Critère ${currentCriterion.id}\nLe client n'a pas atteint les 70% requis.`
+                                        type: 'client_quiz_failed',
+                                        content: `❌ Tentative de quiz échouée (Score : ${score}%)\n🎯 Critère ${currentCriterion.id}\nLe client n'a pas atteint les 70% requis.`
                                     });
-                                    if (failErr) console.error("Quiz fail message error:", failErr);
+                                    if (failErr) console.error("Quiz fail notification error:", failErr);
+                                    
+                                    showToast("Le score obtenu n'est pas suffisant pour valider le quiz (70% requis). Veuillez réviser et réessayer !", "warning");
                                 } catch (err) {
                                     console.error("Error logging failed quiz attempt:", err);
                                 }
@@ -1385,7 +2125,7 @@ export default function ClientDashboard() {
                                     // Robust state lookup: try both number and string keys
                                      const state = indicatorStates[ind.id] || indicatorStates[String(ind.id)] || {}
                                      const status = state.status || null
-                                    const verdict = state.consultant_verdict
+
                                     const currentAuditKey = (selectedAudit || 'initial').trim().toLowerCase()
                                     const fileData = quizUploads['ind_' + ind.id]?.[currentAuditKey]
 
@@ -1397,19 +2137,19 @@ export default function ClientDashboard() {
                                             {/* Indicator header */}
                                             <div className="flex items-start gap-4 mb-4">
                                                 <div className={`mt-3 h-[28px] w-[28px] rounded-full border-2 flex items-center justify-center flex-shrink-0 text-[11px] font-black shadow-sm transition-all ${isDone ? 'bg-[#10b981] border-[#10b981] text-white' :
-                                                    isNonApplicable ? 'bg-slate-400 border-slate-400 text-white' :
-                                                        'bg-white border-gray-200 text-gray-400'
-                                                    }`}>
+                                                    isNonApplicable ? 'bg-slate-400 border-slate-400 text-white' : ''
+                                                    }`} style={(!isDone && !isNonApplicable) ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary, borderColor: getCriterionColor(currentCriterion.id).primary } : {}}>
                                                     {isDone ? <Check className="h-3.5 w-3.5" /> : (isNonApplicable ? '–' : idx + 1)}
                                                 </div>
                                                 <div className="flex-1 min-w-0 bg-slate-50/50 rounded-[20px] px-6 py-4 border border-slate-100/50 group-hover:bg-slate-50 transition-colors">
                                                     <div className="flex items-center gap-3">
                                                         <h3 className="text-base font-black text-slate-900">Indicateur {idx + 1}</h3>
                                                             <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${status === 'not_applicable' || status === 'non_applicable' ? 'text-slate-500 bg-slate-50' :
-                                                                 status === 'to_do' || status === 'doing' ? 'text-blue-600 bg-blue-50' :
                                                                  status === 'done' ? 'text-emerald-600 bg-emerald-50' :
-                                                                     'text-blue-600 bg-blue-50'
-                                                                 }`}>
+                                                                     ''
+                                                                 }`}
+                                                                style={status !== 'done' && status !== 'not_applicable' && status !== 'non_applicable' ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary } : {}}
+                                                             >
                                                                 {status === 'done' ? 'FAIT' : (status === 'not_applicable' || status === 'non_applicable' ? 'NA' : (status === 'to_do' || status === 'doing' ? 'EN COURS' : 'À DÉCLARER'))}
                                                             </span>
                                                             <button 
@@ -1418,11 +2158,12 @@ export default function ClientDashboard() {
                                                                     setSelectedVideoIndicator(ind.id);
                                                                     window.scrollTo({ top: 0, behavior: 'smooth' });
                                                                 }}
-                                                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-all border ${
+                                                                className={`font-poppins flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${
                                                                     selectedVideoIndicator === ind.id 
-                                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-100' 
-                                                                        : 'bg-white text-indigo-600 border-indigo-100 hover:bg-indigo-50'
+                                                                        ? 'shadow-sm' 
+                                                                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'
                                                                 }`}
+                                                                style={selectedVideoIndicator === ind.id ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary, borderColor: getCriterionColor(currentCriterion.id).border } : {}}
                                                             >
                                                                 <PlayCircle className="h-3 w-3" />
                                                                 {selectedVideoIndicator === ind.id ? 'Vidéo en cours' : 'Voir la vidéo'}
@@ -1446,9 +2187,16 @@ export default function ClientDashboard() {
                                             <div className="ml-[14px] pl-8">
                                                 <div className="bg-white rounded-[24px] border border-gray-100 shadow-[0_4px_24px_rgba(0,0,0,0.04)] p-8 relative transition-all">
                                                     {/* Top Right Model Button */}
-                                                    {status !== 'non_applicable' && (
+                                                    {status !== 'non_applicable' && [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32].includes(Number(ind.id)) && (
                                                         <div className="absolute top-6 right-8">
-                                                            <button className="flex items-center gap-2 px-4 py-2 bg-[#f5f0ff] text-[#7c3aed] rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-[#ede5ff] transition-all">
+                                                            <button 
+                                                                onClick={() => {
+                                                                    setSelectedTemplateIndicator(Number(ind.id));
+                                                                    setTemplateModalOpen(true);
+                                                                }}
+                                                                className="font-poppins flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all hover:opacity-80"
+                                                                style={{ backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary }}
+                                                            >
                                                                 <Download className="h-3.5 w-3.5" /> Télécharger le modèle type
                                                             </button>
                                                         </div>
@@ -1460,21 +2208,21 @@ export default function ClientDashboard() {
                                                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-5">Déclarez votre statut</p>
                                                             <div className="space-y-2.5">
                                                                 {[
-                                                                    { val: 'to_do', label: 'En cours', icon: Sun, color: 'text-blue-600', active: 'border-blue-200 bg-blue-50 text-blue-700' },
-                                                                    { val: 'done', label: 'Fait', icon: Flag, color: 'text-emerald-500', active: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
-                                                                    { val: 'not_applicable', label: 'Non applicable', icon: Ban, color: 'text-orange-500', active: 'border-orange-500 bg-orange-50 text-orange-700' },
+                                                                    { val: 'to_do', label: 'En cours', icon: Sun },
+                                                                    { val: 'done', label: 'Fait', icon: Flag, active: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
+                                                                    { val: 'not_applicable', label: 'Non applicable', icon: Ban, active: 'border-orange-500 bg-orange-50 text-orange-700' },
                                                                 ].map(opt => (
                                                                     <button
                                                                         key={opt.val}
                                                                         onClick={() => handleStatusChange(ind.id, opt.val)}
-                                                                        disabled={!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null}
                                                                         className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 text-[13px] font-bold transition-all ${status === opt.val
-                                                                            ? opt.active
+                                                                            ? (opt.active || 'shadow-sm')
                                                                             : 'border-transparent bg-gray-50/50 text-gray-400 hover:bg-gray-50'
-                                                                            } ${(!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null) ? 'opacity-50 cursor-not-allowed' : 'opacity-100 cursor-pointer'}`}
+                                                                            } opacity-100 cursor-pointer`}
+                                                                        style={status === opt.val && opt.val === 'to_do' ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary, borderColor: getCriterionColor(currentCriterion.id).border } : {}}
                                                                     >
                                                                         <div className="flex items-center gap-3">
-                                                                            <opt.icon className={`h-4 w-4 ${status === opt.val ? '' : 'text-gray-300'}`} />
+                                                                            <opt.icon className={`h-4 w-4 ${status === opt.val ? '' : 'text-gray-300'}`} style={status === opt.val && opt.val === 'to_do' ? { color: getCriterionColor(currentCriterion.id).primary } : {}} />
                                                                             {opt.label}
                                                                         </div>
                                                                         {status === opt.val && <CheckCircle className={`h-4 w-4`} />}
@@ -1532,10 +2280,10 @@ export default function ClientDashboard() {
                                                                     <button
                                                                         onClick={() => { setPendingCriterionId(ind.id); fileInputRef.current?.click() }}
                                                                         disabled={uploadingFor === 'ind_' + ind.id || savingIndicator === ind.id}
-                                                                        className="w-full h-[154px] flex flex-col items-center justify-center gap-3 rounded-[24px] border-2 border-dashed border-gray-100 text-gray-500 hover:border-[#7c3aed]/30 hover:bg-[#fbf9ff] transition-all group"
+                                                                        className="w-full h-[154px] flex flex-col items-center justify-center gap-3 rounded-[24px] border-2 border-dashed border-gray-100 text-gray-500 transition-all group"
                                                                     >
                                                                         <div className="h-12 w-12 bg-white rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-gray-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                                            <Upload className="h-6 w-6 text-[#7c3aed]" />
+                                                                            <Upload className="h-6 w-6" style={{ color: getCriterionColor(currentCriterion.id).primary }} />
                                                                         </div>
                                                                         <div className="text-center">
                                                                             <p className="text-sm font-black text-gray-800">Cliquez pour ajouter un document</p>
@@ -1547,15 +2295,7 @@ export default function ClientDashboard() {
 
                                                             {/* SAVE BUTTON AT BOTTOM OF CARD */}
                                                             <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-end gap-4">
-                                                                {saveSuccess[ind.id] && (
-                                                                    <div className="flex items-center gap-2 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100 animate-in fade-in zoom-in duration-300">
-                                                                        <CheckCircle className="h-4 w-4 text-emerald-500" />
-                                                                        <span className="text-emerald-600 text-[11px] font-black uppercase tracking-widest leading-none">
-                                                                            Enregistrement réussi !
-                                                                        </span>
-                                                                    </div>
-                                                                )}
-                                                                
+
                                                                  <button
                                                                      onClick={() => {
                                                                          if (!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null) {
@@ -1570,9 +2310,10 @@ export default function ClientDashboard() {
                                                                          savingIndicator === ind.id 
                                                                              ? 'bg-gray-100 text-gray-400 cursor-progress'
                                                                              : (dirtyIndicators.has(ind.id) || pendingFiles[ind.id] || status === null)
-                                                                                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700 hover:scale-[1.02] active:scale-95'
+                                                                                 ? 'text-white shadow-lg hover:scale-[1.02] active:scale-95'
                                                                                  : 'bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100'
                                                                      }`}
+                                                                     style={(dirtyIndicators.has(ind.id) || pendingFiles[ind.id] || status === null) && savingIndicator !== ind.id ? { backgroundColor: getCriterionColor(currentCriterion.id).primary } : {}}
                                                                  >
                                                                      {savingIndicator === ind.id ? (
                                                                          'Enregistrement...'
@@ -1622,10 +2363,72 @@ export default function ClientDashboard() {
                     confirmText={statusModal.confirmText}
                     cancelText={statusModal.cancelText}
                     isLoading={statusModal.isLoading}
+                    criterionId={currentCriterion?.id}
                 />
-            </div>
-        )
-    }
+
+                {templateModalOpen && (
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                        <div className="max-w-2xl w-full bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 relative flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+                            {/* Close Button */}
+                            <button 
+                                onClick={() => setTemplateModalOpen(false)}
+                                className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-50 transition-all"
+                            >
+                                <XCircle className="h-6 w-6" />
+                            </button>
+
+                            {/* Header */}
+                            <div className="mb-4 pr-8">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-2"
+                                      style={{ backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary }}>
+                                    Modèles Types
+                                </span>
+                                <h3 className="text-xl font-black text-slate-900">{getModalContent(selectedTemplateIndicator).title}</h3>
+                                <p className="text-xs text-slate-400 font-medium mt-1">
+                                    {getModalContent(selectedTemplateIndicator).desc}
+                                </p>
+                            </div>
+
+                            {/* Scrollable File List */}
+                            <div className="overflow-y-auto space-y-3 my-2 pr-1 flex-1">
+                                {getModalContent(selectedTemplateIndicator).files.map((item, idx) => (
+                                    <div key={idx} className="flex items-center gap-4 p-4 bg-slate-50/50 hover:bg-slate-50 border border-slate-100/50 rounded-2xl transition-all group">
+                                        <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform"
+                                             style={{ backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary }}>
+                                            <FileText className="h-5 w-5" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="text-xs font-bold text-slate-800 leading-snug truncate">{item.name}</h4>
+                                            <p className="text-[10px] text-slate-400 font-medium mt-0.5 truncate">{item.file}</p>
+                                        </div>
+                                        <a 
+                                            href={`${getModalContent(selectedTemplateIndicator).pathPrefix}${item.file}`} 
+                                            download 
+                                            className="flex items-center gap-2 px-4 py-2 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md active:scale-95 flex-shrink-0 hover:opacity-90"
+                                            style={{ backgroundColor: getCriterionColor(currentCriterion.id).primary }}
+                                        >
+                                            <Download className="h-3.5 w-3.5" /> Télécharger
+                                        </a>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
+                                <button 
+                                    onClick={() => setTemplateModalOpen(false)}
+                                    className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all"
+                                >
+                                    Fermer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                </div>
+            )
+        }
 
     // ─── MAIN DASHBOARD (Vue d'ensemble) ─────────────────────────────────────
     return (
@@ -1635,7 +2438,7 @@ export default function ClientDashboard() {
                 indicators={indicators}
                 indicatorStates={indicatorStates}
                 consultantName={consultantName}
-                unreadCount={messages.filter(m => m.sender_id !== user.id && !m.read_at).length}
+                unreadCount={messages.filter(m => m.sender_id !== user?.id && !m.read_at).length}
                 upcomingCount={caseEvents.filter(e => new Date(e.event_date) > new Date()).length}
                 isOpen={showMobileMenu}
                 onClose={() => setShowMobileMenu(false)}
@@ -1658,30 +2461,31 @@ export default function ClientDashboard() {
                     </div>
                 )}
 
-                <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
+                <main className="flex-1 p-6 lg:p-8 w-full max-w-[1300px] mx-auto">
                     {/* Audit Selection Tabs (Horizontal Badges) */}
-                    <div className="flex flex-wrap gap-3 mb-10">
+                    <div className="flex flex-wrap justify-center gap-3 mb-10">
                         {casesData?.flatMap((c) => {
-                            const types = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
+                            const rawTypes = Array.isArray(c.audit_type) ? c.audit_type : [c.audit_type || 'Initial'];
+                            const types = sortAuditTypes(rawTypes);
                             return types.map((type, typeIdx) => {
                                 const getColors = (t) => {
                                     const typeStr = t.toLowerCase();
                                     if (typeStr.includes('initial')) return { 
-                                        active: 'bg-[#cc6d3e] text-white border-[#cc6d3e] shadow-[#cc6d3e]/30', 
-                                        inactive: 'hover:border-[#cc6d3e]/30 hover:bg-[#cc6d3e]/5 text-slate-400',
+                                        active: 'bg-[#fdf6f0] text-[#cc6d3e] border-[#cc6d3e] shadow-[#cc6d3e]/10', 
+                                        inactive: 'hover:border-[#cc6d3e]/30 hover:bg-[#cc6d3e]/5 text-slate-600 border-slate-200/80',
                                         dot: 'bg-[#cc6d3e]' 
                                     };
                                     if (typeStr.includes('surveillance')) return { 
-                                        active: 'bg-blue-600 text-white border-blue-600 shadow-blue-600/30', 
-                                        inactive: 'hover:border-blue-600/30 hover:bg-blue-600/5 text-slate-400',
-                                        dot: 'bg-blue-600' 
+                                        active: 'bg-[#f0f7ff] text-[#2563eb] border-[#2563eb] shadow-blue-600/10', 
+                                        inactive: 'hover:border-blue-600/30 hover:bg-blue-600/5 text-slate-600 border-slate-200/80',
+                                        dot: 'bg-[#2563eb]' 
                                     };
                                     if (typeStr.includes('renouvellement')) return { 
-                                        active: 'bg-emerald-600 text-white border-emerald-600 shadow-emerald-600/30', 
-                                        inactive: 'hover:border-emerald-600/30 hover:bg-emerald-600/5 text-slate-400',
-                                        dot: 'bg-emerald-600' 
+                                        active: 'bg-[#f0fdf4] text-[#16a34a] border-[#16a34a] shadow-emerald-600/10', 
+                                        inactive: 'hover:border-emerald-600/30 hover:bg-emerald-600/5 text-slate-600 border-slate-200/80',
+                                        dot: 'bg-[#16a34a]' 
                                     };
-                                    return { active: 'bg-slate-800 text-white', inactive: 'text-slate-400', dot: 'bg-slate-400' };
+                                    return { active: 'bg-slate-50 text-slate-700 border-slate-300', inactive: 'text-slate-600 border-slate-200/80', dot: 'bg-slate-400' };
                                 };
                                 
                                 const colors = getColors(type);
@@ -1696,13 +2500,13 @@ export default function ClientDashboard() {
                                             setSelectedAudit(type);
                                             localStorage.setItem('clientSelectedAudit', type);
                                         }}
-                                        className={`flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-black uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
+                                        className={`font-poppins flex items-center gap-3 px-8 py-4 rounded-[20px] text-[10px] font-bold uppercase tracking-[0.15em] transition-all duration-500 border-2 ${
                                             isSelected 
-                                                ? `${colors.active} shadow-[0_10px_30px_-10px_rgba(0,0,0,0.3)] scale-105 z-10` 
-                                                : `bg-white border-slate-50 ${colors.inactive} shadow-sm translate-y-0`
+                                                ? `${colors.active} scale-105 z-10` 
+                                                : `bg-white ${colors.inactive} shadow-sm translate-y-0`
                                         } hover:-translate-y-1 active:scale-95`}
                                     >
-                                        <div className={`h-2.5 w-2.5 rounded-full shadow-inner ${isSelected ? 'bg-white animate-pulse' : colors.dot} transition-colors duration-500`} />
+                                        <div className={`h-2.5 w-2.5 rounded-full shadow-inner ${colors.dot} ${isSelected ? 'animate-pulse scale-110' : ''} transition-colors duration-500`} />
                                         AUDIT {cleanType}
                                     </button>
                                 );
@@ -1711,11 +2515,11 @@ export default function ClientDashboard() {
                     </div>
 
                     {/* Welcome card */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-                        <h2 className="text-base font-black text-gray-900 mb-1">
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 mb-6 text-center">
+                        <h2 className="text-xl font-black text-gray-900 mb-2 justify-center flex items-center gap-2">
                             Bienvenue dans votre espace d'accompagnement Qualiopi 👋
                         </h2>
-                        <p className="text-sm text-gray-500 mb-5">
+                        <p className="text-sm text-gray-500 mb-6 leading-relaxed max-w-3xl mx-auto">
                             Cette plateforme est conçue pour vous guider pas à pas vers votre certification. Pour chaque critère du référentiel,{' '}
                             <span className="text-[#cc6d3e] font-semibold">vous retrouverez des ressources pédagogiques</span>{' '}
                             et un espace pour déposer vos éléments. Voici le déroulé de votre préparation :
@@ -1727,15 +2531,39 @@ export default function ClientDashboard() {
                                 { n: 3, title: 'Soumettez le dossier', desc: "Une fois les indicateurs 'Faits', envoyez le dossier complet au consultant." },
                                 { n: 4, title: 'Audit blanc', desc: 'Le consultant révise vos preuves et vous prépare à l\'audit final.' },
                             ].map(step => (
-                                <div key={step.n} className="flex flex-col gap-2 p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-                                    <div className="h-7 w-7 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs font-black text-gray-400 shadow-sm">
+                                <div key={step.n} className="flex flex-col items-center text-center gap-3 p-4 bg-gray-50/80 rounded-2xl border border-gray-100 hover:bg-white hover:shadow-md hover:border-[#cc6d3e]/20 transition-all duration-300">
+                                    <div className="h-8 w-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-xs font-black text-gray-400 shadow-sm">
                                         {step.n}
                                     </div>
                                     <p className="text-xs font-black text-gray-800">{step.title}</p>
-                                    <p className="text-[11px] text-gray-400 leading-relaxed">{step.desc}</p>
+                                    <p className="text-[11px] text-gray-400 leading-relaxed max-w-[160px]">{step.desc}</p>
                                 </div>
                             ))}
                         </div>
+                    </div>
+
+                    {/* Guide Base Documentaire Banner */}
+                    <div className="bg-gradient-to-r from-[#faf1ec] to-[#f5e2d6]/30 rounded-2xl border border-[#f5e2d6] shadow-sm p-6 mb-6 flex flex-col sm:flex-row items-center justify-between gap-6 group hover:shadow-md transition-all">
+                        <div className="flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-xl bg-white flex items-center justify-center shadow-sm border border-[#f5e2d6] group-hover:scale-110 transition-transform">
+                                <FileText className="h-6 w-6 text-[#cc6d3e]" />
+                            </div>
+                            <div className="text-left">
+                                <h3 className="text-base font-black text-gray-900 mb-1">Guide de Base Documentaire</h3>
+                                <p className="text-xs text-gray-500 font-medium">
+                                    Consultez et téléchargez le guide complet pour vous aider à structurer vos documents et preuves.
+                                </p>
+                            </div>
+                        </div>
+                        <a 
+                            href="/ressources/Guide_Base_Documentaire_EasyQual.pdf" 
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 flex items-center gap-2 px-6 py-3 bg-[#cc6d3e] text-white text-sm font-bold rounded-xl hover:bg-[#b55d32] shadow-lg shadow-[#cc6d3e]/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                        >
+                            <Download className="h-4 w-4" />
+                            Télécharger le Guide
+                        </a>
                     </div>
 
                     {/* Progress Bar with criteria */}
@@ -1777,6 +2605,13 @@ export default function ClientDashboard() {
                             })}
                         </div>
                     </div>
+
+                    {/* Avis de pré-audit partagé par le consultant */}
+                    {clientPreAudit && (
+                        <div className="mb-6">
+                            <PreAuditResult result={clientPreAudit} auditType={selectedAudit} />
+                        </div>
+                    )}
 
                     {/* Stats cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -1826,23 +2661,8 @@ export default function ClientDashboard() {
                         </div>
                     </div>
 
-                    {/* Soumission finale */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
-                        <h3 className="text-base font-black text-gray-900 mb-1">Soumission finale</h3>
-                        <p className="text-sm text-gray-400 mb-4">
-                            Une fois les {totalIndicators} indicateurs traités,{' '}
-                            <span className="text-[#cc6d3e] font-semibold">vous pourrez envoyer</span>{' '}
-                            le dossier complet à votre consultant.
-                        </p>
-                        <button
-                            disabled={validatedCount < totalIndicators}
-                            className="inline-flex items-center gap-2 px-6 py-3 bg-gray-100 text-gray-400 rounded-xl text-sm font-bold cursor-not-allowed transition-all disabled:opacity-60"
-                        >
-                            <CheckSquare className="h-4 w-4" />
-                            Soumettre mon dossier complet
-                        </button>
-                    </div>
 
+                    {/* Floating Toasts rendered globally in ClientTopBar */}
                 </main>
             </div>
         </div>

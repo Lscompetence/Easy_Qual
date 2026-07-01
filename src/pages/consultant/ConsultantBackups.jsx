@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../../supabaseClient'
+
 import { useAuth } from '../../contexts/AuthContext'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
 import { CloudOff, CloudCheck, ShieldCheck, Download, Clock, HardDrive, AlertCircle } from 'lucide-react'
 
 export default function ConsultantBackups() {
-    const { user } = useAuth()
+    useAuth()
     const [showMobileMenu, setShowMobileMenu] = useState(false)
     const [lastSync, setLastSync] = useState(new Date())
 
@@ -21,15 +21,15 @@ export default function ConsultantBackups() {
     return (
         <div className="bg-gray-50 min-h-screen flex font-sans">
             <ConsultantSidebar isOpen={showMobileMenu} onClose={() => setShowMobileMenu(false)} />
-            
+
             <div className="flex-1 flex flex-col min-w-0">
-                <ConsultantTopBar 
-                    showMobileMenu={showMobileMenu} 
+                <ConsultantTopBar
+                    showMobileMenu={showMobileMenu}
                     setShowMobileMenu={setShowMobileMenu}
                     showSearch={false}
                 />
 
-                <main className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full">
+                <main className="flex-1 p-6 lg:p-8 w-full max-w-[1300px] mx-auto">
                     {/* Header */}
                     <div className="mb-10">
                         <div className="flex items-center gap-4 mb-4">
@@ -43,12 +43,13 @@ export default function ConsultantBackups() {
                         </div>
                     </div>
 
+
                     {/* Status Card */}
                     <div className="bg-white rounded-[32px] border border-gray-100 shadow-xl shadow-gray-200/40 p-8 mb-8 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-8 opacity-5">
                             <HardDrive className="h-32 w-32" />
                         </div>
-                        
+
                         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-8 relative z-10">
                             <div className="space-y-4">
                                 <div className="flex items-center gap-3">
@@ -64,7 +65,7 @@ export default function ConsultantBackups() {
                                     Dernière synchronisation : {lastSync.toLocaleTimeString('fr-FR')}
                                 </div>
                             </div>
-                            
+
                             <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-6 flex flex-col items-center text-center">
                                 <ShieldCheck className="h-10 w-10 text-emerald-600 mb-2" />
                                 <span className="text-xs font-bold text-emerald-800 uppercase tracking-tighter">Protection active</span>

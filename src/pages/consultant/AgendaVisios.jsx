@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { Video, Calendar as CalendarIcon, Clock, User, ArrowRight, ExternalLink, Plus } from 'lucide-react'
+import { Video, Calendar as CalendarIcon, Clock, User, ArrowRight, ExternalLink, Plus, MessageSquare } from 'lucide-react'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
 import { useNavigate } from 'react-router-dom'
@@ -9,9 +9,12 @@ import { useNavigate } from 'react-router-dom'
 export default function AgendaVisios() {
     const { user } = useAuth()
     const navigate = useNavigate()
-    const [clientRows, setClientRows] = useState([])
+    const [events, setEvents] = useState([])
+    const [casesCount, setCasesCount] = useState(0)
+    const [casesWithoutMeetings, setCasesWithoutMeetings] = useState(0)
     const [loading, setLoading] = useState(true)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
+    const [searchQuery, setSearchQuery] = useState('')
 
     useEffect(() => {
         if (user) fetchData()
@@ -21,7 +24,7 @@ export default function AgendaVisios() {
         try {
             setLoading(true)
 
-            // 1. Fetch ALL cases for this consultant
+            // 1. Fetch all cases for count
             const { data: casesData, error: casesError } = await supabase
                 .from('cases')
                 .select('id, category, status, tenants(name)')
@@ -29,35 +32,32 @@ export default function AgendaVisios() {
 
             if (casesError) throw casesError
 
+            // 2. Fetch events (we can just fetch all events from the user's cases where event_type is 'meeting' or visio_link is present)
             const caseIds = casesData.map(c => c.id)
-
-            // 2. Fetch ALL Audit Blanc events across cases
-            let auditBlancEvents = []
+            let fetchedEvents = []
+            
             if (caseIds.length > 0) {
                 const { data: eventsData, error: eventsError } = await supabase
                     .from('case_events')
-                    .select('id, case_id, event_date, title, visio_link, event_type, status')
+                    .select(`
+                        id, case_id, title, event_date, visio_link, event_type, status,
+                        cases ( category, status, tenants(name) )
+                    `)
                     .in('case_id', caseIds)
-                    .or('event_type.eq.audit,title.ilike.%audit blanc%')
                     .order('event_date', { ascending: true })
 
                 if (eventsError) throw eventsError
-                auditBlancEvents = eventsData || []
+                
+                fetchedEvents = eventsData.filter(e => e.event_type === 'meeting' || e.visio_link)
             }
 
-            // 3. Merge: for each case, attach its Audit Blanc event (if any)
-            const rows = casesData.map(c => {
-                const auditEvent = auditBlancEvents.find(e => e.case_id === c.id)
-                return {
-                    caseId: c.id,
-                    clientName: c.tenants?.name || 'Client Inconnu',
-                    category: c.category,
-                    status: c.status,
-                    auditEvent: auditEvent || null
-                }
-            })
+            // Calculate which cases don't have ANY meeting
+            const casesWithMeetings = new Set(fetchedEvents.map(e => e.case_id))
+            const without = casesData.filter(c => !casesWithMeetings.has(c.id)).length
 
-            setClientRows(rows)
+            setCasesCount(casesData.length)
+            setCasesWithoutMeetings(without)
+            setEvents(fetchedEvents)
         } catch (error) {
             console.error('Error fetching agenda data:', error)
         } finally {
@@ -67,11 +67,19 @@ export default function AgendaVisios() {
 
     // Stats
     const stats = {
-        total: clientRows.length,
-        scheduled: clientRows.filter(r => r.auditEvent).length,
-        missingLink: clientRows.filter(r => r.auditEvent && !r.auditEvent.visio_link).length,
-        notScheduled: clientRows.filter(r => !r.auditEvent).length
+        totalCases: casesCount,
+        scheduledMeetings: events.length,
+        notScheduledCases: casesWithoutMeetings,
+        missingLink: events.filter(e => !e.visio_link).length
     }
+
+    const filteredEvents = events.filter(ev => {
+        if (!searchQuery) return true;
+        const searchLower = searchQuery.toLowerCase();
+        const clientName = ev.cases?.tenants?.name || 'Client Inconnu';
+        const title = ev.title || 'Réunion';
+        return clientName.toLowerCase().includes(searchLower) || title.toLowerCase().includes(searchLower);
+    });
 
     return (
         <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
@@ -80,14 +88,16 @@ export default function AgendaVisios() {
                 <ConsultantTopBar
                     showMobileMenu={showMobileMenu}
                     setShowMobileMenu={setShowMobileMenu}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
                 />
 
                 <main className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-[2000px] mx-auto w-full">
 
                     {/* Header */}
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Agenda Visios</h1>
-                        <p className="mt-1 text-sm text-gray-500">Gérez vos sessions d'Audit Blanc et liens visio.</p>
+                        <h1 className="text-2xl font-bold text-gray-900">Agenda Visios & Réunions</h1>
+                        <p className="mt-1 text-sm text-gray-500">Gérez vos réunions planifiées avec vos clients et lancez vos visios.</p>
                     </div>
 
                     {/* KPI Cards */}
@@ -100,21 +110,21 @@ export default function AgendaVisios() {
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-gray-900">{stats.total}</h3>
+                                <h3 className="text-3xl font-bold text-gray-900">{stats.totalCases}</h3>
                                 <p className="text-xs font-medium text-gray-500 mt-1">Dossiers clients</p>
                             </div>
                         </div>
 
-                        {/* Card 2: Audits Blancs planifiés */}
+                        {/* Card 2: Réunions planifiées */}
                         <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between group hover:shadow-md transition-shadow">
                             <div className="flex justify-between items-start mb-4">
                                 <div className="p-3 bg-purple-50 rounded-lg text-purple-600">
-                                    <Video className="h-6 w-6" />
+                                    <CalendarIcon className="h-6 w-6" />
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-gray-900">{stats.scheduled}</h3>
-                                <p className="text-xs font-medium text-gray-500 mt-1">Audits Blancs planifiés</p>
+                                <h3 className="text-3xl font-bold text-gray-900">{stats.scheduledMeetings}</h3>
+                                <p className="text-xs font-medium text-gray-500 mt-1">Réunions au total</p>
                             </div>
                         </div>
 
@@ -124,13 +134,13 @@ export default function AgendaVisios() {
                                 <div className="p-3 bg-amber-50 rounded-lg text-amber-600">
                                     <Clock className="h-6 w-6" />
                                 </div>
-                                {stats.notScheduled > 0 && (
-                                    <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-full uppercase">À planifier</span>
+                                {stats.notScheduledCases > 0 && (
+                                    <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-1 rounded-full uppercase">À relancer</span>
                                 )}
                             </div>
                             <div>
-                                <h3 className="text-3xl font-bold text-gray-900">{stats.notScheduled}</h3>
-                                <p className="text-xs font-medium text-gray-500 mt-1">Non planifiés</p>
+                                <h3 className="text-3xl font-bold text-gray-900">{stats.notScheduledCases}</h3>
+                                <p className="text-xs font-medium text-gray-500 mt-1">Dossiers sans réunion</p>
                             </div>
                         </div>
 
@@ -146,7 +156,7 @@ export default function AgendaVisios() {
                             </div>
                             <div>
                                 <h3 className="text-3xl font-bold text-gray-900">{stats.missingLink}</h3>
-                                <p className="text-xs font-medium text-gray-500 mt-1">Liens Visio manquants</p>
+                                <p className="text-xs font-medium text-gray-500 mt-1">Réunions sans lien Visio</p>
                             </div>
                         </div>
                     </div>
@@ -154,7 +164,7 @@ export default function AgendaVisios() {
                     {/* Table */}
                     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
                         <div className="flex items-center justify-between mb-6">
-                            <h3 className="text-base font-bold text-gray-900">Audits Blancs — Tous les clients</h3>
+                            <h3 className="text-base font-bold text-gray-900">Agenda des Réunions & Visios</h3>
                         </div>
 
                         <div className="overflow-x-auto">
@@ -162,6 +172,7 @@ export default function AgendaVisios() {
                                 <thead>
                                     <tr className="text-left text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50">
                                         <th className="pb-3 pl-2">Client</th>
+                                        <th className="pb-3">Réunion</th>
                                         <th className="pb-3">Date Prévue</th>
                                         <th className="pb-3">Statut Lien</th>
                                         <th className="pb-3 text-right pr-2">Action</th>
@@ -169,102 +180,121 @@ export default function AgendaVisios() {
                                 </thead>
                                 <tbody>
                                     {loading ? (
-                                        <tr><td colSpan="4" className="text-center py-10 text-sm text-gray-400">Chargement...</td></tr>
-                                    ) : clientRows.length === 0 ? (
-                                        <tr><td colSpan="4" className="text-center py-10 text-sm text-gray-400">Aucun dossier client.</td></tr>
+                                        <tr><td colSpan="5" className="text-center py-10 text-sm text-gray-400">Chargement...</td></tr>
+                                    ) : filteredEvents.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="5" className="py-16">
+                                                <div className="flex flex-col items-center justify-center text-center">
+                                                    <div className="h-16 w-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-4">
+                                                        <CalendarIcon className="h-8 w-8 text-gray-400" />
+                                                    </div>
+                                                    <h3 className="text-lg font-bold text-gray-900 mb-1">{events.length === 0 ? "Aucune réunion planifiée" : "Aucun résultat trouvé"}</h3>
+                                                    <p className="text-sm text-gray-500 max-w-sm mb-6">
+                                                        {events.length === 0 ? "Vous n'avez pas encore programmé de réunion ou d'audit blanc dans vos dossiers." : "Aucune réunion ne correspond à votre recherche."}
+                                                    </p>
+                                                    {events.length === 0 && (
+                                                        <button 
+                                                            onClick={() => navigate('/consultant/cases')}
+                                                            className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-colors shadow-sm"
+                                                        >
+                                                            Voir mes dossiers
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
                                     ) : (
-                                        clientRows.map((row) => {
-                                            const hasEvent = !!row.auditEvent
-                                            const hasLink = hasEvent && !!row.auditEvent.visio_link
-
+                                        filteredEvents.map((ev) => {
+                                            const clientName = ev.cases?.tenants?.name || 'Client Inconnu'
+                                            const isPast = ev.event_date && new Date(ev.event_date) < new Date()
                                             return (
                                                 <tr
-                                                    key={row.caseId}
-                                                    onClick={() => navigate(`/consultant/case/${row.caseId}`)}
+                                                    key={ev.id}
+                                                    onClick={() => navigate(`/consultant/case/${ev.case_id}`)}
                                                     className="group hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-50 last:border-b-0"
                                                 >
                                                     {/* Client */}
                                                     <td className="py-5 pl-4">
                                                         <div className="flex items-center">
-                                                            <div className="h-10 w-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-sm font-bold mr-4 uppercase shadow-sm">
-                                                                {row.clientName?.substring(0, 2) || 'UK'}
+                                                            <div className="h-10 w-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-sm font-bold mr-4 uppercase shadow-sm flex-shrink-0">
+                                                                {clientName.substring(0, 2) || 'UK'}
                                                             </div>
                                                             <div className="flex flex-col">
                                                                 <span className="text-base font-bold text-gray-900 group-hover:text-purple-600 transition-colors mb-0.5">
-                                                                    {row.clientName}
+                                                                    {clientName}
                                                                 </span>
                                                                 <span className="text-xs text-gray-400 font-medium">
                                                                     <span className="font-semibold text-gray-500 uppercase text-[10px] mr-1">
-                                                                        {row.category === 'multi-site' ? 'Multi-site' : 'Mono-site'}
+                                                                        {ev.cases?.category === 'multi-site' ? 'Multi-site' : 'Mono-site'}
                                                                     </span>
                                                                 </span>
                                                             </div>
                                                         </div>
                                                     </td>
 
+                                                    {/* Réunion */}
+                                                    <td className="py-5">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="p-1.5 rounded-lg bg-gray-100 text-gray-500">
+                                                                <MessageSquare className="h-3.5 w-3.5" />
+                                                            </div>
+                                                            <span className="text-sm font-bold text-gray-700">
+                                                                {ev.title || 'Réunion'}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+
                                                     {/* Date */}
                                                     <td className="py-5">
-                                                        {hasEvent ? (
-                                                            <div className="flex items-center gap-2 text-sm text-gray-600 font-medium">
-                                                                <CalendarIcon className="h-4 w-4 text-gray-400" />
-                                                                {new Date(row.auditEvent.event_date).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}
+                                                        {ev.event_date ? (
+                                                            <div className="flex flex-col">
+                                                                <span className={`text-sm font-bold ${isPast ? 'text-gray-400' : 'text-gray-900'}`}>
+                                                                    {new Date(ev.event_date).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                                                                </span>
+                                                                <span className="text-xs font-medium text-gray-500">
+                                                                    à {new Date(ev.event_date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                                                </span>
                                                             </div>
                                                         ) : (
-                                                            <span className="text-sm text-gray-300 italic">Non planifié</span>
+                                                            <span className="text-sm text-gray-400 italic">Date à définir</span>
                                                         )}
                                                     </td>
 
                                                     {/* Statut Lien */}
                                                     <td className="py-5">
-                                                        {hasEvent ? (
-                                                            hasLink ? (
-                                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
-                                                                    ● Lien Ajouté
-                                                                </span>
-                                                            ) : (
-                                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700">
-                                                                    ● Lien Manquant
-                                                                </span>
-                                                            )
+                                                        {ev.visio_link ? (
+                                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-100">
+                                                                ● Lien disponible
+                                                            </span>
                                                         ) : (
-                                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-400">
-                                                                — Pas d'audit
+                                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-100">
+                                                                ● Lien manquant
                                                             </span>
                                                         )}
                                                     </td>
 
                                                     {/* Action */}
                                                     <td className="py-5 text-right pr-2">
-                                                        {hasLink ? (
+                                                        {ev.visio_link ? (
                                                             <a
-                                                                href={row.auditEvent.visio_link}
+                                                                href={ev.visio_link.startsWith('http') ? ev.visio_link : `https://${ev.visio_link}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 onClick={(e) => e.stopPropagation()}
-                                                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                                                                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
                                                             >
-                                                                <Video className="h-3 w-3" /> Lancer Visio
+                                                                <Video className="h-3 w-3" /> Rejoindre la Visio
                                                             </a>
-                                                        ) : hasEvent ? (
-                                                            <div 
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    navigate(`/consultant/case/${row.caseId}?tab=planification`)
-                                                                }}
-                                                                className="text-xs font-bold text-blue-600 flex items-center justify-end gap-1 hover:underline underline-offset-4"
-                                                            >
-                                                                Modifier planification <ArrowRight className="h-3 w-3" />
-                                                            </div>
                                                         ) : (
-                                                            <div 
+                                                            <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation()
-                                                                    navigate(`/consultant/case/${row.caseId}?tab=planification`)
+                                                                    navigate(`/consultant/case/${ev.case_id}`)
                                                                 }}
-                                                                className="text-xs font-bold text-amber-600 flex items-center justify-end gap-1 hover:underline underline-offset-4"
+                                                                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-200 transition-colors"
                                                             >
-                                                                <Plus className="h-3 w-3" /> Planifier
-                                                            </div>
+                                                                Ajouter un lien
+                                                            </button>
                                                         )}
                                                     </td>
                                                 </tr>

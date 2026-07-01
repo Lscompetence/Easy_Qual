@@ -6,7 +6,7 @@ const SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3Mi
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 async function finalAdminRepair() {
-    const TARGET_EMAIL = 'yassinealaoui095@gmail.com'
+    const TARGET_EMAIL = 'devweb.lsc@outlook.com'
     console.log(`[🚀] RÉPARATION FINALE POUR: ${TARGET_EMAIL}`)
 
     const { data: { users } } = await supabase.auth.admin.listUsers()
@@ -16,6 +16,9 @@ async function finalAdminRepair() {
         console.error("Utilisateur introuvable.")
         return
     }
+
+
+
 
     // 🔥 CRITIQUE: On injecte le rôle dans les "user_metadata"
     // C'est ce qui permet au site de vous laisser passer sans attendre !

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import jsPDF from 'jspdf'
@@ -5,11 +6,16 @@ import autoTable from 'jspdf-autotable'
 
 import NewCaseModal from '../../components/consultant/NewCaseModal'
 import EventModal from '../../components/consultant/EventModal'
+import SignatureModal from '../../components/shared/SignatureModal'
 import { supabase } from '../../supabaseClient'
+import { getCriterionColor } from '../../utils/theme'
 import { useAuth } from '../../contexts/AuthContext'
 import ConsultantSidebar from '../../components/consultant/ConsultantSidebar'
 import ConsultantTopBar from '../../components/consultant/ConsultantTopBar'
 import StatusModal from '../../components/shared/StatusModal'
+import PreAuditResult from '../../components/consultant/PreAuditResult'
+import EliminatoiresControls from '../../components/consultant/EliminatoiresControls'
+import { calculerPreAudit, cleMatriceCategorie, eliminatoiresPourType, CAT } from '../AuditPrototype/referentiel'
 import {
     ChevronLeft,
     FileText,
@@ -39,7 +45,11 @@ import {
     AlertTriangle,
     Settings,
     Shield,
-    Eye
+    Eye,
+    EyeOff,
+    Mail,
+    Lock,
+    X
 } from 'lucide-react'
 
 // Icon mapping for Criteria
@@ -77,6 +87,19 @@ const normalizeAudit = (type) => {
     return t
 }
 
+const getAuditRank = (type) => {
+    const norm = normalizeAudit(type);
+    if (norm === 'initial') return 1;
+    if (norm === 'surveillance') return 2;
+    if (norm === 'renouvellement') return 3;
+    return 4;
+};
+
+const sortAuditTypes = (types) => {
+    if (!Array.isArray(types)) return types;
+    return [...types].sort((a, b) => getAuditRank(a) - getAuditRank(b));
+};
+
 export default function CaseDetails() {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -88,7 +111,6 @@ export default function CaseDetails() {
     const [criteriaData, setCriteriaData] = useState([])
     const [allIndicatorStates, setAllIndicatorStates] = useState([])
     const [error, setError] = useState(null)
-    const [stats, setStats] = useState({ total: 32, validated: 0 })
     const [showNewCaseModal, setShowNewCaseModal] = useState(false)
     const [quizUploads, setQuizUploads] = useState({}) // { criterion_id: { audit_type: quiz } }
     const [showMobileMenu, setShowMobileMenu] = useState(false)
@@ -113,14 +135,14 @@ export default function CaseDetails() {
     // Planning State
     const [events, setEvents] = useState([])
     const [showEventModal, setShowEventModal] = useState(false)
+    const [showSignatureModal, setShowSignatureModal] = useState(false)
+    const [signatureEventId, setSignatureEventId] = useState(null)
     const [editingEvent, setEditingEvent] = useState(null)
-    const [savingEvent, setSavingEvent] = useState(false)
 
     // Messaging State
     const [messages, setMessages] = useState([])
     const [newMessage, setNewMessage] = useState('')
     const [loadingMessages, setLoadingMessages] = useState(false)
-    const [scrolledToBottom, setScrolledToBottom] = useState(false)
     const messagesEndRef = useRef(null)
 
     // Status Modal State
@@ -135,7 +157,7 @@ export default function CaseDetails() {
         isLoading: false
     })
 
-    const showStatus = (type, title, message, onConfirm = null, confirmText = 'OK', cancelText = 'Annuler') => {
+    const showStatus = (type, title, message, onConfirm = null, confirmText = 'OK', cancelText = 'Annuler', criterionId = null) => {
         setStatusModal({
             isOpen: true,
             type,
@@ -144,9 +166,126 @@ export default function CaseDetails() {
             onConfirm,
             confirmText,
             cancelText,
+            criterionId,
             isLoading: false
         })
     }
+
+
+
+    // Email Access Modal State
+    const [showEmailConfirmModal, setShowEmailConfirmModal] = useState(false)
+    const [emailSending, setEmailSending] = useState(false)
+    const [toasts, setToasts] = useState([])
+
+    const showToast = useCallback((message, type = 'success') => {
+        const id = Date.now() + Math.random().toString(36).substr(2, 9)
+        setToasts(prev => [...prev, { id, message, type, created_at: new Date().toISOString() }])
+        setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id))
+        }, 4000)
+    }, [])
+
+    const renderLocalToasts = () => {
+        return (
+            <div className="fixed top-20 right-5 z-[9999] flex flex-col gap-3 max-w-sm pointer-events-none">
+                {toasts.map(t => {
+                    const iconMap = {
+                        success: <CheckCircle className="h-5 w-5 text-emerald-400" />,
+                        error: <XCircle className="h-5 w-5 text-rose-400" />,
+                        warning: <AlertTriangle className="h-5 w-5 text-amber-400" />,
+                        info: <Info className="h-5 w-5 text-indigo-400" />
+                    }
+                    const borderMap = {
+                        success: 'border-l-4 border-l-emerald-500 border-slate-800/80',
+                        error: 'border-l-4 border-l-rose-500 border-slate-800/80',
+                        warning: 'border-l-4 border-l-amber-500 border-slate-800/80',
+                        info: 'border-l-4 border-l-indigo-500 border-slate-800/80'
+                    }
+                    const titleMap = {
+                        success: 'Succès',
+                        error: 'Erreur',
+                        warning: 'Avertissement',
+                        info: 'Notification'
+                    }
+                    const icon = iconMap[t.type] || iconMap.info
+                    const borderClass = borderMap[t.type] || borderMap.info
+                    const title = titleMap[t.type] || titleMap.info
+                    const timeStr = t.created_at ? new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+                    return (
+                        <div
+                            key={t.id}
+                            className={`pointer-events-auto flex gap-4 bg-slate-900/95 text-white p-4 rounded-xl shadow-2xl border border-slate-800/50 backdrop-blur-md animate-in slide-in-from-top duration-300 w-80 sm:w-96 transition-all ${borderClass}`}
+                        >
+                            <div className="flex-shrink-0 mt-0.5">
+                                {icon}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                    <span className="text-sm font-bold tracking-wide text-slate-200">
+                                        {title}
+                                    </span>
+                                    {timeStr && (
+                                        <span className="text-[10px] text-slate-500 font-medium">
+                                            {timeStr}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-line font-medium break-words">
+                                    {t.message}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
+                                className="flex-shrink-0 text-slate-500 hover:text-slate-200 transition-colors p-1 rounded-lg hover:bg-slate-800"
+                                aria-label="Fermer"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    )
+                })}
+            </div>
+        )
+    }
+
+    const handleResendAccess = async () => {
+        if (!caseData || !caseData.tenants || !caseData.tenants.client_email) {
+            showToast("Email client manquant dans ce dossier.", "error")
+            return
+        }
+
+        try {
+            setEmailSending(true)
+            const tenant = caseData.tenants
+            
+            const { data, error } = await supabase.functions.invoke('invite-client', {
+                body: {
+                    email: tenant.client_email,
+                    password: tenant.initial_password || '',
+                    tenant_id: caseData.tenant_id,
+                    tenant_name: tenant.name
+                }
+            })
+
+            if (error) throw error
+            if (data?.error) throw new Error(data.error)
+
+            showToast(`Les accès ont été envoyés avec succès à ${tenant.client_email} ✓`, "success")
+            setShowEmailConfirmModal(false)
+        } catch (err) {
+            console.error('Error sending credentials:', err)
+            showToast(`L'envoi des accès a échoué : ${err.message}`, "error")
+        } finally {
+            setEmailSending(false)
+        }
+    }
+
+    const activeTabRef = useRef(activeTab)
+    useEffect(() => {
+        activeTabRef.current = activeTab
+    }, [activeTab])
 
     // Persist States
     useEffect(() => {
@@ -259,6 +398,70 @@ export default function CaseDetails() {
 
     const progressPercent = (allIndicatorStates.length > 0) ? globalProgress : (caseData?.progress || 0)
 
+    // ─── PRÉ-AUDIT (même moteur que l'audit blanc, scopé par type d'audit) ──────
+    const verdictsForAudit = useCallback((auditType) => {
+        const grouped = getGroupedStates(auditType)
+        const verdicts = {}
+        Object.entries(grouped).forEach(([indId, s]) => {
+            verdicts[indId] = s?.consultant_verdict || 'to_do'
+        })
+        return verdicts
+    }, [getGroupedStates])
+
+    // Catégories du dossier mappées vers les clés de la matrice (AFC/BC/VAE/CFA), dédupliquées.
+    // Si aucune catégorie, un seul périmètre "global" (null = pas de filtrage matrice).
+    const categoriesMatrice = useMemo(() => {
+        const keys = [...new Set((caseData?.training_categories || []).map(cleMatriceCategorie))]
+        return keys.length ? keys : [null]
+    }, [caseData?.training_categories])
+
+    // Critères éliminatoires (ANO-03) applicables à un type, enrichis du statut consultant
+    const eliminatoiresForType = useCallback((type) => {
+        const statuts = (caseData?.eliminatoires || {})[String(type).trim()] || {}
+        return eliminatoiresPourType(type, statuts)
+    }, [caseData?.eliminatoires])
+
+    // Met à jour le statut d'un critère éliminatoire (toggle) et persiste
+    const handleSetEliminatoire = async (type, critKey, statut) => {
+        const typeKey = String(type).trim()
+        const current = caseData?.eliminatoires || {}
+        const currentType = { ...(current[typeKey] || {}) }
+        if (currentType[critKey] === statut) delete currentType[critKey] // re-clic = annule
+        else currentType[critKey] = statut
+        const next = { ...current, [typeKey]: currentType }
+        setCaseData(prev => ({ ...prev, eliminatoires: next }))
+        const { error } = await supabase.from('cases').update({ eliminatoires: next }).eq('id', id)
+        if (error) console.warn('MAJ critère éliminatoire échouée:', error)
+    }
+
+    // Périmètres (catégorie × type sélectionné) pour l'encart
+    const SEVERITE_AVIS = { FAVORABLE: 0, RESERVE: 1, DEFAVORABLE: 2 }
+    const preAuditPerimetres = useMemo(() => {
+        const verdicts = verdictsForAudit(selectedAudit)
+        const elim = eliminatoiresForType(selectedAudit)
+        return categoriesMatrice.map(cat => ({ cat, result: calculerPreAudit(verdicts, cat, elim) }))
+    }, [verdictsForAudit, selectedAudit, categoriesMatrice, eliminatoiresForType])
+
+    // Avis le plus sévère du type sélectionné (badge de l'onglet)
+    const preAuditCurrent = useMemo(() => {
+        return preAuditPerimetres.reduce(
+            (worst, p) => (SEVERITE_AVIS[p.result.avis.cle] > SEVERITE_AVIS[worst.avis.cle] ? p.result : worst),
+            preAuditPerimetres[0].result
+        )
+    }, [preAuditPerimetres])
+
+    // Partage de l'avis au client (par défaut non partagé)
+    const [savingShare, setSavingShare] = useState(false)
+    const handleTogglePreAuditShare = async () => {
+        if (!caseData) return
+        setSavingShare(true)
+        const next = !caseData.preaudit_shared
+        const { error } = await supabase.from('cases').update({ preaudit_shared: next }).eq('id', id)
+        if (!error) setCaseData(prev => ({ ...prev, preaudit_shared: next }))
+        else console.warn('Toggle partage pré-audit échoué:', error)
+        setSavingShare(false)
+    }
+
     // Auto-sync progress to DB if it differs from stored value
     useEffect(() => {
         if (!caseData || allIndicatorStates.length === 0 || criteriaData.length === 0) return
@@ -271,7 +474,7 @@ export default function CaseDetails() {
             (progressPercent > 0 && currentDBStatus !== 'active' && currentDBStatus !== 'validated')
 
         if (needsSync) {
-            console.log(`Syncing progress to DB: ${progressPercent}%, status: ${targetStatus}`)
+
             const syncProgress = async () => {
                 const { error: syncError } = await supabase.from('cases').update({
                     progress: progressPercent,
@@ -286,104 +489,55 @@ export default function CaseDetails() {
             }
             syncProgress()
         }
-    }, [progressPercent, caseData?.progress, caseData?.status, id])
+    }, [progressPercent, caseData?.progress, caseData?.status, id, allIndicatorStates.length, caseData, criteriaData.length])
 
-    // Handle tab initialization from URL
+    // Handle tab and deep links from URL
     useEffect(() => {
         const params = new URLSearchParams(location.search)
         const tab = params.get('tab')
+        const critId = params.get('criterionId')
+        const indId = params.get('indicatorId')
+        const audit = params.get('audit')
+
         if (tab === 'planification' || tab === 'messagerie' || tab === 'suivi_rno') {
             setActiveTab(tab)
         }
-    }, [location.search])
 
-    useEffect(() => {
-        if (!caseData || criteriaData.length === 0) return
-        
-        let validatedCount = 0
-        Object.values(indicatorStatesMap).forEach(s => {
-            if (s.consultant_verdict === 'validated' || s.consultant_verdict === 'non_applicable') validatedCount++
-        })
-        setStats({ total: totalPossibleIndicators, validated: validatedCount })
-    }, [indicatorStatesMap, criteriaData, caseData])
-
-    useEffect(() => {
-        if (id && user) {
-            fetchCaseDetails()
-        } else if (!id) {
-            setError("ID manquant dans l'URL")
-            setLoading(false)
+        if (audit) {
+            setSelectedAudit(audit)
         }
 
-        // Realtime subscription for ALL relevant case data
-        if (id) {
-            const channel = supabase
-                .channel(`case_realtime:${id}`)
-                // Indicator States Subscription
-                .on('postgres_changes', {
-                    event: '*',
-                    schema: 'public',
-                    table: 'case_indicator_states',
-                    filter: `case_id=eq.${id}`
-                }, (payload) => {
-                    console.log('Realtime indicator sync:', payload.eventType)
-                    if (payload.eventType === 'DELETE') {
-                        setAllIndicatorStates(prev => prev.filter(s => s.id !== (payload.old.id || payload.old.id_indicateur_perdu))) // Fallback to id
-                    } else {
-                        // For INSERT and UPDATE: Replace or add into the local array by ID
-                        setAllIndicatorStates(prev => {
-                            const filtered = prev.filter(s => s.id !== payload.new.id)
-                            return [...filtered, payload.new]
-                        })
-                    }
-                })
-                // Quiz Uploads Subscription
-                .on('postgres_changes', {
-                    event: '*',
-                    schema: 'public',
-                    table: 'criterion_quiz_uploads',
-                    filter: `case_id=eq.${id}`
-                }, (payload) => {
-                    if (payload.eventType === 'DELETE') {
-                        setQuizUploads(prev => {
-                            const next = { ...prev }
-                            const critId = payload.old.criterion_id
-                            if (next[critId]) {
-                                const aType = payload.old.audit_type || 'initial'
-                                delete next[critId][aType]
-                            }
-                            return next
-                        })
-                    } else {
-                        const q = payload.new
-                        const aType = (q.audit_type || 'initial').trim().toLowerCase()
-                        const storageKey = String(q.criterion_id) // 'crit_X' or 'ind_X'
-                        setQuizUploads(prev => ({
-                            ...prev,
-                            [storageKey]: {
-                                ...(prev[storageKey] || {}),
-                                [aType]: q
-                            }
-                        }))
-                    }
-                })
-                .subscribe()
+        if (critId && criteriaData.length > 0) {
+            const crit = criteriaData.find(c => String(c.id) === String(critId))
+            if (crit) setActiveCriterion(crit)
+        }
 
-            return () => {
-                supabase.removeChannel(channel)
+        if (indId) {
+            setSelectedIndicatorId(Number(indId))
+        }
+
+        // Auto-scroll to linked element
+        setTimeout(() => {
+            if (indId) {
+                const el = document.getElementById(`indicator-${indId}`)
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            } else if (critId) {
+                const el = document.getElementById(`criterion-${critId}`)
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
             }
-        }
-    }, [id, user])
+        }, 800)
+    }, [location.search, criteriaData])
 
-    const fetchCaseDetails = async () => {
-        console.log('Fetching details for case:', id)
+
+
+    const fetchCaseDetails = useCallback(async () => {
         try {
             setLoading(true)
             setError(null)
 
             const { data: cData, error: cError } = await supabase
                 .from('cases')
-                .select(`id, tenant_id, audit_type, training_categories, consultant_id, created_at, progress, status, tenants (id, name, siret, logo_url, owner_id, client_email)`)
+                .select(`id, tenant_id, audit_type, training_categories, consultant_id, created_at, progress, status, preaudit_shared, eliminatoires, tenants (id, name, siret, logo_url, owner_id, client_email, initial_password)`)
                 .eq('id', id)
                 .single()
 
@@ -439,7 +593,7 @@ export default function CaseDetails() {
                 .order('updated_at', { ascending: true })
 
             if (sError) throw sError
-            console.log('Fetched indicator states:', sData?.length || 0)
+
             setAllIndicatorStates(sData || [])
 
             // Fetch quiz uploads & comments for this case
@@ -466,7 +620,7 @@ export default function CaseDetails() {
             // Fetch events
             const { data: eventData } = await supabase
                 .from('case_events')
-                .select('id, case_id, event_date, title, visio_link, event_type, status, description')
+                .select('id, case_id, event_date, title, visio_link, event_type, status, description, consultant_signature, consultant_signature_date, consultant_signature_name, client_signature, client_signature_date, client_signature_name, actual_start_time, actual_end_time')
                 .eq('case_id', id)
                 .order('event_date', { ascending: true })
 
@@ -494,7 +648,95 @@ export default function CaseDetails() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [id])
+
+    useEffect(() => {
+        if (id && user) {
+            fetchCaseDetails()
+        } else if (!id) {
+            setError("ID manquant dans l'URL")
+            setLoading(false)
+        }
+
+        // Realtime subscription for ALL relevant case data
+        if (id) {
+            const channel = supabase
+                .channel(`case_realtime:${id}`)
+                // Indicator States Subscription
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'case_indicator_states',
+                    filter: `case_id=eq.${id}`
+                }, (payload) => {
+
+                    if (payload.eventType === 'DELETE') {
+                        setAllIndicatorStates(prev => prev.filter(s => s.id !== (payload.old.id || payload.old.id_indicateur_perdu))) // Fallback to id
+                    } else {
+                        // For INSERT and UPDATE: Replace or add into the local array by ID
+                        setAllIndicatorStates(prev => {
+                            const filtered = prev.filter(s => s.id !== payload.new.id)
+                            return [...filtered, payload.new]
+                        })
+                    }
+                })
+                // Quiz Uploads Subscription
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'criterion_quiz_uploads',
+                    filter: `case_id=eq.${id}`
+                }, (payload) => {
+                    if (payload.eventType === 'DELETE') {
+                        setQuizUploads(prev => {
+                            const next = { ...prev }
+                            const critId = payload.old.criterion_id
+                            if (next[critId]) {
+                                const aType = payload.old.audit_type || 'initial'
+                                delete next[critId][aType]
+                            }
+                            return next
+                        })
+                    } else {
+                        const q = payload.new
+                        const aType = (q.audit_type || 'initial').trim().toLowerCase()
+                        const storageKey = String(q.criterion_id) // 'crit_X' or 'ind_X'
+                        setQuizUploads(prev => ({
+                            ...prev,
+                            [storageKey]: {
+                                ...(prev[storageKey] || {}),
+                                [aType]: q
+                            }
+                        }))
+                    }
+                })
+                // Messages Subscription
+                .on('postgres_changes', {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'case_messages',
+                    filter: `case_id=eq.${id}`
+                }, (payload) => {
+                    const isSystem = /^(?:\[SYSTEM\]|\[Remarque)/i.test(payload.new.content || '')
+                    if (isSystem) return // System notifications are filtered out of the chat UI
+
+                    // For human messages
+                    if (activeTabRef.current === 'messagerie') {
+                        setMessages(prev => {
+                            if (prev.some(m => m.id === payload.new.id)) return prev
+                            return [...prev, payload.new]
+                        })
+                        setTimeout(scrollToBottom, 100)
+                    }
+                })
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channel)
+            }
+        }
+    }, [id, user])
+
 
     // Scroll to bottom of chat
     const scrollToBottom = () => {
@@ -503,39 +745,7 @@ export default function CaseDetails() {
         }
     }
 
-    useEffect(() => {
-        if (activeTab === 'messagerie') {
-            fetchMessages()
-            scrollToBottom()
-
-            // Realtime subscription
-            const channel = supabase
-                .channel(`case_messages:${id}`)
-                .on('postgres_changes', {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'case_messages',
-                    filter: `case_id=eq.${id}`
-                }, (payload) => {
-                    setMessages(prev => {
-                        if (prev.some(m => m.id === payload.new.id)) return prev
-                        return [...prev, payload.new]
-                    })
-                    setTimeout(scrollToBottom, 100)
-                })
-                .subscribe()
-
-            return () => {
-                supabase.removeChannel(channel)
-            }
-        }
-    }, [activeTab, id])
-
-    useEffect(() => {
-        scrollToBottom()
-    }, [messages])
-
-    const fetchMessages = async () => {
+    const fetchMessages = useCallback(async () => {
         try {
             setLoadingMessages(true)
             const { data, error } = await supabase
@@ -545,8 +755,8 @@ export default function CaseDetails() {
                 .order('created_at', { ascending: true })
 
             if (error) throw error
-            // Filter out system messages for the chat tab
-            const userMessages = (data || []).filter(m => !m.content.startsWith('[SYSTEM]'))
+            // Le fil de messagerie ne contient que du dialogue humain : on exclut toute entrée système ([SYSTEM], [Remarque])
+            const userMessages = (data || []).filter(m => !/^\s*\[(?:SYSTEM|Remarque)/i.test(m.content || ''))
             setMessages(userMessages)
 
             // Mark messages from client as read
@@ -562,7 +772,18 @@ export default function CaseDetails() {
         } finally {
             setLoadingMessages(false)
         }
-    }
+    }, [id])
+
+    useEffect(() => {
+        if (activeTab === 'messagerie') {
+            fetchMessages()
+            scrollToBottom()
+        }
+    }, [activeTab, id, fetchMessages])
+
+    useEffect(() => {
+        scrollToBottom()
+    }, [messages])
 
     const handleSendMessage = async (e) => {
         e.preventDefault()
@@ -595,29 +816,7 @@ export default function CaseDetails() {
         }
     }
 
-    const handleCriterionClick = (criterion) => {
-        setActiveCriterion(criterion)
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
 
-    const handleIndicatorUpdate = async (indicatorId, newStatus) => {
-        // This function handled CLIENT updates, but we'll keep it as is if needed by client.
-        // However, the USER request implies progress should be based on CONSULTANT verdicts now.
-        // Let's focus on handleVerdict for the consultant's automation.
-
-        let updatedStates = [...allIndicatorStates]
-        const type = selectedAudit || 'initial'
-        const index = updatedStates.findIndex(s => s.indicator_id === indicatorId && (s.audit_type || 'initial') === type)
-
-        if (index >= 0) {
-            updatedStates[index] = { ...updatedStates[index], status: newStatus }
-        } else {
-            updatedStates.push({ indicator_id: indicatorId, audit_type: type, status: newStatus, case_id: id })
-        }
-
-        setAllIndicatorStates(updatedStates)
-        // We'll let handleVerdict handle the main case updates for the consultant view.
-    }
 
     // Save consultant verdict for an indicator
     const handleVerdict = async (indicatorId, verdict) => {
@@ -631,7 +830,7 @@ export default function CaseDetails() {
             const clientStatus = currentIndState.status === 'non_applicable' ? 'not_applicable' : currentIndState.status
             const statusToSave = clientStatus || (verdict === 'non_applicable' ? 'not_applicable' : 'to_do')
 
-            const { data: updatedState, error: upsertError } = await supabase.from('case_indicator_states').upsert({
+            const { error: upsertError } = await supabase.from('case_indicator_states').upsert({
                 case_id: id,
                 indicator_id: indicatorId,
                 audit_type: type,
@@ -642,6 +841,17 @@ export default function CaseDetails() {
 
             if (upsertError) throw upsertError
 
+            // [NOTIFICATION] Notify client of verdict
+            const verdictLabel = verdict === 'validated' ? 'Conforme'
+                : verdict === 'non_applicable' ? 'Non applicable'
+                : verdict === 'non_conforme' ? 'Non conforme'
+                : 'À retravailler';
+            await supabase.from('case_notifications').insert({
+                case_id: id,
+                type: 'consultant_verdict',
+                content: `✅ Votre consultant a rendu son verdict sur l'indicateur ${indicatorId} : ${verdictLabel}`
+            })
+
             // 2. Refresh all states to calculate accurate progress
             const { data: allStates } = await supabase.from('case_indicator_states').select('id, status, consultant_verdict, audit_type, indicator_id').eq('case_id', id)
             if (allStates) setAllIndicatorStates(allStates)
@@ -649,7 +859,6 @@ export default function CaseDetails() {
             // 3. Global Progress Calculation (Across all audit types)
             const totalIndicators = criteriaData.reduce((acc, crit) => acc + (crit.indicators?.length || 0), 0)
             const activeAuditTypes = caseData?.audit_type || ['initial']
-            const totalPossibleGlobal = totalIndicators * activeAuditTypes.length
 
             const newProgress = calculateScore(Object.values(getGroupedStates(null)), totalIndicators)
 
@@ -713,15 +922,17 @@ export default function CaseDetails() {
 
             if (saveError) throw saveError
 
-            // 2. SEND TO CHAT
+            // 2. Notifier le client UNIQUEMENT par toast (aucun message système dans le fil de dialogue humain)
             const labelId = idStr.replace('crit_', '')
-            const { error: msgError } = await supabase.from('case_messages').insert({
-                case_id: id,
-                sender_id: user.id,
-                content: `[Remarque - Critère ${labelId}] : ${commentToSend.trim()}`
-            })
 
-            if (msgError) throw msgError
+            // 3. ANO-01 — Notify client via toast (case_notifications)
+            try {
+                await supabase.from('case_notifications').insert({
+                    case_id: id,
+                    type: 'consultant_remark',
+                    content: `💬 Votre consultant a ajouté une remarque sur le Critère ${labelId} :\n${commentToSend.trim().substring(0, 150)}${commentToSend.length > 150 ? '...' : ''}`
+                })
+            } catch (e) { console.warn('Could not insert consultant_remark notification:', e) }
             
             // Success feedback
             setSaveConfirmation({ id: criterionId, type: 'sent' })
@@ -751,143 +962,8 @@ export default function CaseDetails() {
         }
     }
 
-    const handleInitializeEvents = async () => {
-        setSavingEvent(true)
-        try {
-            const startDate = new Date()
-            const standardEvents = [
-                {
-                    case_id: id,
-                    title: "Rendez-vous de lancement",
-                    description: "Cadrage de la mission et analyse initiale.",
-                    event_date: new Date(startDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(), // +2 days
-                    event_type: 'meeting',
-                    visio_link: 'https://meet.google.com/abc-defg-hij',
-                    status: 'done'
-                },
-                {
-                    case_id: id,
-                    title: "Mentorat : Suivi Mi-Parcours",
-                    description: "Revue des indicateurs bloquants (C2, C3).",
-                    event_date: new Date(startDate.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString(), // +15 days
-                    event_type: 'meeting',
-                    visio_link: '',
-                    status: 'in_progress'
-                },
-                {
-                    case_id: id,
-                    title: "Audit Blanc",
-                    description: "Simulation complète de l'audit de surveillance.",
-                    event_date: new Date(startDate.getTime() + 45 * 24 * 60 * 60 * 1000).toISOString(), // +45 days (1.5 months)
-                    event_type: 'audit',
-                    visio_link: '',
-                    status: 'pending'
-                },
-                {
-                    case_id: id,
-                    title: "Audit de Surveillance",
-                    description: "Date prévisionnelle : Mars 2026",
-                    event_date: new Date(startDate.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString(), // +60 days (2 months)
-                    event_type: 'audit',
-                    visio_link: '',
-                    status: 'pending'
-                }
-            ]
-
-            const { data, error } = await supabase
-                .from('case_events')
-                .insert(standardEvents)
-                .select()
-
-            if (error) throw error
-            setEvents(data.sort((a, b) => new Date(a.event_date) - new Date(b.event_date)))
-        } catch (err) {
-            console.error('Error initializing events:', err)
-        } finally {
-            setSavingEvent(false)
-        }
-    }
-
-    // Planning Actions
-    const handleSaveEvent = async (eventData) => {
-        setSavingEvent(true)
-        try {
-            if (editingEvent) {
-                // Update
-                const { error } = await supabase
-                    .from('case_events')
-                    .update({
-                        title: eventData.title,
-                        description: eventData.description,
-                        event_date: eventData.event_date, // Changed from date to event_date to match DB
-                        event_type: eventData.type,
-                        visio_link: eventData.visio_link
-                    })
-                    .eq('id', editingEvent.id)
-
-                if (error) throw error
-                setEvents(prev => prev.map(e => e.id === editingEvent.id ? { ...e, ...eventData, event_date: eventData.event_date, event_type: eventData.type } : e).sort((a, b) => new Date(a.event_date) - new Date(b.event_date)))
-            } else {
-                // Create
-                const { data, error } = await supabase
-                    .from('case_events')
-                    .insert({
-                        case_id: id,
-                        title: eventData.title,
-                        description: eventData.description,
-                        event_date: eventData.event_date,
-                        event_type: eventData.type,
-                        visio_link: eventData.visio_link,
-                        status: 'pending'
-                    })
-                    .select()
-                    .single()
-
-                if (error) throw error
-                setEvents([...events, data].sort((a, b) => new Date(a.event_date) - new Date(b.event_date)))
-            }
-            setShowEventModal(false)
-            setEditingEvent(null)
-        } catch (err) {
-            console.error('Error saving event:', err)
-        } finally {
-            setSavingEvent(false)
-        }
-    }
-
-    const handleDeleteEvent = async (eventId) => {
-        showStatus(
-            'delete',
-            'Supprimer cette étape ?',
-            'Êtes-vous sûr de vouloir retirer cette étape du parcours ? Cette action est irréversible.',
-            async () => {
-                setStatusModal(prev => ({ ...prev, isLoading: true }))
-                try {
-                    const { error } = await supabase.from('case_events').delete().eq('id', eventId)
-                    if (error) throw error
-                    setEvents(prev => prev.filter(e => e.id !== eventId))
-                    setStatusModal(prev => ({ ...prev, isOpen: false, isLoading: false }))
-                    showStatus('success', 'Étape supprimée', 'L\'étape a été retirée du parcours avec succès.')
-                } catch (err) {
-                    console.error('Error deleting event:', err)
-                    setStatusModal(prev => ({ ...prev, isLoading: false }))
-                    showStatus('error', 'Erreur', 'Impossible de supprimer cette étape : ' + err.message)
-                }
-            },
-            'Confirmer',
-            'Annuler'
-        )
-    }
-
-    const handleUpdateEventStatus = async (eventId, newStatus) => {
-        // Optimistic update
-        setEvents(prev => prev.map(e => e.id === eventId ? { ...e, status: newStatus } : e))
-        try {
-            await supabase.from('case_events').update({ status: newStatus }).eq('id', eventId)
-        } catch (err) {
-            console.error('Error updating status:', err)
-        }
-    }
+    // Permanent link logic removed, replaced with dynamic Jitsi link
+    // Planning Actions removed
 
     const handleGenerateReport = async () => {
         const doc = new jsPDF()
@@ -1004,7 +1080,7 @@ export default function CaseDetails() {
         }
 
         // -- CRITERIA LOOP --
-        criteriaData.forEach((crit, index) => {
+        criteriaData.forEach((crit) => {
             // Check page break
             if (yPos > 240) {
                 doc.addPage()
@@ -1213,6 +1289,147 @@ export default function CaseDetails() {
         )
     }
 
+
+    const handleSaveEvent = async (eventData) => {
+        try {
+            if (editingEvent) {
+                const { error } = await supabase
+                    .from('case_events')
+                    .update({ ...eventData })
+                    .eq('id', editingEvent.id)
+                if (error) throw error
+            } else {
+                const { error } = await supabase
+                    .from('case_events')
+                    .insert({ ...eventData, case_id: id, status: 'pending' })
+                if (error) throw error
+            }
+            setShowEventModal(false)
+            setEditingEvent(null)
+            fetchCaseDetails()
+            showStatus('success', 'Succès', editingEvent ? 'Étape modifiée.' : 'Étape ajoutée.')
+        } catch (error) {
+            console.error(error)
+            showStatus('error', 'Erreur', error?.message || 'Erreur lors de l\'enregistrement.')
+        }
+    }
+
+    const handleDeleteEvent = async (eventId) => {
+        showStatus('warning', 'Confirmation', 'Voulez-vous vraiment supprimer cette étape ?', async () => {
+            try {
+                const { error } = await supabase.from('case_events').delete().eq('id', eventId)
+                if (error) throw error
+                fetchCaseDetails()
+                showStatus('success', 'Succès', 'Étape supprimée.')
+            } catch (error) {
+                console.error(error)
+                showStatus('error', 'Erreur', error?.message || 'Erreur lors de la suppression.')
+            }
+        }, 'Supprimer', 'Annuler')
+    }
+
+    
+    const handleGenerateDefaultPlan = async () => {
+        try {
+            showStatus('info', 'Génération en cours', 'Création du plan type...');
+            
+            const defaultEvents = [
+                {
+                    case_id: id,
+                    title: "Réunion de Lancement",
+                    description: "Définition des objectifs et planning prévisionnel.",
+                    event_type: "meeting",
+                    event_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+                    status: 'done'
+                },
+                {
+                    case_id: id,
+                    title: "Mentorat : Suivi Mi-Parcours",
+                    description: "Revue des indicateurs bloquants (C2, C3).",
+                    event_type: "meeting",
+                    event_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+                    status: 'pending',
+                    visio_link: `https://meet.jit.si/EasyQual-Visio-${id}`
+                },
+                {
+                    case_id: id,
+                    title: "Audit Blanc",
+                    description: "Simulation complète de l'audit de surveillance. En attente de validation des indicateurs.",
+                    event_type: "audit",
+                    event_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                    status: 'pending'
+                },
+                {
+                    case_id: id,
+                    title: "Audit de Surveillance",
+                    description: "Date prévisionnelle.",
+                    event_type: "deadline",
+                    event_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+                    status: 'pending'
+                }
+            ];
+
+            const { error } = await supabase.from('case_events').insert(defaultEvents);
+            if (error) throw error;
+            
+            fetchCaseDetails(); // Refresh to load the new events
+            setTimeout(() => {
+                showStatus('success', 'Succès', 'Le plan type a été généré avec succès !');
+            }, 500);
+            
+        } catch (error) {
+            console.error("Error generating plan:", error);
+            showStatus('error', 'Erreur', 'Impossible de générer le plan.');
+        }
+    }
+
+    const handleUpdateEventStatus = async (eventId, newStatus) => {
+        try {
+            const { error } = await supabase
+                .from('case_events')
+                .update({ status: newStatus })
+                .eq('id', eventId)
+            if (error) throw error
+            fetchCaseDetails()
+        } catch (error) {
+            console.error(error)
+            showStatus('error', 'Erreur', error?.message || 'Erreur lors de la mise à jour.')
+        }
+    }
+
+    const handleConfirmSignature = async (sigData) => {
+        try {
+            const updateData = {
+                actual_start_time: sigData.startTime,
+                actual_end_time: sigData.endTime
+            };
+            if (sigData.role === 'consultant') {
+                updateData.consultant_signature = sigData.signatureData;
+                updateData.consultant_signature_date = new Date().toISOString();
+                updateData.consultant_signature_name = sigData.name;
+            } else {
+                updateData.client_signature = sigData.signatureData;
+                updateData.client_signature_date = new Date().toISOString();
+                updateData.client_signature_name = sigData.name;
+            }
+
+            const { error } = await supabase
+                .from('case_events')
+                .update(updateData)
+                .eq('id', signatureEventId);
+
+            if (error) throw error;
+
+            fetchCaseDetails();
+            setShowSignatureModal(false);
+            setSignatureEventId(null);
+            showStatus('success', 'Succès', 'Émargement enregistré avec succès.');
+        } catch (err) {
+            console.error(err);
+            showStatus('error', 'Erreur', err.message || "Erreur lors de l'enregistrement.");
+        }
+    };
+
     if (!caseData) return <div className="p-8 text-center text-gray-500">Dossier introuvable (Data is null)</div>
 
     // Global Progress based on dynamic calculation using weighted scores
@@ -1243,91 +1460,136 @@ export default function CaseDetails() {
                     </button>
 
                     {/* HEADER CARD */}
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
-                        <div className="flex items-center gap-6 w-full md:w-auto">
+                    <div className="bg-white rounded-[24px] p-6 shadow-sm border border-slate-200/60 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-8 mb-8 relative overflow-hidden">
+                        {/* Decorative background element */}
+                        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-indigo-50 to-transparent rounded-bl-[100px] -z-10 opacity-60"></div>
+                        
+                        <div className="flex items-center gap-6 w-full xl:w-auto z-10">
                             {(caseData.tenants?.logo_url || caseData.tenants?.avatar_url) ? (
                                 <img 
                                     src={caseData.tenants.logo_url || caseData.tenants.avatar_url} 
                                     alt={caseData.tenants.name} 
-                                    className="h-20 w-20 rounded-2xl object-cover shadow-lg border-2 border-white"
+                                    className="h-24 w-24 rounded-[20px] object-cover shadow-md border-4 border-white"
                                 />
                             ) : (
-                                <div className="h-20 w-20 rounded-2xl bg-emerald-500 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-200">
+                                <div className="h-24 w-24 rounded-[20px] bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-3xl font-black shadow-lg shadow-emerald-200 border-4 border-white flex-shrink-0">
                                     {getInitials(caseData.tenants?.name)}
                                 </div>
                             )}
-                            <div>
-                                <div className="flex items-center gap-3 mb-2">
-                                    <h1 className="text-3xl font-bold text-gray-900">{caseData.tenants?.name}</h1>
-                                    <div className="flex flex-wrap gap-2">
+                            
+                            <div className="flex flex-col justify-center">
+                                <div className="flex flex-wrap items-center gap-3 mb-1.5">
+                                    <h1 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">{caseData.tenants?.name || 'Client Inconnu'}</h1>
+                                    <div className="flex flex-wrap gap-2 mt-1 sm:mt-0">
                                         {Array.isArray(caseData.training_categories) && caseData.training_categories.map((cat, idx) => (
-                                            <span key={idx} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold uppercase rounded border border-gray-200">
+                                            <span key={idx} className="px-2.5 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider rounded-md border border-slate-200">
                                                 {cat.includes(' / ') ? 'CFA' : cat}
                                             </span>
                                         ))}
-                                        {Array.isArray(caseData.audit_type) && caseData.audit_type.map((type, idx) => (
-                                            <span key={idx} className="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] font-bold uppercase rounded border border-amber-100">
-                                                {type.split(' ')[1]}
+                                        {Array.isArray(caseData.audit_type) && sortAuditTypes(caseData.audit_type).map((type, idx) => (
+                                            <span key={idx} className="px-2.5 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-amber-200">
+                                                {type.split(' ')[1] || type}
                                             </span>
                                         ))}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-4 text-sm text-gray-500">
-                                    {/* Referent removed */}
-                                    <div className="flex items-center gap-1.5">
-                                        <Clock className="h-4 w-4 text-gray-400" />
-                                        <span>Modifié hier</span>
+                                <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
+                                    <div
+                                        className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-100"
+                                        title={caseData.created_at ? new Date(caseData.created_at).toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' }) : ''}
+                                    >
+                                        <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                        <span>{(() => {
+                                            if (!caseData.created_at) return 'Date inconnue'
+                                            const d = new Date(caseData.created_at)
+                                            const startOfDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate())
+                                            const diffDays = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000)
+                                            if (diffDays === 0) return "Modifié aujourd'hui"
+                                            if (diffDays === 1) return 'Modifié hier'
+                                            if (diffDays < 7) return `Modifié il y a ${diffDays} jours`
+                                            return `Modifié le ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                                        })()}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">ID:</span>
+                                        <span className="font-mono">{id.substring(0,8)}</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Progress + Status */}
-                        <div className="w-full md:w-auto md:min-w-[300px] flex items-center gap-6">
-                            <div className="flex-1">
+                        {/* Progress + Status + Buttons */}
+                        <div className="w-full xl:w-auto flex flex-col sm:flex-row items-center gap-6 xl:gap-8 z-10 bg-white/50 backdrop-blur-sm p-4 xl:p-0 rounded-2xl xl:bg-transparent">
+                            
+                            {/* Progress Section */}
+                            <div className="w-full sm:w-[280px]">
                                 <div className="flex justify-between items-end mb-2">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Avancement Global</span>
-                                    <span className="text-2xl font-bold text-gray-900">{progressPercent}%</span>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Avancement Global</span>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-2xl font-black text-indigo-600 leading-none">{progressPercent}</span>
+                                        <span className="text-sm font-bold text-indigo-400">%</span>
+                                    </div>
                                 </div>
-                                <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${progressPercent}%` }}></div>
+                                <div className="h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner mb-2.5 relative">
+                                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-1000 ease-out rounded-full" style={{ width: `${progressPercent}%` }}>
+                                        <div className="absolute top-0 right-0 bottom-0 w-10 bg-gradient-to-r from-transparent to-white/30"></div>
+                                    </div>
                                 </div>
-                                {/* Case Status Badge */}
-                                <div className="mt-2 flex items-center gap-2">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Statut :</span>
+                                
+                                {/* Status Badge */}
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Statut :</span>
                                     {caseData.status === 'validated' ? (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[11px] font-black border border-emerald-100 shadow-sm uppercase tracking-wide">
                                             <CheckCircle className="h-3.5 w-3.5" /> Validé
                                         </span>
                                     ) : (caseData.status === 'active' || (progressPercent > 0)) ? (
-                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-100 shadow-sm">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span> En cours
+                                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-[11px] font-black border border-blue-100 shadow-sm uppercase tracking-wide">
+                                            <span className="relative flex h-2 w-2">
+                                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                                            </span>
+                                            En cours
                                         </span>
                                     ) : (
-                                        <span className="text-gray-300 font-bold px-4">—</span>
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-500 text-[11px] font-black border border-slate-200 shadow-sm uppercase tracking-wide">
+                                            Nouveau
+                                        </span>
                                     )}
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 print:hidden">
+
+                            {/* Divider for desktop */}
+                            <div className="hidden sm:block w-px h-16 bg-slate-200/60"></div>
+
+                            {/* Action Buttons */}
+                            <div className="flex sm:flex-col gap-3 w-full sm:w-auto print:hidden">
                                 <button
                                     onClick={handleGenerateReport}
-                                    className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold text-sm rounded-xl shadow-sm hover:bg-gray-50 transition-colors flex items-center gap-2"
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs uppercase tracking-wide rounded-xl transition-all shadow-sm active:scale-95 border border-slate-200"
                                 >
-                                    <FileText className="h-4 w-4" />
-                                    Rapport
+                                    <FileText className="h-4 w-4 text-slate-400" />
+                                    Générer Rapport
                                 </button>
                             </div>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-8 border-b border-gray-200 mb-8">
-                        {['Détail de l\'Audit', 'Planification', 'Messagerie'].map((tab) => {
-                            const key = tab === 'Détail de l\'Audit' ? 'suivi_rno' : tab.toLowerCase().replace(' ', '_').replace('é', 'e')
+                        {['Détail de l\'Audit', 'Planification', 'Messagerie', 'Synthèse pré-audit'].map((tab) => {
+                            const key = tab === 'Détail de l\'Audit' ? 'suivi_rno'
+                                : tab === 'Synthèse pré-audit' ? 'preaudit'
+                                : tab.toLowerCase().replace(' ', '_').replace('é', 'e')
                             const isActive = activeTab === key
 
                             // Mock badges
                             let badge = null
                             if (key === 'suivi_rno') badge = <span className="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded-full">3</span>
+                            if (key === 'preaudit') badge = (
+                                <span className="ml-2 px-1.5 py-0.5 text-white text-[10px] rounded-full font-black" style={{ background: preAuditCurrent.avis.couleur }}>
+                                    {preAuditCurrent.avis.label}
+                                </span>
+                            )
                             if (key === 'planification') badge = <span className="ml-2 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded-full">Actif</span>
                             if (key === 'messagerie') badge = <span className="ml-2 h-2 w-2 rounded-full bg-red-500 inline-block"></span>
 
@@ -1457,12 +1719,59 @@ export default function CaseDetails() {
                     )}
 
                     {/* ── SUIVI RNO ── */}
+                    {activeTab === 'preaudit' && (
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between flex-wrap gap-3">
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900">Résultat Synthèse de Pré-audit</h2>
+                                    <p className="text-sm text-gray-500 font-medium">
+                                        Avis calculé selon le moteur de l'audit blanc, à partir de vos verdicts (Conforme / Non conforme / Non applicable).
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleTogglePreAuditShare}
+                                    disabled={savingShare}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all disabled:opacity-50 ${
+                                        caseData?.preaudit_shared
+                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                            : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'
+                                    }`}
+                                >
+                                    {caseData?.preaudit_shared ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                    {caseData?.preaudit_shared ? 'Avis partagé au client' : 'Avis non partagé'}
+                                </button>
+                            </div>
+
+                            {(caseData?.audit_type && caseData.audit_type.length > 0
+                                ? sortAuditTypes(caseData.audit_type)
+                                : ['initial']
+                            ).map((type, i) => {
+                                const t = String(type).trim()
+                                const verdicts = verdictsForAudit(t)
+                                const elim = eliminatoiresForType(t)
+                                return (
+                                    <div key={i} className="space-y-3 border-t border-gray-100 pt-5 first:border-0 first:pt-0">
+                                        <h3 className="text-xs font-black uppercase tracking-widest text-gray-400">Type d'audit : {t}</h3>
+                                        <EliminatoiresControls eliminatoires={elim} onSet={(k, s) => handleSetEliminatoire(t, k, s)} />
+                                        {categoriesMatrice.map((cat, j) => (
+                                            <PreAuditResult
+                                                key={j}
+                                                result={calculerPreAudit(verdicts, cat, elim)}
+                                                auditType={cat ? `${CAT[cat]} × ${t}` : t}
+                                            />
+                                        ))}
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+
                     {activeTab === 'suivi_rno' && (
                         <div className="space-y-5">
                             {/* AUDIT TYPE TABS */}
                             {caseData.audit_type && caseData.audit_type.length > 0 && (
                                 <div className="flex items-center gap-3 mb-8 overflow-x-auto pb-4 scrollbar-hide">
-                                    {caseData.audit_type.map((type, i) => {
+                                    {sortAuditTypes(caseData.audit_type).map((type, i) => {
                                         const trimmedType = String(type).trim()
                                         const isActive = normalizeAudit(selectedAudit) === normalizeAudit(trimmedType)
                                         return (
@@ -1485,10 +1794,43 @@ export default function CaseDetails() {
                                 </div>
                             )}
 
+                            {/* Encart résultat du pré-audit (un avis par périmètre catégorie × type) */}
+                            <div className="mb-8 space-y-3">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <h3 className="text-sm font-black text-gray-700 uppercase tracking-wide flex items-center gap-2">
+                                        <ShieldCheck className="h-4 w-4 text-indigo-500" /> Synthèse pré-audit · {selectedAudit}
+                                    </h3>
+                                    <button
+                                        onClick={handleTogglePreAuditShare}
+                                        disabled={savingShare}
+                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold border-2 transition-all whitespace-nowrap disabled:opacity-50 ${
+                                            caseData?.preaudit_shared
+                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        {caseData?.preaudit_shared ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                        {caseData?.preaudit_shared ? 'Partagé au client' : 'Non partagé'}
+                                    </button>
+                                </div>
+                                <EliminatoiresControls
+                                    eliminatoires={eliminatoiresForType(selectedAudit)}
+                                    onSet={(critKey, statut) => handleSetEliminatoire(selectedAudit, critKey, statut)}
+                                />
+                                {preAuditPerimetres.map(({ cat, result }, i) => (
+                                    <PreAuditResult
+                                        key={i}
+                                        result={result}
+                                        auditType={cat ? `${cat} · ${selectedAudit}` : selectedAudit}
+                                        compact
+                                    />
+                                ))}
+                            </div>
+
                             <div className="flex items-center justify-between mb-8">
                                 <div className="flex flex-col">
                                     <h2 className="flex items-center gap-3 text-lg font-bold text-gray-900 group">
-                                        Détail de l'Audit : <span className="text-indigo-600 capitalize">{selectedAudit}</span> 
+                                        Détail de l'Audit : <span className="text-indigo-600 capitalize">{selectedAudit}</span>
                                         <span className="text-indigo-400 text-sm font-medium ml-1">({calculatedProgress}%)</span>
                                     </h2>
                                     <div className="flex items-center gap-2 mt-2">
@@ -1547,12 +1889,12 @@ export default function CaseDetails() {
                                     const savedComment = quiz?.consultant_comment || ''
 
                                     return (
-                                        <div key={crit.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                        <div key={crit.id} id={`criterion-${crit.id}`} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden scroll-mt-20">
 
                                             {/* ── Criterion Header ── */}
                                             <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-black shadow-md shadow-indigo-200">
+                                                    <div className="h-10 w-10 rounded-xl flex items-center justify-center text-white text-sm font-black shadow-md" style={{ backgroundColor: getCriterionColor(crit.id).primary }}>
                                                         C{crit.id}
                                                     </div>
                                                     <div>
@@ -1564,7 +1906,7 @@ export default function CaseDetails() {
                                                     {/* Progress pill */}
                                                     <div className="hidden sm:flex items-center gap-2">
                                                         <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                                            <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all" style={{ width: `${percent}%` }} />
+                                                            <div className="h-full rounded-full transition-all" style={{ width: `${percent}%`, backgroundColor: getCriterionColor(crit.id).primary }} />
                                                         </div>
                                                         <span className="text-xs font-bold text-gray-400">{percent}%</span>
                                                     </div>
@@ -1595,12 +1937,12 @@ export default function CaseDetails() {
                                                     const isOpen = selectedIndicatorId === ind.id
 
                                                     return (
-                                                        <div key={ind.id}>
+                                                        <div key={ind.id} id={`indicator-${ind.id}`} className="scroll-mt-20">
                                                             {/* Row — click to expand */}
                                                             <button
                                                                 onClick={() => setSelectedIndicatorId(isOpen ? null : ind.id)}
-                                                                className={`w-full flex items-center justify-between px-6 py-3.5 text-left transition-all group ${isOpen ? 'bg-indigo-50' : 'hover:bg-gray-50'
-                                                                    }`}
+                                                                className={`w-full flex items-center justify-between px-6 py-3.5 text-left transition-all group hover:bg-gray-50`}
+                                                                style={isOpen ? { backgroundColor: getCriterionColor(crit.id).light } : {}}
                                                             >
                                                                 <div className="flex items-center gap-3 min-w-0">
                                                                     {/* Number */}
@@ -1639,7 +1981,7 @@ export default function CaseDetails() {
 
                                                             {/* Expanded verdict panel */}
                                                             {isOpen && (
-                                                                <div className="px-6 pb-5 pt-3 bg-indigo-50 border-t border-indigo-100 space-y-4">
+                                                                <div className="px-6 pb-5 pt-3 border-t space-y-4" style={{ backgroundColor: getCriterionColor(crit.id).light, borderColor: getCriterionColor(crit.id).border }}>
                                                                     
                                                                     {/* Document Proof from Client */}
                                                                     {(() => {
@@ -1698,7 +2040,7 @@ export default function CaseDetails() {
 
                                                                     {/* Consultant verdict */}
                                                                     <div>
-                                                                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-2">Votre décision finale</p>
+                                                                        <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: getCriterionColor(crit.id).primary }}>Votre décision finale</p>
                                                                         <div className="flex gap-3">
                                                                             <button
                                                                                 onClick={() => handleVerdict(ind.id, 'validated')}
@@ -1747,16 +2089,17 @@ export default function CaseDetails() {
                                                             href={quiz.file_url}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-3 px-4 py-3 bg-white border border-indigo-200 rounded-xl hover:bg-indigo-50 transition-colors group shadow-sm"
+                                                            className="inline-flex items-center gap-3 px-4 py-3 bg-white border rounded-xl hover:opacity-90 transition-all group shadow-sm"
+                                                            style={{ borderColor: getCriterionColor(crit.id).border }}
                                                         >
-                                                            <div className="h-9 w-9 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                                                            <div className="h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: getCriterionColor(crit.id).primary }}>
                                                                 <FileText className="h-4 w-4 text-white" />
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <p className="text-sm font-bold text-indigo-900 truncate">{quiz.file_name || 'Quiz.pdf'}</p>
-                                                                <p className="text-xs text-indigo-400">Soumis le {new Date(quiz.uploaded_at || Date.now()).toLocaleDateString('fr-FR')}</p>
+                                                                <p className="text-sm font-bold truncate" style={{ color: getCriterionColor(crit.id).primary }}>{quiz.file_name || 'Quiz.pdf'}</p>
+                                                                <p className="text-xs opacity-70" style={{ color: getCriterionColor(crit.id).primary }}>Soumis le {new Date(quiz.uploaded_at || Date.now()).toLocaleDateString('fr-FR')}</p>
                                                             </div>
-                                                            <MessageSquare className="h-4 w-4 text-indigo-400 group-hover:text-indigo-600 ml-auto" />
+                                                            <MessageSquare className="h-4 w-4 ml-auto" style={{ color: getCriterionColor(crit.id).primary }} />
                                                         </a>
                                                     ) : (
                                                         <div className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-gray-200 rounded-xl text-gray-400">
@@ -1787,9 +2130,10 @@ export default function CaseDetails() {
                                                                         onClick={() => handleSendCommentToChat(crit.id)}
                                                                         disabled={savingComment === crit.id || !criterionComments[crit.id]?.trim()}
                                                                         className={`px-6 py-2 text-white text-xs font-bold rounded-lg shadow-lg transition-all flex items-center gap-2 ${savingComment === crit.id
-                                                                            ? 'bg-indigo-400 cursor-wait'
-                                                                            : 'bg-indigo-600 hover:bg-indigo-700 hover:shadow-md hover:scale-105 active:scale-95'
+                                                                            ? 'opacity-50 cursor-wait'
+                                                                            : 'hover:shadow-md hover:scale-105 active:scale-95 hover:opacity-90'
                                                                             }`}
+                                                                        style={{ backgroundColor: getCriterionColor(crit.id).primary }}
                                                                     >
                                                                         <Send className="h-3 w-3" />
                                                                         {savingComment === crit.id ? 'Envoi...' : 'Envoyer'}
@@ -1807,58 +2151,46 @@ export default function CaseDetails() {
 
 
 
-                    {/* VUE PLANIFICATION (Timeline Mockup) */}
-                    {
-                        activeTab === 'planification' && (
-                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-fadeIn max-w-4xl mx-auto">
-                                <div className="flex justify-between items-center mb-10">
-                                    <h2 className="text-xl font-bold text-gray-900">Parcours d'Accompagnement</h2>
-                                    <button
-                                        onClick={() => { setEditingEvent(null); setShowEventModal(true) }}
-                                        className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors uppercase tracking-wide"
-                                    >
-                                        <Plus className="h-4 w-4" /> Ajouter une étape
-                                    </button>
+                    
+                    {/* --- PLANIFICATION TAB --- */}
+                    {activeTab === 'planification' && (
+                        <div className="max-w-3xl mx-auto py-8 animate-fadeIn">
+                            <div className="flex justify-between items-center mb-8">
+                                <div>
+                                    <h2 className="text-2xl font-black text-gray-900">Planification</h2>
+                                    <p className="text-sm text-gray-500 mt-1">Gérez les étapes et jalons de ce dossier</p>
                                 </div>
+                                <button
+                                    onClick={() => { setEditingEvent(null); setShowEventModal(true); }}
+                                    className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center gap-2"
+                                >
+                                    <Plus className="h-5 w-5" />
+                                    Ajouter une étape
+                                </button>
+                            </div>
 
-                                {events.length === 0 ? (
-                                    <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-100 rounded-xl bg-gray-50/50">
-                                        <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <Calendar className="h-8 w-8" />
-                                        </div>
-                                        <h3 className="text-lg font-bold text-gray-900 mb-2">Aucune étape planifiée</h3>
-                                        <p className="text-sm text-gray-500 max-w-sm mx-auto mb-6">
-                                            Le parcours est vide. Vous pouvez commencer par générer les étapes standards d'accompagnement.
-                                        </p>
-                                        <button
-                                            onClick={handleInitializeEvents}
-                                            disabled={savingEvent}
-                                            className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all disabled:opacity-50"
-                                        >
-                                            {savingEvent ? 'Génération...' : 'Générer le Parcours Type'}
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="relative border-l-2 border-dashed border-gray-200 ml-6 space-y-10 py-2">
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-10">
+                                {events && events.length > 0 ? (
+                                    <div className="relative border-l-2 border-gray-100 ml-3 md:ml-6 space-y-10">
                                         {events.map((event) => {
-                                            const isDone = event.status === 'done' || event.status === 'realise'
-                                            const isToday = new Date(event.event_date).toDateString() === new Date().toDateString()
-
-                                            let connectorColor = 'bg-gray-50 border-gray-200'
-                                            let dotColor = 'bg-gray-300'
-                                            if (isDone) {
-                                                connectorColor = 'bg-green-100 border-green-500'
-                                                dotColor = 'text-green-600' // Check icon
-                                            } else if (event.status === 'in_progress' || isToday) {
-                                                connectorColor = 'bg-blue-100 border-blue-500'
-                                                dotColor = 'bg-blue-500'
+                                            const isDone = event.status === 'done';
+                                            
+                                            let connectorColor = 'bg-gray-50 border-gray-200';
+                                            let dotColor = 'bg-gray-300';
+                                            
+                                            if (event.event_type === 'meeting') {
+                                                connectorColor = 'bg-blue-50 border-blue-200';
+                                                dotColor = 'bg-blue-300';
+                                            } else if (event.event_type === 'deadline') {
+                                                connectorColor = 'bg-orange-50 border-orange-200';
+                                                dotColor = 'bg-orange-300';
                                             } else if (event.event_type === 'audit') {
-                                                connectorColor = 'bg-purple-50 border-purple-200'
-                                                dotColor = 'bg-purple-300'
+                                                connectorColor = 'bg-purple-50 border-purple-200';
+                                                dotColor = 'bg-purple-300';
                                             }
 
                                             return (
-                                                <div key={event.id} className="relative pl-10">
+                                                <div key={event.id} className="relative pl-8 sm:pl-10">
                                                     {/* Connector Dot */}
                                                     <div className={`absolute -left-[9px] top-0 h-5 w-5 rounded-full border-2 flex items-center justify-center ${connectorColor} ${event.status === 'in_progress' ? 'animate-pulse' : ''}`}>
                                                         {isDone ? (
@@ -1868,7 +2200,7 @@ export default function CaseDetails() {
                                                         )}
                                                     </div>
 
-                                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
+                                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
                                                         <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
                                                             {event.title}
                                                             <button
@@ -1884,70 +2216,217 @@ export default function CaseDetails() {
                                                                 <Trash2 className="h-3 w-3" />
                                                             </button>
                                                         </h3>
-
-                                                        <div className="flex items-center gap-2 mt-2 sm:mt-0">
-                                                            {/* Status Toggle - "Bien réalisé" Logic */}
+                                                        <div className="flex items-center gap-2">
                                                             {!isDone && (
                                                                 <button
                                                                     onClick={() => handleUpdateEventStatus(event.id, 'done')}
-                                                                    className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-green-50 hover:border-green-200 hover:text-green-700 transition-all shadow-sm"
+                                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-green-50 hover:border-green-200 hover:text-green-700 transition-all shadow-sm text-xs font-bold"
                                                                 >
-                                                                    <div className="h-4 w-4 rounded border border-gray-300 group-hover:border-green-500 flex items-center justify-center transition-colors">
-                                                                        <CheckCircle className="h-3 w-3 text-white group-hover:text-green-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                                    </div>
-                                                                    <span className="text-xs font-bold uppercase tracking-wide">Marquer réalisé</span>
+                                                                    <CheckCircle className="h-3.5 w-3.5" />
+                                                                    Marquer fait
                                                                 </button>
                                                             )}
                                                             {isDone && (
-                                                                <span className="flex items-center gap-1 text-[10px] font-bold bg-green-100 text-green-700 px-2 py-1 rounded-lg uppercase border border-green-200 shadow-sm">
-                                                                    <CheckCircle className="h-3 w-3" /> Réalisé
+                                                                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-bold border border-green-100">
+                                                                    <CheckCircle className="h-3.5 w-3.5" />
+                                                                    Bien réalisé
                                                                 </span>
-                                                            )}
-
-                                                            {/* Visio Link - Special Logic for Audit Blanc ONLY */}
-                                                            {isDone && event.title.toLowerCase().includes('audit blanc') && (
-                                                                <a
-                                                                    href={event.visio_link || '#'}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    onClick={(e) => {
-                                                                        if (!event.visio_link) {
-                                                                            e.preventDefault()
-                                                                            setEditingEvent(event)
-                                                                            setShowEventModal(true)
-                                                                        }
-                                                                    }}
-                                                                    className="text-xs font-bold bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 flex items-center gap-1.5"
-                                                                >
-                                                                    <Video className="h-3.5 w-3.5" />
-                                                                    {event.visio_link ? 'Lancer Visio' : 'Planifier Visio'}
-                                                                </a>
                                                             )}
                                                         </div>
                                                     </div>
-                                                    {event.description && <p className="text-sm text-gray-500 mb-2">{event.description}</p>}
-                                                    <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50 inline-block px-2 py-1 rounded border border-blue-100">
-                                                        <Calendar className="h-3 w-3" /> {new Date(event.event_date).toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}
+
+                                                    <div className="flex items-center gap-4 text-xs font-medium text-gray-500 mb-3">
+                                                        <div className="flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
+                                                            <Calendar className="h-3.5 w-3.5 text-blue-500" />
+                                                            {new Date(event.event_date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} à {new Date(event.event_date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
                                                     </div>
+
+                                                    {event.description && (
+                                                        <p className="text-sm text-gray-600 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                                            {event.description}
+                                                        </p>
+                                                    )}
+
+                                                    {event.visio_link && (
+                                                        <div className="mt-3">
+                                                            <a href={event.visio_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-white text-sm text-indigo-600 font-bold border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors shadow-sm">
+                                                                <Video className="h-4 w-4" />
+                                                                Rejoindre la visio
+                                                            </a>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Emargement Block */}
+                                                    {(event.event_type === 'meeting' || event.visio_link) && (
+                                                        <div className="mt-6 flex flex-col md:flex-row gap-4 border-t border-gray-100 pt-4">
+                                                            {/* Consultant Signature */}
+                                                            <div className="flex-1">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Émargement Consultant</p>
+                                                                {event.consultant_signature ? (
+                                                                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                                                                        <div className="flex items-center gap-2 text-emerald-700 font-bold mb-3">
+                                                                            <CheckCircle className="h-4 w-4" /> Émargé
+                                                                        </div>
+                                                                        <div className="text-xs text-emerald-900 space-y-1 mb-3">
+                                                                            <p><span className="font-semibold">Nom :</span> {event.consultant_signature_name || 'Consultant'}</p>
+                                                                            <p><span className="font-semibold">Date :</span> {new Date(event.consultant_signature_date || event.event_date).toLocaleDateString('fr-FR')}</p>
+                                                                            <p><span className="font-semibold">Horaires :</span> {event.actual_start_time || 'N/A'} - {event.actual_end_time || 'N/A'}</p>
+                                                                        </div>
+                                                                        <div className="bg-white rounded-lg p-2 border border-emerald-100 inline-block">
+                                                                            <img src={event.consultant_signature} alt="Signature" className="h-12 object-contain" />
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center text-center h-full min-h-[140px]">
+                                                                        <button 
+                                                                            onClick={() => { setSignatureEventId(event.id); setShowSignatureModal(true); }}
+                                                                            className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-slate-800 transition-colors"
+                                                                        >
+                                                                            Émarger ma présence
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            {/* Client Signature */}
+                                                            <div className="flex-1">
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Émargement Bénéficiaire</p>
+                                                                {event.client_signature ? (
+                                                                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                                                                        <div className="flex items-center gap-2 text-emerald-700 font-bold mb-3">
+                                                                            <CheckCircle className="h-4 w-4" /> Émargé
+                                                                        </div>
+                                                                        <div className="text-xs text-emerald-900 space-y-1 mb-3">
+                                                                            <p><span className="font-semibold">Nom :</span> {event.client_signature_name || 'Bénéficiaire'}</p>
+                                                                            <p><span className="font-semibold">Date :</span> {new Date(event.client_signature_date || event.event_date).toLocaleDateString('fr-FR')}</p>
+                                                                            <p><span className="font-semibold">Horaires :</span> {event.actual_start_time || 'N/A'} - {event.actual_end_time || 'N/A'}</p>
+                                                                        </div>
+                                                                        <div className="bg-white rounded-lg p-2 border border-emerald-100 inline-block">
+                                                                            <img src={event.client_signature} alt="Signature" className="h-12 object-contain" />
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center text-center h-full min-h-[140px] border-dashed">
+                                                                        <p className="text-xs text-slate-500 font-medium">En attente de l'émargement du bénéficiaire</p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )
+                                            );
                                         })}
                                     </div>
+                                ) : (
+                                    
+                                    <div className="space-y-8">
+                                        <div className="bg-blue-50 border border-blue-100 p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+                                            <div className="flex items-start gap-3">
+                                                <Info className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                                                <div>
+                                                    <h4 className="text-sm font-bold text-blue-900">Modèle de Planification</h4>
+                                                    <p className="text-xs text-blue-700 mt-1 max-w-lg">Voici un aperçu d'un plan type. Vous pouvez créer votre propre plan à partir de zéro, ou générer directement ce modèle et le modifier par la suite.</p>
+                                                </div>
+                                            </div>
+                                            <button 
+                                                onClick={handleGenerateDefaultPlan}
+                                                className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl shadow-md hover:bg-blue-700 transition-all flex-shrink-0"
+                                            >
+                                                Générer ce plan type
+                                            </button>
+                                        </div>
+                                        <div className="relative border-l-2 border-gray-100 ml-3 md:ml-6 space-y-10 opacity-70 pointer-events-none">
+                                            {/* Step 1: Kick-off (Done) */}
+                                            <div className="relative pl-10">
+                                                <div className="absolute -left-[9px] top-0 h-5 w-5 rounded-full bg-green-50 border-2 border-green-200 flex items-center justify-center">
+                                                    <CheckCircle className="h-3 w-3 text-green-600" />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
+                                                    <h3 className="text-base font-bold text-gray-900">Réunion de Lancement</h3>
+                                                    <span className="text-xs font-bold px-3 py-1 bg-green-50 text-green-700 rounded-full border border-green-100 mt-2 sm:mt-0">
+                                                        Bien réalisé
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm text-gray-500 mb-2">Définition des objectifs et planning prévisionnel.</p>
+                                                <div className="flex items-center gap-2 text-xs font-semibold text-gray-400">
+                                                    <Calendar className="h-3 w-3" /> 10 Janv. 2026
+                                                </div>
+                                            </div>
+
+                                            {/* Step 2: Suivi (In progress) */}
+                                            <div className="relative pl-10">
+                                                <div className="absolute -left-[9px] top-0 h-5 w-5 rounded-full border-2 bg-blue-50 border-blue-200 flex items-center justify-center">
+                                                    <span className="h-2 w-2 rounded-full bg-blue-500"></span>
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
+                                                    <h3 className="text-base font-bold text-gray-900">Mentorat : Suivi Mi-Parcours</h3>
+                                                    <button className="text-xs font-bold bg-blue-600 text-white px-3 py-1.5 rounded shadow-sm mt-2 sm:mt-0">
+                                                        Lancer Visio
+                                                    </button>
+                                                </div>
+                                                <p className="text-sm text-gray-500 mb-2">Revue des indicateurs bloquants (C2, C3).</p>
+                                                <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 bg-blue-50 inline-block px-2 py-1 rounded border border-blue-100">
+                                                    <Calendar className="h-3 w-3" /> 16 Fév. 2026 – 14:00
+                                                </div>
+                                            </div>
+
+                                            {/* Step 3: Audit Blanc (Future) */}
+                                            <div className="relative pl-10">
+                                                <div className="absolute -left-[9px] top-0 h-5 w-5 rounded-full bg-purple-50 border-2 border-purple-200 flex items-center justify-center">
+                                                    <span className="h-2 w-2 rounded-full bg-purple-300"></span>
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
+                                                    <h3 className="text-base font-bold text-gray-900">Audit Blanc</h3>
+                                                    <button className="text-xs font-bold text-purple-600 border border-purple-200 bg-white px-3 py-1.5 rounded mt-2 sm:mt-0">
+                                                        Planifier
+                                                    </button>
+                                                </div>
+                                                <p className="text-sm text-gray-500 mb-2">Simulation complète de l'audit de surveillance.</p>
+                                                <div className="flex items-center gap-1.5 text-xs text-purple-500 font-medium">
+                                                    <Info className="h-3 w-3" /> En attente de validation des indicateurs
+                                                </div>
+                                            </div>
+
+                                            {/* Step 4: Audit de Surveillance (Final) */}
+                                            <div className="relative pl-10">
+                                                <div className="absolute -left-[9px] top-0 h-5 w-5 rounded-full bg-gray-50 border-2 border-gray-200 flex items-center justify-center">
+                                                    <span className="h-2 w-2 rounded-full bg-gray-300"></span>
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
+                                                    <h3 className="text-base font-bold text-gray-900">Audit de Surveillance</h3>
+                                                </div>
+                                                <p className="text-sm text-gray-500">Date prévisionnelle : Mars 2026</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                 )}
                             </div>
-                        )
-                    }
+                        </div>
+                    )}
 
-                    {/* EVENT MODAL */}
-                    <EventModal
-                        isOpen={showEventModal}
-                        onClose={() => { setShowEventModal(false); setEditingEvent(null) }}
-                        onSave={handleSaveEvent}
-                        eventToEdit={editingEvent}
-                        isSaving={savingEvent}
+                    {showEventModal && (
+                        <EventModal
+                            isOpen={showEventModal}
+                            onClose={() => {
+                                setShowEventModal(false)
+                                setEditingEvent(null)
+                            }}
+                            onSave={handleSaveEvent}
+                            eventToEdit={editingEvent}
+                        />
+                    )}
+
+                    <SignatureModal 
+                        isOpen={showSignatureModal}
+                        onClose={() => {
+                            setShowSignatureModal(false);
+                            setSignatureEventId(null);
+                        }}
+                        onConfirm={handleConfirmSignature}
+                        eventDetails={events?.find(e => e.id === signatureEventId)}
+                        role="consultant"
                     />
-
-
 
                 </div >
             </div >
@@ -1964,6 +2443,7 @@ export default function CaseDetails() {
                 isOpen={statusModal.isOpen}
                 onClose={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
                 onConfirm={statusModal.onConfirm}
+                criterionId={statusModal.criterionId}
                 type={statusModal.type}
                 title={statusModal.title}
                 message={statusModal.message}
@@ -1971,6 +2451,49 @@ export default function CaseDetails() {
                 cancelText={statusModal.cancelText}
                 isLoading={statusModal.isLoading}
             />
+
+            {/* Modal: Email Confirmation */}
+            {showEmailConfirmModal && caseData && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[999] animate-in fade-in duration-300">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
+                        <div className="p-6 text-center">
+                            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-purple-100 mb-4">
+                                <Mail className="h-6 w-6 text-purple-600" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Envoyer les accès ?</h3>
+                            <p className="text-sm text-gray-500 mb-6 text-center">
+                                Êtes-vous sûr de vouloir envoyer les identifiants de connexion à <span className="font-bold">{caseData.tenants?.name}</span> ({caseData.tenants?.client_email}) ?
+                            </p>
+                            <div className="flex space-x-3">
+                                <button
+                                    onClick={() => {
+                                        setShowEmailConfirmModal(false)
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold transition-colors text-sm"
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    onClick={handleResendAccess}
+                                    disabled={emailSending}
+                                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-colors shadow-lg shadow-purple-500/30 flex items-center justify-center text-sm disabled:opacity-50"
+                                >
+                                    {emailSending ? (
+                                        <>
+                                            <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                                            Envoi...
+                                        </>
+                                    ) : (
+                                        'Envoyer'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {renderLocalToasts()}
+
         </div>
     )
 }
