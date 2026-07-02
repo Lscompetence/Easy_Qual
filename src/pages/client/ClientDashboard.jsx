@@ -873,10 +873,35 @@ export default function ClientDashboard() {
 
 
 
-    const handleFileSelect = (file, indicatorId) => {
-        if (!file) return
-        setPendingFiles(prev => ({ ...prev, [indicatorId]: file }))
-        setDirtyIndicators(prev => new Set(prev).add(indicatorId))
+    const handleFileSelect = async (file, indicatorId) => {
+        if (!file || !myCase) return
+        setUploadingFor('ind_' + indicatorId)
+        try {
+            const ext = file.name.split('.').pop()
+            const path = `${myCase.id}/ind_${indicatorId}_${Date.now()}.${ext}`
+            const { error: uploadError } = await supabase.storage
+                .from('quiz-uploads').upload(path, file, { upsert: true })
+            
+            if (uploadError) throw uploadError
+            
+            const { data: urlData } = supabase.storage.from('quiz-uploads').getPublicUrl(path)
+            
+            setPendingFiles(prev => ({ 
+                ...prev, 
+                [indicatorId]: { 
+                    name: file.name, 
+                    url: urlData.publicUrl, 
+                    path: path 
+                } 
+            }))
+            setDirtyIndicators(prev => new Set(prev).add(indicatorId))
+            showToast('Document chargé avec succès ! N\'oubliez pas d\'enregistrer.', 'success')
+        } catch (err) {
+            console.error("Upload error:", err)
+            showToast("Erreur lors du chargement du fichier : " + err.message, 'error')
+        } finally {
+            setUploadingFor(null)
+        }
     }
 
     const handleSaveIndicator = async (indicatorId) => {
@@ -892,62 +917,42 @@ export default function ClientDashboard() {
             const statusChanged = state.status && state.status !== dbState?.status;
             const commentChanged = state.client_comment && state.client_comment !== dbState?.client_comment;
 
-            // 1. Upload file if pending
+            // 1. Check if background uploaded file exists in pendingFiles
             const pendingFile = pendingFiles[indicatorId];
             let fileUploaded = false;
 
-            if (pendingFile) {
-                const ext = pendingFile.name.split('.').pop();
-                const path = `${myCase.id}/ind_${indicatorId}_${Date.now()}.${ext}`;
-                const { error: uploadError } = await supabase.storage
-                    .from('quiz-uploads').upload(path, pendingFile, { upsert: true });
-                
-                if (uploadError) throw uploadError;
-                
-                const { data: urlData } = supabase.storage.from('quiz-uploads').getPublicUrl(path);
-                
-                // Save file metadata
-                const { error: quizError } = await supabase.from('criterion_quiz_uploads').upsert({
-                    case_id: myCase.id,
-                    criterion_id: 'ind_' + indicatorId,
-                    audit_type: normalizedAudit,
-                    file_url: urlData.publicUrl,
-                    file_name: pendingFile.name,
-                    uploaded_at: new Date().toISOString()
-                }, { onConflict: 'case_id,criterion_id,audit_type' });
+            const dbPromises = [];
 
-                if (quizError) throw quizError;
+            // DB Operation 1: Save indicator state (status, comment)
+            dbPromises.push(
+                supabase.from('case_indicator_states').upsert({
+                    case_id: myCase.id,
+                    indicator_id: indicatorId,
+                    audit_type: normalizedAudit,
+                    status: state.status || 'to_do',
+                    consultant_verdict: state.consultant_verdict,
+                    consultant_comment: state.consultant_comment,
+                    client_comment: state.client_comment,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'case_id,indicator_id,audit_type' })
+            );
+
+            // DB Operation 2: Save file metadata (if any file was uploaded in the background)
+            if (pendingFile && pendingFile.url) {
+                dbPromises.push(
+                    supabase.from('criterion_quiz_uploads').upsert({
+                        case_id: myCase.id,
+                        criterion_id: 'ind_' + indicatorId,
+                        audit_type: normalizedAudit,
+                        file_url: pendingFile.url,
+                        file_name: pendingFile.name,
+                        uploaded_at: new Date().toISOString()
+                    }, { onConflict: 'case_id,criterion_id,audit_type' })
+                );
                 fileUploaded = true;
-                
-                // Update local quiz states
-                setQuizUploads(prev => ({
-                    ...prev,
-                    ['ind_' + indicatorId]: {
-                        ...(prev['ind_' + indicatorId] || {}),
-                        [normalizedAudit]: { 
-                            file_url: urlData.publicUrl, 
-                            file_name: pendingFile.name, 
-                            uploaded_at: new Date().toISOString() 
-                        }
-                    }
-                }));
             }
 
-            // 2. Save indicator state (status, comment)
-            const { error: stateError } = await supabase.from('case_indicator_states').upsert({
-                case_id: myCase.id,
-                indicator_id: indicatorId,
-                audit_type: normalizedAudit,
-                status: state.status || 'to_do',
-                consultant_verdict: state.consultant_verdict,
-                consultant_comment: state.consultant_comment,
-                client_comment: state.client_comment,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'case_id,indicator_id,audit_type' });
-
-            if (stateError) throw stateError;
-
-            // 📩 3. AUTOMATIC NOTIFICATION MESSAGE
+            // DB Operation 3: Send automatic notification message
             const indicatorLabel = indicators.find(i => i.id === indicatorId)?.label || `Indicateur ${indicatorId}`;
             const statusLabels = { 'done': 'Fait', 'not_applicable': 'Non applicable', 'doing': 'En cours', 'to_do': 'À traiter' };
             
@@ -959,14 +964,34 @@ export default function ClientDashboard() {
                 }
                 if (fileUploaded) msgContent += `📁 Document joint : ${pendingFile.name}\n`;
                 
-                try {
-                    const { error: msgErr } = await supabase.from('case_notifications').insert({
+                dbPromises.push(
+                    supabase.from('case_notifications').insert({
                         case_id: myCase.id,
                         type: 'client_indicator_update',
                         content: msgContent
-                    });
-                    if (msgErr) console.error("Failed to insert notification:", msgErr);
-                } catch (e) { console.warn("Could not insert notification exception:", e); }
+                    })
+                );
+            }
+
+            // Execute all DB queries in parallel for maximum speed!
+            const dbResults = await Promise.all(dbPromises);
+            for (const res of dbResults) {
+                if (res.error) throw res.error;
+            }
+
+            // Update local state for quiz uploads if file was added
+            if (pendingFile && pendingFile.url) {
+                setQuizUploads(prev => ({
+                    ...prev,
+                    ['ind_' + indicatorId]: {
+                        ...(prev['ind_' + indicatorId] || {}),
+                        [normalizedAudit]: { 
+                            file_url: pendingFile.url, 
+                            file_name: pendingFile.name, 
+                            uploaded_at: new Date().toISOString() 
+                        }
+                    }
+                }));
             }
 
             // IMMEDIATE LOCAL SYNC
@@ -992,6 +1017,13 @@ export default function ClientDashboard() {
                 const { [String(indicatorId)]: __, ...rest2 } = rest;
                 return rest2;
             });
+
+            // Refresh DB States in the background
+            const { data: newStates } = await supabase
+                .from('case_indicator_states')
+                .select('id, case_id, indicator_id, status, consultant_comment, consultant_verdict, client_comment, audit_type, updated_at')
+                .eq('case_id', myCase.id)
+            if (newStates) setAllStatesData(newStates);
 
             setSaveSuccess(prev => ({ ...prev, [indicatorId]: true }));
             showToast('Enregistré ! Les informations ont été sauvegardées et votre consultant a été notifié.', 'success');
@@ -2203,102 +2235,134 @@ export default function ClientDashboard() {
                                                     )}
 
                                                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-                                                        {/* Status Selection (Left) */}
-                                                        <div className="lg:col-span-4">
-                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-5">Déclarez votre statut</p>
-                                                            <div className="space-y-2.5">
-                                                                {[
-                                                                    { val: 'to_do', label: 'En cours', icon: Sun },
-                                                                    { val: 'done', label: 'Fait', icon: Flag, active: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
-                                                                    { val: 'not_applicable', label: 'Non applicable', icon: Ban, active: 'border-orange-500 bg-orange-50 text-orange-700' },
-                                                                ].map(opt => (
-                                                                    <button
-                                                                        key={opt.val}
-                                                                        onClick={() => handleStatusChange(ind.id, opt.val)}
-                                                                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 text-[13px] font-bold transition-all ${status === opt.val
-                                                                            ? (opt.active || 'shadow-sm')
-                                                                            : 'border-transparent bg-gray-50/50 text-gray-400 hover:bg-gray-50'
-                                                                            } opacity-100 cursor-pointer`}
-                                                                        style={status === opt.val && opt.val === 'to_do' ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary, borderColor: getCriterionColor(currentCriterion.id).border } : {}}
-                                                                    >
-                                                                        <div className="flex items-center gap-3">
-                                                                            <opt.icon className={`h-4 w-4 ${status === opt.val ? '' : 'text-gray-300'}`} style={status === opt.val && opt.val === 'to_do' ? { color: getCriterionColor(currentCriterion.id).primary } : {}} />
-                                                                            {opt.label}
-                                                                        </div>
-                                                                        {status === opt.val && <CheckCircle className={`h-4 w-4`} />}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
+                                                         {/* Status Selection (Left) */}
+                                                         <div className="lg:col-span-4">
+                                                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-5">Déclarez votre statut</p>
+                                                             <div className="space-y-2.5">
+                                                                 {(() => {
+                                                                     const isDirty = dirtyIndicators.has(ind.id) || pendingFiles[ind.id] || status === null || status === undefined;
+                                                                     return [
+                                                                         { val: 'to_do', label: 'En cours', icon: Sun },
+                                                                         { val: 'done', label: 'Fait', icon: Flag, active: 'border-emerald-500 bg-emerald-50 text-emerald-700' },
+                                                                         { val: 'not_applicable', label: 'Non applicable', icon: Ban, active: 'border-orange-500 bg-orange-50 text-orange-700' },
+                                                                     ].map(opt => {
+                                                                         const isSelected = status === opt.val;
+                                                                         const isDisabled = !isDirty;
+                                                                         return (
+                                                                             <button
+                                                                                 key={opt.val}
+                                                                                 disabled={isDisabled || uploadingFor === 'ind_' + ind.id || savingIndicator === ind.id}
+                                                                                 onClick={() => handleStatusChange(ind.id, opt.val)}
+                                                                                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 text-[13px] font-bold transition-all ${
+                                                                                     isSelected
+                                                                                         ? (opt.active || 'shadow-sm')
+                                                                                         : isDisabled
+                                                                                             ? 'border-transparent bg-gray-50/20 text-gray-300 cursor-not-allowed'
+                                                                                             : 'border-transparent bg-gray-50/50 text-gray-400 hover:bg-gray-50 cursor-pointer'
+                                                                                 } opacity-100`}
+                                                                                 style={isSelected && opt.val === 'to_do' ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary, borderColor: getCriterionColor(currentCriterion.id).border } : {}}
+                                                                             >
+                                                                                 <div className="flex items-center gap-3">
+                                                                                     <opt.icon className={`h-4 w-4 ${isSelected ? '' : isDisabled ? 'text-gray-200' : 'text-gray-300'}`} style={isSelected && opt.val === 'to_do' ? { color: getCriterionColor(currentCriterion.id).primary } : {}} />
+                                                                                     {opt.label}
+                                                                                 </div>
+                                                                                 {isSelected && <CheckCircle className={`h-4 w-4`} />}
+                                                                             </button>
+                                                                         );
+                                                                     });
+                                                                 })()}
+                                                             </div>
+                                                         </div>
 
-                                                        {/* File Management (Right) */}
-                                                        <div className="lg:col-span-8">
-                                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-5">
-                                                                Preuve documentaire
-                                                            </p>
+                                                         {/* File Management (Right) */}
+                                                         <div className="lg:col-span-8">
+                                                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-5">
+                                                                 Preuve documentaire
+                                                             </p>
 
-                                                            <div className="flex-1">
-                                                                { (fileData || pendingFiles[ind.id]) ? (
-                                                                    <div className="h-[154px] flex flex-col justify-center bg-gray-50/50 border-2 border-dashed border-gray-100 rounded-2xl px-8 relative">
-                                                                        <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-5 shadow-sm">
-                                                                            <div className="h-12 w-12 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center text-red-500">
-                                                                                <FileText className="h-7 w-7" />
-                                                                            </div>
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <p className="text-sm font-black text-gray-900 truncate mb-1">
-                                                                                    {pendingFiles[ind.id]?.name || (fileData ? fileData.file_name : '')}
-                                                                                </p>
-                                                                                <p className={`text-[11px] ${pendingFiles[ind.id] ? 'text-blue-500' : 'text-emerald-600'} font-bold flex items-center gap-1.5 uppercase tracking-wider`}>
-                                                                                    {pendingFiles[ind.id] ? (
-                                                                                        <>Non enregistré</>
-                                                                                    ) : (
-                                                                                        <><Check className="h-3 w-3 stroke-[3px]" /> Prêt pour l'audit</>
-                                                                                    )}
-                                                                                </p>
-                                                                            </div>
-                                                                            <button
-                                                                                onClick={(e) => {
-                                                                                    e.preventDefault();
-                                                                                    e.stopPropagation();
-                                                                                    if (pendingFiles[ind.id] || pendingFiles[String(ind.id)]) {
-                                                                                        setPendingFiles(prev => {
-                                                                                            const { [ind.id]: _, [String(ind.id)]: __, ...rest } = prev
-                                                                                            return rest
-                                                                                        })
-                                                                                    } else {
-                                                                                        handleDeleteFile('ind_' + ind.id, fileData?.audit_type)
-                                                                                    }
-                                                                                }}
-                                                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer z-20"
-                                                                                title="Supprimer le fichier"
-                                                                            >
-                                                                                <Trash2 className="h-5 w-5" />
-                                                                            </button>
-                                                                        </div>
-                                                                    </div>
-                                                                ) : (
-                                                                    <button
-                                                                        onClick={() => { setPendingCriterionId(ind.id); fileInputRef.current?.click() }}
-                                                                        disabled={uploadingFor === 'ind_' + ind.id || savingIndicator === ind.id}
-                                                                        className="w-full h-[154px] flex flex-col items-center justify-center gap-3 rounded-[24px] border-2 border-dashed border-gray-100 text-gray-500 transition-all group"
-                                                                    >
-                                                                        <div className="h-12 w-12 bg-white rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-gray-50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                                                            <Upload className="h-6 w-6" style={{ color: getCriterionColor(currentCriterion.id).primary }} />
-                                                                        </div>
-                                                                        <div className="text-center">
-                                                                            <p className="text-sm font-black text-gray-800">Cliquez pour ajouter un document</p>
-                                                                            <p className="text-[11px] text-gray-400 mt-1 font-medium">Sera enregistré avec l'indicateur</p>
-                                                                        </div>
-                                                                    </button>
-                                                                )}
-                                                            </div>
+                                                             <div className="flex-1">
+                                                                 {(() => {
+                                                                     const isDirty = dirtyIndicators.has(ind.id) || pendingFiles[ind.id] || status === null || status === undefined;
+                                                                     if (uploadingFor === 'ind_' + ind.id) {
+                                                                         return (
+                                                                             <div className="w-full h-[154px] flex flex-col items-center justify-center gap-3 rounded-[24px] border-2 border-dashed border-purple-200 bg-purple-50/10 text-purple-600 animate-pulse">
+                                                                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                                                                                 <p className="text-sm font-bold">Chargement du document...</p>
+                                                                             </div>
+                                                                         );
+                                                                     }
+                                                                     if (fileData || pendingFiles[ind.id]) {
+                                                                         return (
+                                                                             <div className="h-[154px] flex flex-col justify-center bg-gray-50/50 border-2 border-dashed border-gray-100 rounded-2xl px-8 relative">
+                                                                                 <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-5 shadow-sm">
+                                                                                     <div className="h-12 w-12 bg-white rounded-xl shadow-sm border border-gray-100 flex items-center justify-center text-red-500">
+                                                                                         <FileText className="h-7 w-7" />
+                                                                                     </div>
+                                                                                     <div className="flex-1 min-w-0">
+                                                                                         <p className="text-sm font-black text-gray-900 truncate mb-1">
+                                                                                             {pendingFiles[ind.id]?.name || (fileData ? fileData.file_name : '')}
+                                                                                         </p>
+                                                                                         <p className={`text-[11px] ${pendingFiles[ind.id] ? 'text-blue-500' : 'text-emerald-600'} font-bold flex items-center gap-1.5 uppercase tracking-wider`}>
+                                                                                             {pendingFiles[ind.id] ? (
+                                                                                                 <>Non enregistré</>
+                                                                                             ) : (
+                                                                                                 <><Check className="h-3 w-3 stroke-[3px]" /> Prêt pour l'audit</>
+                                                                                             )}
+                                                                                         </p>
+                                                                                     </div>
+                                                                                     <button
+                                                                                         disabled={!isDirty || savingIndicator === ind.id}
+                                                                                         onClick={(e) => {
+                                                                                             e.preventDefault();
+                                                                                             e.stopPropagation();
+                                                                                             if (pendingFiles[ind.id] || pendingFiles[String(ind.id)]) {
+                                                                                                 setPendingFiles(prev => {
+                                                                                                     const { [ind.id]: _, [String(ind.id)]: __, ...rest } = prev
+                                                                                                     return rest
+                                                                                                 })
+                                                                                             } else {
+                                                                                                 handleDeleteFile('ind_' + ind.id, fileData?.audit_type)
+                                                                                             }
+                                                                                         }}
+                                                                                         className={`p-2 rounded-xl transition-all z-20 ${
+                                                                                             !isDirty 
+                                                                                                 ? 'text-gray-300 cursor-not-allowed opacity-50' 
+                                                                                                 : 'text-gray-400 hover:text-red-500 hover:bg-red-50 cursor-pointer'
+                                                                                         }`}
+                                                                                         title={!isDirty ? "Veuillez cliquer sur modifier pour supprimer" : "Supprimer le fichier"}
+                                                                                     >
+                                                                                         <Trash2 className="h-5 w-5" />
+                                                                                     </button>
+                                                                                 </div>
+                                                                             </div>
+                                                                         );
+                                                                     }
+                                                                     return (
+                                                                         <button
+                                                                             onClick={() => { setPendingCriterionId(ind.id); fileInputRef.current?.click() }}
+                                                                             disabled={!isDirty || uploadingFor === 'ind_' + ind.id || savingIndicator === ind.id}
+                                                                             className={`w-full h-[154px] flex flex-col items-center justify-center gap-3 rounded-[24px] border-2 border-dashed border-gray-100 text-gray-500 transition-all group ${
+                                                                                 !isDirty ? 'bg-gray-50/30 cursor-not-allowed opacity-60' : 'cursor-pointer'
+                                                                             }`}
+                                                                         >
+                                                                             <div className="h-12 w-12 bg-white rounded-2xl shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-gray-50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                                                 <Upload className={`h-6 w-6 ${!isDirty ? 'text-gray-300' : ''}`} style={isDirty ? { color: getCriterionColor(currentCriterion.id).primary } : {}} />
+                                                                             </div>
+                                                                             <div className="text-center">
+                                                                                 <p className="text-sm font-black text-gray-800">Cliquez pour ajouter un document</p>
+                                                                                 <p className="text-[11px] text-gray-400 mt-1 font-medium">Sera enregistré avec l'indicateur</p>
+                                                                             </div>
+                                                                         </button>
+                                                                     );
+                                                                 })()}
+                                                             </div>
 
-                                                            {/* SAVE BUTTON AT BOTTOM OF CARD */}
-                                                            <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-end gap-4">
-
+                                                             {/* SAVE BUTTON AT BOTTOM OF CARD */}
+                                                             <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-end gap-4">
                                                                  <button
                                                                      onClick={() => {
-                                                                         if (!dirtyIndicators.has(ind.id) && !pendingFiles[ind.id] && status !== null) {
+                                                                         const isDirty = dirtyIndicators.has(ind.id) || pendingFiles[ind.id] || status === null || status === undefined;
+                                                                         if (!isDirty) {
                                                                              // "Modifier" mode triggered by making it dirty (using current status as starting point)
                                                                              setDirtyIndicators(prev => new Set(prev).add(ind.id))
                                                                          } else {
