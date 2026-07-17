@@ -56,3 +56,54 @@ L'application repose sur une architecture **Single Page Application (SPA)** coup
     ```
 
 3.  Ouvrir le navigateur à l'adresse indiquée (par défaut `http://localhost:5173`).
+
+---
+
+## 📁 Organisation du Code Source
+
+Voici l'organisation détaillée de l'arborescence des fichiers du projet :
+
+```
+Easy_Qual/
+├── docs/                               # Documentation, audits et schémas SQL
+│   ├── AUDIT_BASE_DE_DONNEES.md        # Audit complet de la base de données
+│   ├── Audit_Base_de_Donnees_EasyQual.pdf # Rapport d'audit au format PDF
+│   ├── qualiopi_audit_schema.sql       # Script SQL des structures de tables d'audit
+│   ├── public_schema_dump.sql          # Dump SQL de la structure publique
+│   └── fix_reclamations_delete.sql     # Correction SQL pour la suppression de réclamations
+├── public/                             # Fichiers statiques copiés à la racine lors du build
+│   └── assets/                         # Logos, médias et icônes
+├── src/                                # Code source React principal de l'application
+│   ├── components/                     # Composants réutilisables (tableaux, modals, cartes)
+│   ├── pages/                          # Pages de l'application (Dashboard, Clients, Login)
+│   ├── lib/                            # Outils et configuration du client Supabase
+│   ├── App.jsx                         # Composant racine React et gestion du routage
+│   └── main.jsx                        # Point d'entrée de l'application React
+├── scratch/                            # Scripts de maintenance, de synchronisation et de test
+│   ├── check_cols.js
+│   ├── debug_db.js
+│   ├── debug_notifs.js
+│   ├── debug_tenants.mjs
+│   ├── deploy_log.txt
+│   ├── fix-client-password.mjs
+│   ├── fix-password.js
+│   ├── inspect_db.mjs
+│   ├── lint_results.txt
+│   ├── list_notifs.js
+│   ├── repair_result.json
+│   ├── repair_result_final.json
+│   ├── repair_users.js
+│   ├── repair_users.mjs
+│   ├── run_global_repair.mjs
+│   ├── sync_all_clients.mjs
+│   ├── test-invite.js
+│   ├── test-invite2.mjs
+│   └── test-req.js
+├── supabase/                           # Configuration de base de données (fonctions, migrations)
+├── index.html                          # Fichier d'entrée de l'application
+├── package.json                        # Liste des dépendances et scripts npm
+├── vite.config.js                      # Configuration du build Vite
+├── PASSATION.md                        # Fichier de passation résumant l'état du projet
+└── README.md                           # Ce fichier d'introduction
+```
+
