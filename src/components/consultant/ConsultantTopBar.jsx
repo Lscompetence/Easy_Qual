@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Search, Bell, Plus, Menu, Lock, CheckCircle, XCircle, AlertTriangle, Info, X, ClipboardList, ExternalLink } from 'lucide-react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import CreditsModal from './CreditsModal'
 
 export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, showCredits = true, showNotifications = true, showSearch = true, refreshKey = 0, onCreditsUpdate = () => { }, showMobileMenu, setShowMobileMenu, hasUnreadNotifications, onNotificationClick, searchQuery = '', onSearchChange = () => { } }) {
@@ -13,6 +13,9 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
     const [showCreditsModal, setShowCreditsModal] = useState(false)
     const { user, profile, logout } = useAuth()
     const navigate = useNavigate()
+    const [searchParams, setSearchParams] = useSearchParams()
+    const [modalInitialStep, setModalInitialStep] = useState('selection')
+    const [modalInitialSelectedPack, setModalInitialSelectedPack] = useState(null)
 
     const [toasts, setToasts] = useState(() => {
         if (typeof window !== 'undefined' && user) {
@@ -306,6 +309,64 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
         if (!error && data) setCredits(data.balance)
     }
 
+    useEffect(() => {
+        if (!user) return
+        const paymentStatus = searchParams.get('payment')
+        const packId = searchParams.get('pack')
+
+        if (paymentStatus === 'success') {
+            const packs = [
+                { id: 'decouverte', name: 'Pack Découverte', credits: 1, price: 200 },
+                { id: 'pro', name: 'Pack Pro', credits: 5, price: 900 },
+                { id: 'expert', name: 'Pack Expert', credits: 10, price: 1600 }
+            ]
+            let matchedPack;
+            if (packId === 'custom' || searchParams.has('credits')) {
+                const creditsParam = parseInt(searchParams.get('credits') || '5', 10);
+                let unitPrice = 200;
+                if (creditsParam >= 10) unitPrice = 160;
+                else if (creditsParam >= 5) unitPrice = 180;
+                matchedPack = {
+                    id: packId || 'custom',
+                    name: packId === 'decouverte' ? 'Pack Découverte' : packId === 'pro' ? 'Pack Pro' : packId === 'expert' ? 'Pack Expert' : 'Recharge sur-mesure',
+                    credits: creditsParam,
+                    price: creditsParam * unitPrice
+                }
+            } else {
+                matchedPack = packs.find(p => p.id === packId) || packs[1]
+            }
+
+            // Trigger success view
+            setModalInitialStep('success')
+            setModalInitialSelectedPack(matchedPack)
+            setShowCreditsModal(true)
+
+            // Force refresh of credits wallet
+            setTimeout(() => {
+                fetchCredits()
+                if (onCreditsUpdate) onCreditsUpdate()
+            }, 1000)
+
+            // Clear search params
+            const newParams = new URLSearchParams(window.location.search)
+            newParams.delete('payment')
+            newParams.delete('pack')
+            setSearchParams(newParams, { replace: true })
+        } else if (paymentStatus === 'cancel') {
+            showToastOnly("L'achat de crédits a été annulé.", 'warning')
+            
+            const newParams = new URLSearchParams(window.location.search)
+            newParams.delete('payment')
+            setSearchParams(newParams, { replace: true })
+        }
+    }, [searchParams, user])
+
+    const handleCloseCreditsModal = () => {
+        setShowCreditsModal(false)
+        setModalInitialStep('selection')
+        setModalInitialSelectedPack(null)
+    }
+
     const fetchUnreadCount = async () => {
         if (!user) return
         try {
@@ -506,9 +567,11 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
 
             <CreditsModal
                 isOpen={showCreditsModal}
-                onClose={() => setShowCreditsModal(false)}
+                onClose={handleCloseCreditsModal}
                 balance={credits}
                 onSuccess={handleCreditsSuccess}
+                initialStep={modalInitialStep}
+                initialSelectedPack={modalInitialSelectedPack}
             />
             {renderToasts()}
         </header >
