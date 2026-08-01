@@ -88,7 +88,7 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
         { id: -3, criterion_id: 3, label: "Adaptation aux publics", criteria: { id: 3, label: "Adaptation aux publics" } },
         { id: -4, criterion_id: 4, label: "Moyens pédagogiques", criteria: { id: 4, label: "Moyens pédagogiques" } },
         { id: -5, criterion_id: 5, label: "Qualification formateurs", criteria: { id: 5, label: "Qualification formateurs" } },
-        { id: -6, criterion_id: 6, label: "Inscription socio-éco", criteria: { id: 6, label: "Inscription socio-éco" } },
+        { id: -6, criterion_id: 6, label: "Investissement environnement", criteria: { id: 6, label: "Investissement environnement" } },
         { id: -7, criterion_id: 7, label: "Amélioration continue", criteria: { id: 7, label: "Amélioration continue" } }
     ]
 
@@ -99,7 +99,7 @@ export default function ClientSidebar({ caseData, indicators, indicatorStates, c
         3: "Adaptation aux publics",
         4: "Moyens pédagogiques",
         5: "Qualification formateurs",
-        6: "Inscription socio-éco",
+        6: "Investissement environnement",
         7: "Amélioration continue"
     }
 

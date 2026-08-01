@@ -10,6 +10,7 @@ export default function ClientTopBar({ breadcrumbs = [], consultantName = '', on
     const { user } = useAuth()
     const [caseId, setCaseId] = useState(null)
     const [toasts, setToasts] = useState([])
+    const [consultant, setConsultant] = useState(null)
 
     // Badge: unread messages from consultant
     const [unreadMsgCount, setUnreadMsgCount] = useState(0)
@@ -25,12 +26,26 @@ export default function ClientTopBar({ breadcrumbs = [], consultantName = '', on
             if (tenants && tenants.length > 0) {
                 const { data: cases } = await supabase
                     .from('cases')
-                    .select('id')
+                    .select('id, consultant_id')
                     .eq('tenant_id', tenants[0].id)
                     .order('created_at', { ascending: false })
                     .limit(1)
                 if (cases && cases.length > 0) {
                     setCaseId(cases[0].id)
+                    
+                    if (cases[0].consultant_id) {
+                        const { data: p } = await supabase
+                            .from('profiles')
+                            .select('first_name, last_name, avatar_url')
+                            .eq('id', cases[0].consultant_id)
+                            .single()
+                        if (p) {
+                            setConsultant({
+                                name: `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+                                avatar_url: p.avatar_url
+                            })
+                        }
+                    }
                 }
             }
         }
@@ -276,16 +291,24 @@ export default function ClientTopBar({ breadcrumbs = [], consultantName = '', on
                     )}
                 </button>
 
-                {consultantName && (
+                {(consultant?.name || consultantName) && (
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50/80 rounded-full border border-gray-100 shadow-sm">
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mr-1">Consultant</span>
-                        <div className="h-5 w-5 rounded-full bg-[#cc6d3e] flex items-center justify-center text-white text-[9px] font-black relative">
-                            {consultantName[0]}
-                            <div className="absolute -bottom-0.5 -right-0.5 h-2 w-2 bg-emerald-500 rounded-full border border-white flex items-center justify-center">
-                                <Check className="h-1 w-1 text-white stroke-[5px]" />
+                        <div className="h-6 w-6 rounded-full bg-[#cc6d3e] flex items-center justify-center text-white text-[9px] font-black relative overflow-visible">
+                            {consultant?.avatar_url ? (
+                                <img 
+                                    src={consultant.avatar_url} 
+                                    alt="Consultant Avatar" 
+                                    className="h-full w-full object-cover rounded-full" 
+                                />
+                            ) : (
+                                <span>{(consultant?.name || consultantName)[0]?.toUpperCase()}</span>
+                            )}
+                            <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 rounded-full border border-white flex items-center justify-center">
+                                <Check className="h-1.5 w-1.5 text-white stroke-[5px]" />
                             </div>
                         </div>
-                        <span className="text-xs font-black text-gray-800">{consultantName}</span>
+                        <span className="text-xs font-black text-gray-800">{consultant?.name || consultantName}</span>
                     </div>
                 )}
                 

@@ -107,18 +107,43 @@ Deno.serve(async (req) => {
 
         const body = await req.json()
         const { packId, customQuantity } = body
-
+ 
         let quantity = 0
         let packName = "Achat de crédits"
         let packDescription = ""
-
+ 
         if (customQuantity !== undefined) {
             quantity = parseInt(customQuantity, 10)
             if (isNaN(quantity) || quantity <= 0) {
                 return new Response(JSON.stringify({ error: "La quantité de crédits doit être un entier positif." }), { status: 400, headers: corsHeaders })
             }
-            packName = `Achat de crédits`
-            packDescription = `Recharge de ${quantity} crédit${quantity > 1 ? 's' : ''}`
+            if (packId) {
+                const packs: Record<string, { name: string; description: string }> = {
+                    'decouverte': {
+                        name: 'Pack Découverte',
+                        description: 'Pack de crédits individuel'
+                    },
+                    'pro': {
+                        name: 'Pack Pro',
+                        description: 'Pack de crédits professionnel'
+                    },
+                    'expert': {
+                        name: 'Pack Expert',
+                        description: 'Pack de crédits expert'
+                    }
+                }
+                const selectedPack = packs[packId]
+                if (selectedPack) {
+                    packName = selectedPack.name
+                    packDescription = `${selectedPack.description} (${quantity} crédits)`
+                } else {
+                    packName = `Achat de crédits`
+                    packDescription = `Recharge de ${quantity} crédit${quantity > 1 ? 's' : ''}`
+                }
+            } else {
+                packName = `Achat de crédits`
+                packDescription = `Recharge de ${quantity} crédit${quantity > 1 ? 's' : ''}`
+            }
         } else if (packId) {
             const packs: Record<string, { name: string; description: string; credits: number }> = {
                 'decouverte': {

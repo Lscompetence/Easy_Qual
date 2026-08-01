@@ -43,7 +43,10 @@ export default function Profile() {
     const [formData, setFormData] = useState({
         first_name: '',
         last_name: '',
-        email: ''
+        email: '',
+        commercial_name: '',
+        siret: '',
+        phone: ''
     })
 
     const [passwordData, setPasswordData] = useState({
@@ -57,7 +60,10 @@ export default function Profile() {
             setFormData({
                 first_name: profile?.first_name || '',
                 last_name: profile?.last_name || '',
-                email: profile?.email || user?.email || ''
+                email: profile?.email || user?.email || '',
+                commercial_name: profile?.commercial_name || '',
+                siret: profile?.siret || '',
+                phone: profile?.phone || ''
             })
             setLoading(false)
             if (profile) setInitialized(true)
@@ -118,7 +124,10 @@ export default function Profile() {
                 .from('profiles')
                 .update({
                     first_name: formData.first_name,
-                    last_name: formData.last_name
+                    last_name: formData.last_name,
+                    commercial_name: formData.commercial_name,
+                    siret: formData.siret,
+                    phone: formData.phone
                 })
                 .eq('id', user.id)
 
@@ -181,9 +190,19 @@ export default function Profile() {
     const content = (
         <div className="w-full max-w-7xl mx-auto space-y-6 animate-fadeIn pb-12">
             {/* Back Button */}
-            <div className="flex justify-start mb-2">
+            <div className="flex justify-start mb-6">
                 <button
-                    onClick={() => navigate(isConsultant ? '/consultant/dashboard' : (isAdmin ? '/admin/dashboard' : -1))}
+                    onClick={() => {
+                        if (profile?.is_internal) {
+                            navigate('/internal/dashboard')
+                        } else if (isConsultant) {
+                            navigate('/consultant/dashboard')
+                        } else if (isAdmin) {
+                            navigate('/admin/dashboard')
+                        } else {
+                            navigate(-1)
+                        }
+                    }}
                     className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-600 hover:text-indigo-600 border border-slate-200/60 rounded-xl text-xs font-bold transition-all shadow-sm shadow-slate-100 hover:shadow group"
                 >
                     <ArrowLeft className="h-4 w-4 mr-1 group-hover:-translate-x-1 transition-transform" />
@@ -245,7 +264,7 @@ export default function Profile() {
                                             {formData.first_name} {formData.last_name}
                                         </h1>
                                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shadow-sm ${isAdmin ? 'bg-slate-50 text-slate-700 border-slate-200' : 'bg-purple-600 text-white border-purple-600 shadow-purple-200'}`}>
-                                            {role === 'consultant' ? 'Consultant' : (role === 'admin' ? 'Administrateur' : role)}
+                                            {role === 'consultant' ? (profile?.is_internal ? 'Collaborateur Interne' : 'Consultant') : (role === 'admin' ? 'Administrateur' : role)}
                                         </span>
                                     </div>
                                     <p className="text-sm font-medium text-gray-500 flex items-center justify-center md:justify-start gap-1.5 hover:text-indigo-500 transition-colors">
@@ -289,7 +308,7 @@ export default function Profile() {
 
                     <div className="p-6 flex-1 bg-white relative flex flex-col">
                         <form onSubmit={handleUpdateProfile} className="space-y-6 h-full flex flex-col relative z-10">
-                            <div className="space-y-6 flex-1">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
                                 <div className="group/input relative transition-all duration-300 hover:scale-[1.01]">
                                     <label className="block text-[10px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide group-hover/input:text-indigo-600 transition-colors pl-0.5">Prénom</label>
                                     <input
@@ -310,6 +329,48 @@ export default function Profile() {
                                         autoComplete="family-name"
                                     />
                                 </div>
+                                <div className="group/input relative transition-all duration-300 hover:scale-[1.01]">
+                                    <label className="block text-[10px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide group-hover/input:text-indigo-600 transition-colors pl-0.5">Téléphone</label>
+                                    <input
+                                        type="tel"
+                                        value={formData.phone}
+                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 placeholder-gray-400 outline-none transition-all duration-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 hover:border-indigo-300 hover:bg-white hover:shadow-sm"
+                                        placeholder="Ex: +33 6 12 34 56 78"
+                                    />
+                                </div>
+                                <div className="group/input relative transition-all duration-300 hover:scale-[1.01]">
+                                    <label className="block text-[10px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide pl-0.5">Adresse Email (Identifiant)</label>
+                                    <input
+                                        type="email"
+                                        value={formData.email}
+                                        disabled
+                                        className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-lg text-sm font-semibold text-gray-400 outline-none cursor-not-allowed"
+                                    />
+                                </div>
+                                
+                                {isConsultant && (
+                                    <>
+                                        <div className="group/input relative transition-all duration-300 hover:scale-[1.01]">
+                                            <label className="block text-[10px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide group-hover/input:text-indigo-600 transition-colors pl-0.5">Nom Commercial / Entreprise</label>
+                                            <input
+                                                type="text"
+                                                value={formData.commercial_name}
+                                                onChange={(e) => setFormData({ ...formData, commercial_name: e.target.value })}
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 placeholder-gray-400 outline-none transition-all duration-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 hover:border-indigo-300 hover:bg-white hover:shadow-sm"
+                                            />
+                                        </div>
+                                        <div className="group/input relative transition-all duration-300 hover:scale-[1.01]">
+                                            <label className="block text-[10px] font-bold text-gray-400 mb-1.5 uppercase tracking-wide group-hover/input:text-indigo-600 transition-colors pl-0.5">SIRET</label>
+                                            <input
+                                                type="text"
+                                                value={formData.siret}
+                                                onChange={(e) => setFormData({ ...formData, siret: e.target.value })}
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 placeholder-gray-400 outline-none transition-all duration-300 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 hover:border-indigo-300 hover:bg-white hover:shadow-sm"
+                                            />
+                                        </div>
+                                    </>
+                                )}
                             </div>
 
                             <div className="pt-4 mt-auto">

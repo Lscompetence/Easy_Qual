@@ -68,7 +68,8 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
     }
 
     const isActive = (path) => location.pathname === path
-
+    const pathPrefix = profile?.is_internal ? '/internal' : '/consultant'
+ 
     return (
         <>
             {/* Backdrop for mobile */}
@@ -78,7 +79,7 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                     onClick={onClose}
                 ></div>
             )}
-
+ 
             <aside className={`fixed inset-y-0 left-0 lg:sticky lg:top-0 w-64 bg-white h-screen flex flex-col z-50 flex-shrink-0 transition-transform duration-300 ease-in-out transform border-r border-gray-100 lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'
                 }`}>
                 {/* Logo Section */}
@@ -88,7 +89,7 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                         <X className="h-5 w-5" />
                     </button>
                 </div>
-
+ 
                 {/* Navigation - PILOTAGE */}
                 <div className="flex-1 overflow-y-auto py-6 px-3 space-y-6 border-r border-gray-100">
                     <div>
@@ -97,139 +98,139 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                         </h3>
                         <nav className="space-y-1">
                             <Link
-                                to="/consultant/dashboard"
-                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive('/consultant/dashboard')
+                                to={`${pathPrefix}/dashboard`}
+                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive(`${pathPrefix}/dashboard`)
                                     ? 'bg-purple-50 text-purple-700'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
-                                <LayoutDashboard className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/dashboard') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
+                                <LayoutDashboard className={`h-5 w-5 mr-3 transition-colors ${isActive(`${pathPrefix}/dashboard`) ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
                                     }`} />
                                 Tableau de bord
-                                {isActive('/consultant/dashboard') && (
+                                {isActive(`${pathPrefix}/dashboard`) && (
                                     <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
                                 )}
                             </Link>
-
+ 
                             <Link
-                                to="/consultant/cases"
-                                className={`flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg group transition-colors ${isActive('/consultant/cases')
+                                to={`${pathPrefix}/cases`}
+                                className={`flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg group transition-colors ${isActive(`${pathPrefix}/cases`)
                                     ? 'bg-purple-50 text-purple-700'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
                                 <div className="flex items-center">
-                                    <FolderOpen className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/cases') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'}`} />
+                                    <FolderOpen className={`h-5 w-5 mr-3 transition-colors ${isActive(`${pathPrefix}/cases`) ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'}`} />
                                     Dossiers Clients
                                 </div>
                                 {caseCount > 0 && (
-                                    <span className={`py-0.5 px-2 rounded-full text-xs font-bold ${isActive('/consultant/cases') ? 'bg-purple-200 text-purple-800' : 'bg-purple-100 text-purple-600'}`}>
+                                    <span className={`py-0.5 px-2 rounded-full text-xs font-bold ${isActive(`${pathPrefix}/cases`) ? 'bg-purple-200 text-purple-800' : 'bg-purple-100 text-purple-600'}`}>
                                         {caseCount}
                                     </span>
                                 )}
                             </Link>
-
-
+ 
+ 
                             <Link
-                                to="/consultant/calendar"
-                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive('/consultant/calendar')
+                                to={`${pathPrefix}/calendar`}
+                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive(`${pathPrefix}/calendar`)
                                     ? 'bg-purple-50 text-purple-700'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
-                                <Calendar className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/calendar') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
+                                <Calendar className={`h-5 w-5 mr-3 transition-colors ${isActive(`${pathPrefix}/calendar`) ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
                                     }`} />
                                 Agenda Visios
-                                {isActive('/consultant/calendar') && (
+                                {isActive(`${pathPrefix}/calendar`) && (
                                     <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
                                 )}
                             </Link>
                         </nav>
                     </div>
-
+ 
                     <div>
                         <h3 className="px-3 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
                              Outils
                         </h3>
                         <nav className="space-y-1">
                             <Link
-                                to="/consultant/resources"
-                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive('/consultant/resources')
+                                to={`${pathPrefix}/resources`}
+                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive(`${pathPrefix}/resources`)
                                     ? 'bg-purple-50 text-purple-700'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
-                                <BookOpen className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/resources') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
+                                <BookOpen className={`h-5 w-5 mr-3 transition-colors ${isActive(`${pathPrefix}/resources`) ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
                                     }`} />
                                 Gestion Session Client
-                                {isActive('/consultant/resources') && (
+                                {isActive(`${pathPrefix}/resources`) && (
                                     <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
                                 )}
                             </Link>
-
-
+ 
+ 
                             <Link
-                                to="/consultant/reclamations"
-                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive('/consultant/reclamations')
+                                to={`${pathPrefix}/reclamations`}
+                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive(`${pathPrefix}/reclamations`)
                                     ? 'bg-purple-50 text-purple-700'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
-                                <Archive className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/reclamations') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
+                                <Archive className={`h-5 w-5 mr-3 transition-colors ${isActive(`${pathPrefix}/reclamations`) ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
                                     }`} />
                                 Mes Réclamations
-                                {isActive('/consultant/reclamations') && (
+                                {isActive(`${pathPrefix}/reclamations`) && (
                                     <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
                                 )}
                             </Link>
-
+ 
                             <Link
-                                to="/consultant/audit"
-                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${location.pathname.startsWith('/consultant/audit')
+                                to={`${pathPrefix}/audit`}
+                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${location.pathname.startsWith(`${pathPrefix}/audit`)
                                     ? 'bg-purple-50 text-purple-700'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
-                                <ClipboardCheck className={`h-5 w-5 mr-3 transition-colors ${location.pathname.startsWith('/consultant/audit') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
+                                <ClipboardCheck className={`h-5 w-5 mr-3 transition-colors ${location.pathname.startsWith(`${pathPrefix}/audit`) ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
                                     }`} />
                                 Audit Qualiopi
-                                {location.pathname.startsWith('/consultant/audit') && (
+                                {location.pathname.startsWith(`${pathPrefix}/audit`) && (
                                     <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
                                 )}
                             </Link>
-
+ 
                             <Link
-                                to="/consultant/questionnaires"
-                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive('/consultant/questionnaires')
+                                to={`${pathPrefix}/questionnaires`}
+                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive(`${pathPrefix}/questionnaires`)
                                     ? 'bg-purple-50 text-purple-700'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
-                                <FileText className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/questionnaires') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
+                                <FileText className={`h-5 w-5 mr-3 transition-colors ${isActive(`${pathPrefix}/questionnaires`) ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
                                     }`} />
                                 Questionnaires
-                                {isActive('/consultant/questionnaires') && (
+                                {isActive(`${pathPrefix}/questionnaires`) && (
                                     <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
                                 )}
                             </Link>
-
+ 
                             <Link
-                                to="/consultant/actions-history"
-                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive('/consultant/actions-history')
+                                to={`${pathPrefix}/actions-history`}
+                                className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors group relative ${isActive(`${pathPrefix}/actions-history`)
                                     ? 'bg-purple-50 text-purple-700'
                                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
-                                <ClipboardList className={`h-5 w-5 mr-3 transition-colors ${isActive('/consultant/actions-history') ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
+                                <ClipboardList className={`h-5 w-5 mr-3 transition-colors ${isActive(`${pathPrefix}/actions-history`) ? 'text-purple-600' : 'text-gray-400 group-hover:text-gray-500'
                                     }`} />
                                 Historique toasts
-                                {isActive('/consultant/actions-history') && (
+                                {isActive(`${pathPrefix}/actions-history`) && (
                                     <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-purple-600 rounded-l-full"></div>
                                 )}
                             </Link>
                         </nav>
                     </div>
-
+ 
                 </div>
 
                 {/* User Profile Section */}
@@ -246,7 +247,12 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                             <p className="text-sm font-bold text-gray-900 truncate">
                                 {profile?.first_name} {profile?.last_name || ''}
                             </p>
-                            <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                            {profile?.is_internal && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-purple-100 text-purple-700 border border-purple-200/50 mt-0.5">
+                                    Profil Interne
+                                </span>
+                            )}
+                            <p className="text-xs text-gray-500 truncate mt-0.5">{user?.email}</p>
                         </div>
                     </div>
                     <div className="flex gap-2">

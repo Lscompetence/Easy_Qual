@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
 
     try {
         const body = await req.json()
-        const { action, userId, email, password, firstName, lastName, initialCredits, commercialName, siret, phone } = body
+        const { action, userId, email, password, firstName, lastName, initialCredits, commercialName, siret, phone, isInternal } = body
         const origin = req.headers.get('origin') || 'http://localhost:5173'
         
         console.log(`[REQ] Action: ${action}, Email: ${email || 'N/A'}, Origin: ${origin}`)
@@ -171,7 +171,8 @@ Deno.serve(async (req) => {
                     siret: siret,
                     phone: phone,
                     is_active: true,
-                    temp_password: pwdToUse
+                    temp_password: pwdToUse,
+                    is_internal: isInternal || false
                 })
                 .eq('id', newId)
 

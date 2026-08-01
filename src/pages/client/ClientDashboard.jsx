@@ -464,7 +464,7 @@ export default function ClientDashboard() {
         { id: 5, criterion_id: 3, label: "Adaptation aux publics.", criteria: { id: 3, label: "Adaptation aux publics" } },
         { id: 6, criterion_id: 4, label: "Moyens pédagogiques.", criteria: { id: 4, label: "Moyens pédagogiques" } },
         { id: 7, criterion_id: 5, label: "Qualification formateurs.", criteria: { id: 5, label: "Qualification formateurs" } },
-        { id: 8, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Inscription socio-éco" } },
+        { id: 8, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Investissement environnement" } },
         { id: 9, criterion_id: 7, label: "Amélioration continue.", criteria: { id: 7, label: "Amélioration continue" } }
     ])
     const [indicatorStates, setIndicatorStates] = useState({})
@@ -692,7 +692,7 @@ export default function ClientDashboard() {
             // 1. Fetch Indicators FIRST (Always needed)
             const { data: indicatorsData } = await supabase
                 .from('indicators')
-                .select('id, code, label, criterion_id, criteria (id, label)')
+                .select('id, code, label, criterion_id, criteria (id, label, description)')
                 .order('id', { ascending: true })
 
             if (!indicatorsData || indicatorsData.length === 0) {
@@ -704,7 +704,7 @@ export default function ClientDashboard() {
                     { id: 5, criterion_id: 3, label: "Adaptation aux publics.", criteria: { id: 3, label: "Adaptation aux publics" } },
                     { id: 6, criterion_id: 4, label: "Moyens pédagogiques.", criteria: { id: 4, label: "Moyens pédagogiques" } },
                     { id: 7, criterion_id: 5, label: "Qualification formateurs.", criteria: { id: 5, label: "Qualification formateurs" } },
-                    { id: 8, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Inscription socio-éco" } },
+                    { id: 8, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Investissement environnement" } },
                     { id: 9, criterion_id: 7, label: "Amélioration continue.", criteria: { id: 7, label: "Amélioration continue" } }
                 ]
                 setIndicators(fallback)
@@ -1337,15 +1337,15 @@ export default function ClientDashboard() {
     // Group indicators by criterion
     const criteriaMap = {}
 
-    // Fallback for dashboard chips if empty
+     // Fallback for dashboard chips if empty
     const effectiveIndicatorsForDashboard = (indicators && indicators.length > 0) ? indicators : [
-        { id: -1, criterion_id: 1, label: "Information du public", criteria: { id: 1, label: "Information du public" } },
-        { id: -2, criterion_id: 2, label: "Objectifs & public", criteria: { id: 2, label: "Objectifs & public" } },
-        { id: -3, criterion_id: 3, label: "Adaptation aux publics", criteria: { id: 3, label: "Adaptation aux publics" } },
-        { id: -4, criterion_id: 4, label: "Moyens pédagogiques", criteria: { id: 4, label: "Moyens pédagogiques" } },
-        { id: -5, criterion_id: 5, label: "Qualification formateurs", criteria: { id: 5, label: "Qualification formateurs" } },
-        { id: -6, criterion_id: 6, label: "Inscription socio-éco", criteria: { id: 6, label: "Inscription socio-éco" } },
-        { id: -7, criterion_id: 7, label: "Amélioration continue", criteria: { id: 7, label: "Amélioration continue" } }
+        { id: -1, criterion_id: 1, label: "Information du public", criteria: { id: 1, label: "Information du public", description: "Conditions d’information du public" } },
+        { id: -2, criterion_id: 2, label: "Objectifs & public", criteria: { id: 2, label: "Objectifs & public", description: "Identification précise des objectifs des prestations" } },
+        { id: -3, criterion_id: 3, label: "Adaptation aux publics", criteria: { id: 3, label: "Adaptation aux publics", description: "Adaptation aux publics bénéficiaires" } },
+        { id: -4, criterion_id: 4, label: "Moyens pédagogiques", criteria: { id: 4, label: "Moyens pédagogiques", description: "Adéquation des moyens pédagogiques" } },
+        { id: -5, criterion_id: 5, label: "Qualification formateurs", criteria: { id: 5, label: "Qualification formateurs", description: "Qualification et développement des connaissances" } },
+        { id: -6, criterion_id: 6, label: "Investissement environnement", criteria: { id: 6, label: "Investissement environnement", description: "Inscription et investissement du prestataire dans son environnement professionnel." } },
+        { id: -7, criterion_id: 7, label: "Amélioration continue", criteria: { id: 7, label: "Amélioration continue", description: "Recueil et prise en compte des appréciations" } }
     ]
 
     effectiveIndicatorsForDashboard.forEach(ind => {
@@ -1354,6 +1354,7 @@ export default function ClientDashboard() {
             criteriaMap[cid] = {
                 id: cid,
                 label: ind.criteria?.label || `Critère ${cid}`,
+                description: ind.criteria?.description || '',
                 items: []
             }
         }
@@ -1556,7 +1557,7 @@ export default function ClientDashboard() {
                                 </div>
                                 <h2 className="text-3xl font-black text-gray-900 mb-3">Synthèse pré-audit</h2>
                                 <p className="text-sm text-gray-500 max-w-lg mx-auto leading-relaxed">
-                                    Retrouvez ici la synthèse et les conclusions de votre audit blanc pour chaque périmètre de certification Qualiopi.
+                                    Retrouvez ici la synthèse et les conclusions pour chaque périmètre de certification Qualiopi.
                                 </p>
                             </div>
 
@@ -1841,7 +1842,7 @@ export default function ClientDashboard() {
                                 {currentCriterion.label}
                             </h1>
                             <p className="text-sm text-gray-500 mt-1">
-                                Découvrez comment communiquer de manière transparente et exhaustive sur votre offre de formation vers vos publics cibles.
+                                {currentCriterion?.description || "Découvrez comment communiquer de manière transparente et exhaustive sur votre offre de formation vers vos publics cibles."}
                             </p>
                         </div>
 
@@ -2171,11 +2172,11 @@ export default function ClientDashboard() {
                                                 <div className={`mt-3 h-[28px] w-[28px] rounded-full border-2 flex items-center justify-center flex-shrink-0 text-[11px] font-black shadow-sm transition-all ${isDone ? 'bg-[#10b981] border-[#10b981] text-white' :
                                                     isNonApplicable ? 'bg-slate-400 border-slate-400 text-white' : ''
                                                     }`} style={(!isDone && !isNonApplicable) ? { backgroundColor: getCriterionColor(currentCriterion.id).light, color: getCriterionColor(currentCriterion.id).primary, borderColor: getCriterionColor(currentCriterion.id).primary } : {}}>
-                                                    {isDone ? <Check className="h-3.5 w-3.5" /> : (isNonApplicable ? '–' : idx + 1)}
+                                                    {isDone ? <Check className="h-3.5 w-3.5" /> : (isNonApplicable ? '–' : String(ind.id).padStart(2, '0'))}
                                                 </div>
                                                 <div className="flex-1 min-w-0 bg-slate-50/50 rounded-[20px] px-6 py-4 border border-slate-100/50 group-hover:bg-slate-50 transition-colors">
                                                     <div className="flex items-center gap-3">
-                                                        <h3 className="text-base font-black text-slate-900">Indicateur {idx + 1}</h3>
+                                                        <h3 className="text-base font-black text-slate-900">Indicateur {String(ind.id).padStart(2, '0')}</h3>
                                                             <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${status === 'not_applicable' || status === 'non_applicable' ? 'text-slate-500 bg-slate-50' :
                                                                  status === 'done' ? 'text-emerald-600 bg-emerald-50' :
                                                                      ''
@@ -2201,8 +2202,10 @@ export default function ClientDashboard() {
                                                                 {selectedVideoIndicator === ind.id ? 'Vidéo en cours' : 'Voir la vidéo'}
                                                             </button>
                                                     </div>
-                                                    <p className="text-sm text-slate-500 mt-1.5 font-medium leading-relaxed">{ind.label}</p>
-                                                </div>
+                                                     {ind.label && !/^indicateur\s*\d+$/i.test(ind.label.trim()) && (
+                                                         <p className="text-sm text-slate-500 mt-1.5 font-medium leading-relaxed">{ind.label}</p>
+                                                     )}
+                                                 </div>
                                                 <div className="mt-4 flex items-center gap-3">
                                                     {fileData && (
                                                         <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 rounded-full border border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-wider">

@@ -359,9 +359,9 @@ export default function ConsultantCases() {
                                             <tr
                                                 key={c.id}
                                                 // Removed onClick on tr to avoid conflict with dropdown
-                                                className="group hover:bg-gray-50 transition-colors cursor-pointer relative"
+                                                className="group cursor-pointer relative"
                                             >
-                                                <td className="px-6 py-4" onClick={() => navigate(`/consultant/case/${c.id}`)}>
+                                                <td className="px-6 py-4 group-hover:bg-slate-50/60 group-hover:rounded-l-2xl transition-all duration-300" onClick={() => navigate(`/consultant/case/${c.id}`)}>
                                                     <div className="flex items-center">
                                                         <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold mr-4 uppercase shadow-sm">
                                                             {c.tenants?.name?.substring(0, 2) || 'UK'}
@@ -374,7 +374,7 @@ export default function ConsultantCases() {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4" onClick={() => navigate(`/consultant/case/${c.id}`)}>
+                                                <td className="px-6 py-4 group-hover:bg-slate-50/60 transition-all duration-300" onClick={() => navigate(`/consultant/case/${c.id}`)}>
                                                     <div className="flex items-center gap-2">
                                                         <Building className="h-4 w-4 text-gray-400" />
                                                         <span className="text-sm font-medium text-gray-600 capitalize">
@@ -382,7 +382,7 @@ export default function ConsultantCases() {
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4" onClick={() => navigate(`/consultant/case/${c.id}`)}>
+                                                <td className="px-6 py-4 group-hover:bg-slate-50/60 transition-all duration-300" onClick={() => navigate(`/consultant/case/${c.id}`)}>
                                                     <div className="flex flex-wrap gap-1">
                                                         {c.audit_type && c.audit_type.map((type, idx) => (
                                                             <span key={idx} className="px-2 py-1 rounded bg-orange-50 text-orange-700 text-[10px] font-bold uppercase border border-orange-100">
@@ -391,25 +391,25 @@ export default function ConsultantCases() {
                                                         ))}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 min-w-[240px]">
-                                                    <div className="flex flex-col gap-2 items-center justify-center pr-4">
+                                                <td className="px-6 py-4 min-w-[240px] group-hover:bg-slate-50/60 transition-all duration-300">
+                                                    <div className="flex flex-col gap-1.5 items-center justify-center pr-4">
                                                         <div
-                                                            className="flex items-center gap-2 w-full bg-slate-50 border border-slate-200/60 px-3 py-1.5 rounded-xl"
+                                                            className="flex items-center gap-1.5 w-full bg-slate-100/50 hover:bg-purple-50 border border-slate-200/40 hover:border-purple-200 px-2.5 py-1 rounded-lg transition-all"
                                                         >
-                                                            <div className="flex-shrink-0 bg-white p-1.5 rounded-lg shadow-sm border border-slate-100">
-                                                                <Mail className="h-4 w-4 text-slate-400" />
+                                                            <div className="flex-shrink-0 bg-white p-1 rounded-md shadow-sm border border-slate-100">
+                                                                <Mail className="h-3.5 w-3.5 text-slate-400" />
                                                             </div>
-                                                            <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                                                            <span className="text-[11px] font-bold text-slate-700 whitespace-nowrap">
                                                                 {c.tenants?.client_email || 'Non défini'}
                                                             </span>
 
 
                                                         </div>
-                                                        <div className="flex items-center gap-2 w-full bg-amber-50 border border-amber-200/50 px-3 py-1.5 rounded-xl">
-                                                            <div className="flex-shrink-0 bg-white p-1.5 rounded-lg shadow-sm border border-amber-100">
-                                                                <Lock className="h-4 w-4 text-amber-600" />
+                                                        <div className="flex items-center gap-1.5 w-full bg-amber-50/50 hover:bg-amber-100 border border-amber-200/40 hover:border-amber-300 px-2.5 py-1 rounded-lg transition-all">
+                                                            <div className="flex-shrink-0 bg-white p-1 rounded-md shadow-sm border border-amber-100">
+                                                                <Lock className="h-3.5 w-3.5 text-amber-600" />
                                                             </div>
-                                                            <span className="text-xs font-mono font-black text-amber-800 whitespace-nowrap">
+                                                            <span className="text-[11px] font-mono font-black text-amber-800 whitespace-nowrap">
                                                                 {c.tenants?.initial_password || '—'}
                                                             </span>
                                                         </div>
@@ -427,7 +427,7 @@ export default function ConsultantCases() {
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 w-1/5" onClick={() => navigate(`/consultant/case/${c.id}`)}>
+                                                <td className="px-6 py-4 w-1/5 group-hover:bg-slate-50/60 transition-all duration-300" onClick={() => navigate(`/consultant/case/${c.id}`)}>
                                                     <div className="flex flex-col gap-1 pr-4">
                                                         <div className="flex justify-between items-center mb-1">
                                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Progression</span>
@@ -443,20 +443,28 @@ export default function ConsultantCases() {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 text-right" onClick={() => navigate(`/consultant/case/${c.id}`)}>
-                                                    {c.status === 'validated' ? (
-                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-green-50 text-green-700 border border-green-100 shadow-sm">
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block"></span> Validé
-                                                        </span>
-                                                    ) : (c.status === 'active' || (c.progress > 0)) ? (
-                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100 shadow-sm">
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span> En cours
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-gray-300 font-bold px-4">—</span>
-                                                    )}
+                                                <td className="px-6 py-4 text-right group-hover:bg-slate-50/60 transition-all duration-300" onClick={() => navigate(`/consultant/case/${c.id}`)}>
+                                                     {c.status === 'validated' ? (
+                                                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm whitespace-nowrap">
+                                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block"></span> Validé
+                                                         </span>
+                                                     ) : c.status === 'active' ? (
+                                                         (c.progress || 0) > 0 ? (
+                                                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100 shadow-sm whitespace-nowrap">
+                                                                 <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span> En cours
+                                                             </span>
+                                                         ) : (
+                                                             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-slate-50 text-slate-600 border border-slate-200/60 shadow-sm whitespace-nowrap">
+                                                                 <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span> Non démarré
+                                                             </span>
+                                                         )
+                                                     ) : (
+                                                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100 shadow-sm whitespace-nowrap">
+                                                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span> Inactif
+                                                         </span>
+                                                     )}
                                                 </td>
-                                                <td className="px-6 py-4 text-right relative">
+                                                <td className="px-6 py-4 text-right relative group-hover:bg-slate-50/60 group-hover:rounded-r-2xl transition-all duration-300">
                                                     <div className="relative">
                                                         <button
                                                             onClick={(e) => {
