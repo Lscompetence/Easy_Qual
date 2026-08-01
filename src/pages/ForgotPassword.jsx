@@ -114,7 +114,7 @@ export default function ForgotPassword() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50/50">
-            <div className="max-w-md w-full bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-10 border border-gray-100">
+            <div className="max-w-md w-full bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-10 border border-gray-100 animate-page-entry">
                 {/* Logo Section */}
                 <div className="text-center mb-10 flex justify-center">
                     <Logo size="large" color={config.color} />

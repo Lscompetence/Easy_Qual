@@ -28,7 +28,14 @@ export default function ClientProfile() {
 
     const [showMobileMenu, setShowMobileMenu] = useState(false)
 
-    const [formData, setFormData] = useState({ first_name: '', last_name: '', email: '' })
+    const [formData, setFormData] = useState({
+        first_name: '',
+        last_name: '',
+        email: '',
+        commercial_name: '',
+        siret: '',
+        phone: ''
+    })
     const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' })
     const [indicators, setIndicators] = useState([
         { id: 1, criterion_id: 1, label: "Information accessible au public, détaillée et vérifiable.", criteria: { id: 1, label: "Information du public" } },
@@ -37,7 +44,7 @@ export default function ClientProfile() {
         { id: 4, criterion_id: 3, label: "Adaptation aux publics.", criteria: { id: 3, label: "Adaptation aux publics" } },
         { id: 5, criterion_id: 4, label: "Moyens pédagogiques.", criteria: { id: 4, label: "Moyens pédagogiques" } },
         { id: 6, criterion_id: 5, label: "Qualification formateurs.", criteria: { id: 5, label: "Qualification formateurs" } },
-        { id: 7, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Inscription socio-éco" } },
+        { id: 7, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Investissement environnement" } },
         { id: 8, criterion_id: 7, label: "Amélioration continue.", criteria: { id: 7, label: "Amélioration continue" } }
     ])
 
@@ -46,7 +53,10 @@ export default function ClientProfile() {
             setFormData({
                 first_name: profile?.first_name || '',
                 last_name: profile?.last_name || '',
-                email: profile?.email || user?.email || ''
+                email: profile?.email || user?.email || '',
+                commercial_name: profile?.commercial_name || '',
+                siret: profile?.siret || '',
+                phone: profile?.phone || ''
             })
             setLoading(false)
             if (profile) setInitialized(true)
@@ -66,7 +76,7 @@ export default function ClientProfile() {
                         { id: 4, criterion_id: 3, label: "Adaptation aux publics.", criteria: { id: 3, label: "Adaptation aux publics" } },
                         { id: 5, criterion_id: 4, label: "Moyens pédagogiques.", criteria: { id: 4, label: "Moyens pédagogiques" } },
                         { id: 6, criterion_id: 5, label: "Qualification formateurs.", criteria: { id: 5, label: "Qualification formateurs" } },
-                        { id: 7, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Inscription socio-éco" } },
+                        { id: 7, criterion_id: 6, label: "Inscription socio-éco.", criteria: { id: 6, label: "Investissement environnement" } },
                         { id: 8, criterion_id: 7, label: "Amélioration continue.", criteria: { id: 7, label: "Amélioration continue" } }
                     ]
                     setIndicators(fallback)
@@ -152,16 +162,25 @@ export default function ClientProfile() {
         setUpdatingInfo(true)
         try {
             const { error } = await supabase.from('profiles')
-                .update({ first_name: formData.first_name, last_name: formData.last_name })
+                .update({ 
+                    first_name: formData.first_name, 
+                    last_name: formData.last_name,
+                    commercial_name: formData.commercial_name,
+                    siret: formData.siret,
+                    phone: formData.phone
+                })
                 .eq('id', user.id)
             if (error) throw error
             await refreshProfile()
 
-            // 🔁 Synchroniser le nom vers tenants.name (ce que voit le consultant)
+            // 🔁 Synchroniser le nom commercial et le SIRET vers tenants
             const fullName = `${formData.first_name || ''} ${formData.last_name || ''}`.trim()
-            const { error: tenantSyncError } = await supabase.rpc('sync_tenant_name_from_client', {
-                p_full_name: fullName
-            })
+            const { error: tenantSyncError } = await supabase.from('tenants')
+                .update({
+                    name: formData.commercial_name || fullName,
+                    siret: formData.siret
+                })
+                .eq('owner_id', user.id)
             if (tenantSyncError) console.warn('Sync du nom vers le dossier échouée:', tenantSyncError)
 
             // 📩 NOTIFICATION POUR LE CONSULTANT
@@ -286,7 +305,7 @@ export default function ClientProfile() {
                     {/* Back Button */}
                     <button
                         onClick={() => navigate('/client/dashboard')}
-                        className="mb-5 inline-flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-[#cc6d3e] transition-colors cursor-pointer bg-white border border-gray-100 px-4 py-2 rounded-xl shadow-sm hover:shadow-md active:scale-95"
+                        className="mb-8 inline-flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-[#cc6d3e] transition-colors cursor-pointer bg-white border border-gray-100 px-4 py-2 rounded-xl shadow-sm hover:shadow-md active:scale-95"
                     >
                         <ArrowLeft className="h-4 w-4" />
                         Retour au tableau de bord
@@ -362,32 +381,81 @@ export default function ClientProfile() {
                             </div>
 
                             <form onSubmit={handleUpdateProfile} className="p-6 space-y-4">
-                                <div>
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
-                                        Prénom
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formData.first_name}
-                                        onChange={e => setFormData({ ...formData, first_name: e.target.value })}
-                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 bg-gray-50 outline-none focus:border-[#cc6d3e] focus:ring-2 focus:ring-[#cc6d3e]/20 focus:bg-white transition-all"
-                                        placeholder="Votre prénom"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
-                                        Nom
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formData.last_name}
-                                        onChange={e => setFormData({ ...formData, last_name: e.target.value })}
-                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 bg-gray-50 outline-none focus:border-[#cc6d3e] focus:ring-2 focus:ring-[#cc6d3e]/20 focus:bg-white transition-all"
-                                        placeholder="Votre nom"
-                                    />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
+                                            Prénom du contact
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.first_name}
+                                            onChange={e => setFormData({ ...formData, first_name: e.target.value })}
+                                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 bg-gray-50 outline-none focus:border-[#cc6d3e] focus:ring-2 focus:ring-[#cc6d3e]/20 focus:bg-white transition-all"
+                                            placeholder="Votre prénom"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
+                                            Nom du contact
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.last_name}
+                                            onChange={e => setFormData({ ...formData, last_name: e.target.value })}
+                                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 bg-gray-50 outline-none focus:border-[#cc6d3e] focus:ring-2 focus:ring-[#cc6d3e]/20 focus:bg-white transition-all"
+                                            placeholder="Votre nom"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
+                                            Téléphone
+                                        </label>
+                                        <input
+                                            type="tel"
+                                            value={formData.phone}
+                                            onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 bg-gray-50 outline-none focus:border-[#cc6d3e] focus:ring-2 focus:ring-[#cc6d3e]/20 focus:bg-white transition-all"
+                                            placeholder="Ex: +33 6 12 34 56 78"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
+                                            Adresse Email (Identifiant)
+                                        </label>
+                                        <input
+                                            type="email"
+                                            value={formData.email}
+                                            disabled
+                                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-400 bg-gray-100 outline-none cursor-not-allowed"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
+                                            Nom de l'Organisme
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.commercial_name}
+                                            onChange={e => setFormData({ ...formData, commercial_name: e.target.value })}
+                                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 bg-gray-50 outline-none focus:border-[#cc6d3e] focus:ring-2 focus:ring-[#cc6d3e]/20 focus:bg-white transition-all"
+                                            placeholder="Ex: LS Compétences"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
+                                            SIRET
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.siret}
+                                            onChange={e => setFormData({ ...formData, siret: e.target.value })}
+                                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 bg-gray-50 outline-none focus:border-[#cc6d3e] focus:ring-2 focus:ring-[#cc6d3e]/20 focus:bg-white transition-all"
+                                            placeholder="SIRET à 14 chiffres"
+                                        />
+                                    </div>
                                 </div>
 
-                                <div className="pt-2">
+                                <div className="pt-4">
                                     <button
                                         type="submit"
                                         disabled={updatingInfo}

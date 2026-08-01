@@ -106,9 +106,10 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess, 
         setStep('processing')
 
         try {
-            const bodyPayload = selectedPack.id === 'custom'
-                ? { customQuantity: selectedPack.credits }
-                : { packId: selectedPack.id };
+            const bodyPayload = {
+                packId: selectedPack.id,
+                customQuantity: selectedPack.credits
+            };
 
             const { data, error } = await supabase.functions.invoke('stripe', {
                 body: bodyPayload

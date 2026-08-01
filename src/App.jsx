@@ -39,6 +39,9 @@ function App() {
           {/* Secret Admin Login Route */}
           <Route path="/admin-lsc-secure" element={<Login forceRole="admin" />} />
           
+          {/* Secret Internal Consultant Login Route */}
+          <Route path="/internal-lsc-secure" element={<Login forceRole="internal" />} />
+          
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/update-password" element={<UpdatePassword />} />
@@ -73,6 +76,21 @@ function App() {
             <Route path="/consultant/questionnaires" element={<ConsultantQuestionnaires />} />
             <Route path="/consultant/audit/:id" element={<AuditQualiopi />} />
             <Route path="/consultant/audit" element={<AuditQualiopi />} />
+
+            {/* Private Internal Routes */}
+            <Route path="/internal/dashboard" element={<ConsultantDashboard />} />
+            <Route path="/internal/cases" element={<ConsultantCases />} />
+            <Route path="/internal/case/:id" element={<CaseDetails />} />
+            <Route path="/internal/calendar" element={<AgendaVisios />} />
+            <Route path="/internal/resources" element={<Ressources />} />
+            <Route path="/internal/notifications" element={<ConsultantNotifications />} />
+            <Route path="/internal/actions-history" element={<ConsultantActionsHistory />} />
+            <Route path="/internal/messages" element={<ConsultantMessages />} />
+            <Route path="/internal/backups" element={<ConsultantBackups />} />
+            <Route path="/internal/reclamations" element={<ConsultantReclamations />} />
+            <Route path="/internal/questionnaires" element={<ConsultantQuestionnaires />} />
+            <Route path="/internal/audit/:id" element={<AuditQualiopi />} />
+            <Route path="/internal/audit" element={<AuditQualiopi />} />
           </Route>
 
           {/* Client (OF) Routes - All point to Dashboard tabs */}

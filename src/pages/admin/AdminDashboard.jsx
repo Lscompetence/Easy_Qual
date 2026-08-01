@@ -59,7 +59,8 @@ export default function AdminDashboard() {
         siret: '',
         phone: '',
         countryCode: '+33',
-        initialCredits: 10
+        initialCredits: 10,
+        isInternal: false
     })
     const [createLoading, setCreateLoading] = useState(false)
 
@@ -344,6 +345,7 @@ export default function AdminDashboard() {
                         siret,
                         phone,
                         is_active,
+                        is_internal,
                         credits_wallet(balance)
                     `)
                         .eq('role', 'consultant')
@@ -383,13 +385,13 @@ export default function AdminDashboard() {
 
 
             setStats({
-                consultants: consultantsData?.length || 0,
+                consultants: consultantsData?.filter(c => !c.is_internal).length || 0,
                 tenants: tenantsCount || 0,
                 activeCases: casesCount || 0
             })
 
             // 4. Calculate Financial Stats
-            const distributed = consultantsData?.reduce((acc, c) => {
+            const distributed = consultantsData?.filter(c => !c.is_internal).reduce((acc, c) => {
                 const wallet = c.credits_wallet;
                 const bal = Array.isArray(wallet) ? (wallet[0]?.balance || 0) : (wallet?.balance || 0);
                 return acc + bal;
@@ -649,12 +651,25 @@ export default function AdminDashboard() {
                     commercialName: newConsultant.commercialName || '',
                     siret: newConsultant.siret || '',
                     phone: `${newConsultant.countryCode || '+33'}${newConsultant.phone || ''}`,
-                    initialCredits: newConsultant.initialCredits !== undefined ? newConsultant.initialCredits : 10
+                    initialCredits: newConsultant.initialCredits !== undefined ? newConsultant.initialCredits : 10,
+                    isInternal: newConsultant.isInternal || false
                 }
             })
 
             if (funcError) throw funcError
             if (funcData && funcData.success === false) throw new Error(funcData.error)
+
+            // Direct update fallback in case Edge Function was not deployed to Cloud
+            const newId = funcData?.user?.id
+            if (newId) {
+                const { error: updateInternalError } = await supabase
+                    .from('profiles')
+                    .update({ is_internal: newConsultant.isInternal || false })
+                    .eq('id', newId)
+                if (updateInternalError) {
+                    console.warn("Direct is_internal profile update failed:", updateInternalError)
+                }
+            }
 
 
 
@@ -676,7 +691,8 @@ export default function AdminDashboard() {
                 siret: '',
                 phone: '',
                 countryCode: '+33',
-                initialCredits: 10
+                initialCredits: 10,
+                isInternal: false
             })
 
         } catch (error) {
@@ -1165,6 +1181,16 @@ export default function AdminDashboard() {
                         Gestion des Consultants
                     </button>
                     <button
+                        onClick={() => setActiveTab('internal_consultants')}
+                        className={`pb-4 px-1 text-sm font-black border-b-2 transition-all relative ${
+                            activeTab === 'internal_consultants'
+                                ? 'border-blue-600 text-blue-650'
+                                : 'border-transparent text-slate-400 hover:text-slate-600'
+                        }`}
+                    >
+                        Profil Interne
+                    </button>
+                    <button
                         onClick={() => setActiveTab('reclamations')}
                         className={`pb-4 px-1 text-sm font-black border-b-2 transition-all relative flex items-center gap-2 ${
                             activeTab === 'reclamations'
@@ -1211,7 +1237,7 @@ export default function AdminDashboard() {
                         }}
                         className={`pb-4 px-1 text-sm font-black border-b-2 transition-all relative flex items-center gap-2 ${
                             activeTab === 'questionnaires'
-                                ? 'border-blue-600 text-blue-650'
+                                ? 'border-blue-650 text-blue-650'
                                 : 'border-transparent text-slate-400 hover:text-slate-600'
                         }`}
                     >
@@ -1228,19 +1254,39 @@ export default function AdminDashboard() {
                     <AdminQuestionnairesTab />
                 )}
 
-                {activeTab === 'consultants' && (
+                {(activeTab === 'consultants' || activeTab === 'internal_consultants') && (
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                     <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                         <div>
-                            <h2 className="text-lg font-black text-slate-800">Gestion des Consultants</h2>
-                            <p className="text-sm text-slate-500">Gérez les accès, crédits et le statut de vos partenaires.</p>
+                            <h2 className="text-lg font-black text-slate-800">
+                                {activeTab === 'internal_consultants' ? 'Profil Interne' : 'Gestion des Consultants'}
+                            </h2>
+                            <p className="text-sm text-slate-500">
+                                {activeTab === 'internal_consultants' 
+                                    ? 'Gérez les accès et le statut de vos collaborateurs internes.' 
+                                    : 'Gérez les accès, crédits et le statut de vos partenaires.'}
+                            </p>
                         </div>
                         <button
-                            onClick={() => setShowCreateModal(true)}
+                            onClick={() => {
+                                setNewConsultant({
+                                    email: '',
+                                    password: '',
+                                    firstName: '',
+                                    lastName: '',
+                                    commercialName: '',
+                                    siret: '',
+                                    phone: '',
+                                    countryCode: '+33',
+                                    initialCredits: activeTab === 'internal_consultants' ? 0 : 10,
+                                    isInternal: activeTab === 'internal_consultants'
+                                });
+                                setShowCreateModal(true);
+                            }}
                             className="inline-flex items-center px-4 py-2.5 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all shadow-blue-600/10"
                         >
                             <Plus className="h-5 w-5 mr-2" />
-                            Nouveau Consultant
+                            {activeTab === 'internal_consultants' ? 'Nouveau Collaborateur' : 'Nouveau Consultant'}
                         </button>
                     </div>
 
@@ -1261,12 +1307,20 @@ export default function AdminDashboard() {
                                     <tr>
                                         <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">Chargement...</td>
                                     </tr>
-                                ) : consultants.length === 0 ? (
+                                ) : (activeTab === 'internal_consultants' 
+                                        ? consultants.filter(c => c.is_internal) 
+                                        : consultants.filter(c => !c.is_internal)
+                                    ).length === 0 ? (
                                     <tr>
-                                        <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">Aucun consultant trouvé.</td>
+                                        <td colSpan="6" className="px-6 py-4 text-center text-sm text-slate-500">
+                                            {activeTab === 'internal_consultants' ? 'Aucun collaborateur interne trouvé.' : 'Aucun consultant trouvé.'}
+                                        </td>
                                     </tr>
                                 ) : (
-                                    consultants.map((consultant) => (
+                                    (activeTab === 'internal_consultants' 
+                                        ? consultants.filter(c => c.is_internal) 
+                                        : consultants.filter(c => !c.is_internal)
+                                    ).map((consultant) => (
                                         <tr key={consultant.id} className={`hover:bg-slate-50/50 transition-colors ${!consultant.is_active ? 'bg-slate-50/20' : ''}`}>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
@@ -1319,20 +1373,26 @@ export default function AdminDashboard() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
-                                                    {(() => {
-                                                        const wallet = consultant.credits_wallet;
-                                                        const balance = Array.isArray(wallet) ? (wallet[0]?.balance || 0) : (wallet?.balance || 0);
-                                                        const isLow = balance < 5;
-                                                        return (
-                                                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold border shadow-sm ${
-                                                                isLow
-                                                                    ? 'bg-rose-50 text-rose-700 border-rose-100'
-                                                                    : 'bg-amber-50 text-amber-700 border-amber-100'
-                                                            }`}>
-                                                                {balance} Crédits
-                                                            </span>
-                                                        );
-                                                    })()}
+                                                    {consultant.is_internal ? (
+                                                        <span className="px-2.5 py-1 rounded-full text-xs font-bold border shadow-sm bg-emerald-50 text-emerald-700 border-emerald-100">
+                                                            Illimité (Interne)
+                                                        </span>
+                                                    ) : (
+                                                        (() => {
+                                                            const wallet = consultant.credits_wallet;
+                                                            const balance = Array.isArray(wallet) ? (wallet[0]?.balance || 0) : (wallet?.balance || 0);
+                                                            const isLow = balance < 5;
+                                                            return (
+                                                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold border shadow-sm ${
+                                                                    isLow
+                                                                        ? 'bg-rose-50 text-rose-700 border-rose-100'
+                                                                        : 'bg-amber-50 text-amber-700 border-amber-100'
+                                                                }`}>
+                                                                    {balance} Crédits
+                                                                </span>
+                                                            );
+                                                        })()
+                                                    )}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-medium">
@@ -1365,25 +1425,27 @@ export default function AdminDashboard() {
                                                     </button>
 
                                                     {/* Credits Button */}
-                                                    {consultant.is_active ? (
-                                                        <button
-                                                            onClick={() => {
-                                                                setSelectedConsultant(consultant)
-                                                                setShowCreditModal(true)
-                                                            }}
-                                                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100/50 hover:border-blue-200 font-bold text-xs rounded-xl transition-all shadow-sm"
-                                                        >
-                                                            <CreditCard className="h-3.5 w-3.5" />
-                                                            + Crédits
-                                                        </button>
-                                                    ) : (
-                                                        <span 
-                                                            className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-50 text-slate-300 border border-slate-100/50 font-bold text-xs rounded-xl cursor-not-allowed" 
-                                                            title="Compte suspendu : impossible d'ajouter des crédits"
-                                                        >
-                                                            <CreditCard className="h-3.5 w-3.5" />
-                                                            + Crédits
-                                                        </span>
+                                                    {!consultant.is_internal && (
+                                                        consultant.is_active ? (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSelectedConsultant(consultant)
+                                                                    setShowCreditModal(true)
+                                                                }}
+                                                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100/50 hover:border-blue-200 font-bold text-xs rounded-xl transition-all shadow-sm"
+                                                            >
+                                                                <CreditCard className="h-3.5 w-3.5" />
+                                                                + Crédits
+                                                            </button>
+                                                        ) : (
+                                                            <span 
+                                                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-50 text-slate-300 border border-slate-100/50 font-bold text-xs rounded-xl cursor-not-allowed" 
+                                                                title="Compte suspendu : impossible d'ajouter des crédits"
+                                                            >
+                                                                <CreditCard className="h-3.5 w-3.5" />
+                                                                + Crédits
+                                                            </span>
+                                                        )
                                                     )}
 
                                                     {/* Send Credentials Button (Email Icon) */}
@@ -1825,6 +1887,25 @@ export default function AdminDashboard() {
                                     />
                                 </div>
 
+                                <div>
+                                    <label className="flex items-center gap-3 cursor-pointer bg-slate-50 p-3 rounded-xl border border-slate-150">
+                                        <input
+                                            type="checkbox"
+                                            className="h-4 w-4 text-blue-600 rounded"
+                                            checked={newConsultant.isInternal}
+                                            onChange={(e) => setNewConsultant({ 
+                                                ...newConsultant, 
+                                                isInternal: e.target.checked,
+                                                initialCredits: e.target.checked ? 0 : 10
+                                            })}
+                                        />
+                                        <div className="flex flex-col">
+                                            <span className="text-xs font-bold text-slate-800">Compte interne (Profil interne)</span>
+                                            <span className="text-[10px] text-slate-400">Ce collaborateur n'utilisera aucun crédit et aura un accès illimité.</span>
+                                        </div>
+                                    </label>
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-gray-700 text-sm font-bold mb-2">Mot de Passe (Provisoire)</label>
@@ -1842,9 +1923,10 @@ export default function AdminDashboard() {
                                         <input
                                             type="number"
                                             min="0"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            value={newConsultant.initialCredits}
-                                            onChange={(e) => setNewConsultant({ ...newConsultant, initialCredits: parseInt(e.target.value) })}
+                                            disabled={newConsultant.isInternal}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                                            value={newConsultant.isInternal ? 0 : newConsultant.initialCredits}
+                                            onChange={(e) => setNewConsultant({ ...newConsultant, initialCredits: parseInt(e.target.value) || 0 })}
                                         />
                                     </div>
                                 </div>

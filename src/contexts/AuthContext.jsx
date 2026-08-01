@@ -109,7 +109,7 @@ export const AuthProvider = ({ children }) => {
             // Race condition: Fetch data or timeout after 5s
             const fetchPromise = supabase
                 .from('profiles')
-                .select('role, first_name, last_name, email, avatar_url, is_active, commercial_name')
+                .select('role, first_name, last_name, email, avatar_url, is_active, commercial_name, is_internal')
                 .eq('id', userId)
                 .single()
 

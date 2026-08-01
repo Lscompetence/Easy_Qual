@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" role="img" aria-label="Easy'Qual - symbole couleur">
+  <title>Easy'Qual - symbole couleur</title>
+  <defs>
+
+
+  </defs>
+  <g>
+    <path d="M177 104C173 73 149 52 116 52C80 52 53 79 53 115C53 151 80 178 117 178C139 178 157 168 169 151" fill="none" stroke="#259FA7" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M57 115H148" fill="none" stroke="#259FA7" stroke-width="19" stroke-linecap="round"/>
+    <path d="M141 149L184 192" fill="none" stroke="#259FA7" stroke-width="20" stroke-linecap="round"/>
+
+  </g>
+</svg>

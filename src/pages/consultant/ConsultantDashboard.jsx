@@ -13,7 +13,7 @@ import DeleteModal from '../../components/DeleteModal'
 import StatusModal from '../../components/shared/StatusModal'
 
 export default function ConsultantDashboard() {
-    const { user } = useAuth() // specific logout not needed here if Sidebar handles it, but kept for logic
+    const { user, profile } = useAuth() // specific logout not needed here if Sidebar handles it, but kept for logic
     const navigate = useNavigate() // Sidebar uses Link, but we might need it for programmatic navigation
 
 
@@ -277,11 +277,13 @@ export default function ConsultantDashboard() {
     }, [user, fetchConsultantData])
 
 
+    const pathPrefix = profile?.is_internal ? '/internal' : '/consultant'
+ 
     return (
         <div className="bg-gray-50 min-h-screen font-sans flex text-slate-800">
             {/* 1. Sidebar */}
             <ConsultantSidebar isOpen={showMobileMenu} onClose={() => setShowMobileMenu(false)} />
-
+ 
             {/* 2. Main Content Area */}
             <div className="flex-1 flex flex-col min-w-0">
 
@@ -420,7 +422,12 @@ export default function ConsultantDashboard() {
                         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h3 className="text-base font-bold text-gray-900">Activité récente</h3>
-                                <button className="text-xs font-bold text-purple-600 hover:text-purple-700">Voir tout</button>
+                                <button
+                                    onClick={() => navigate(`${pathPrefix}/cases`)}
+                                    className="text-xs font-bold text-purple-600 hover:text-purple-700 cursor-pointer"
+                                >
+                                    Voir tout
+                                </button>
                             </div>
 
                             <div className="overflow-x-auto overflow-y-auto max-h-[500px] custom-scrollbar">
@@ -441,17 +448,14 @@ export default function ConsultantDashboard() {
                                         ) : cases.length === 0 ? (
                                             <tr><td colSpan="4" className="text-center py-4 text-sm text-gray-500">Aucune activité récente.</td></tr>
                                         ) : (
-                                            (filterStatus === 'active'
-                                                ? cases.filter(c => c.status === 'active' || c.status === 'validated')
-                                                : cases
-                                            )
+                                                cases
                                                 .filter(c => c.tenants?.name?.toLowerCase().includes(searchQuery.toLowerCase()))
                                                 .slice(0, 8).map((c) => (
                                                     <tr
                                                         key={c.id}
-                                                        className="group hover:bg-gray-50 transition-colors rounded-lg cursor-pointer relative"
+                                                        className="group cursor-pointer relative"
                                                     >
-                                                        <td className="py-6 pl-4" onClick={() => navigate(`/consultant/case/${c.id}`)}>
+                                                        <td className="py-6 pl-4 group-hover:bg-slate-50/60 group-hover:rounded-l-2xl transition-all duration-300" onClick={() => navigate(`${pathPrefix}/case/${c.id}`)}>
                                                             <div className="flex items-center">
                                                                 <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold mr-4 uppercase shadow-sm">
                                                                     {c.tenants?.name?.substring(0, 2) || 'UK'}
@@ -470,7 +474,7 @@ export default function ConsultantDashboard() {
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="py-6" onClick={() => navigate(`/consultant/case/${c.id}`)}>
+                                                        <td className="py-6 group-hover:bg-slate-50/60 transition-all duration-300" onClick={() => navigate(`${pathPrefix}/case/${c.id}`)}>
                                                             <div className="flex flex-wrap gap-1">
                                                                 {Array.isArray(c.training_categories) && c.training_categories.length > 0 ? (
                                                                     c.training_categories.slice(0, 2).map((cat, idx) => (
@@ -488,8 +492,8 @@ export default function ConsultantDashboard() {
                                                                 )}
                                                             </div>
                                                         </td>
-                                                        <td className="py-6 min-w-[220px]">
-                                                            <div className="flex flex-col gap-2 pr-4">
+                                                        <td className="py-4 min-w-[220px] group-hover:bg-slate-50/60 transition-all duration-300">
+                                                            <div className="flex flex-col gap-1.5 pr-4">
                                                                 {/* Action / Send row above the credentials */}
                                                                 <div className="flex items-center justify-between px-1 mb-0.5">
                                                                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
@@ -498,13 +502,13 @@ export default function ConsultantDashboard() {
                                                                     <button
                                                                         onClick={(e) => handleSendAccess(e, c)}
                                                                         disabled={sendingAccessId === c.id || !c.tenants?.client_email}
-                                                                        className="text-[11px] font-bold text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 disabled:opacity-50 px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-purple-100 transition-all active:scale-95 cursor-pointer"
+                                                                        className="text-[10px] font-bold text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 disabled:opacity-50 px-2 py-0.5 rounded-full flex items-center gap-1.5 border border-purple-100 transition-all active:scale-95 cursor-pointer"
                                                                         title="Envoyer les identifiants de connexion par email au client"
                                                                     >
                                                                         {sendingAccessId === c.id ? (
                                                                             <Loader2 className="h-3 w-3 animate-spin text-purple-600" />
                                                                         ) : (
-                                                                            <Send className="h-2.5 w-2.5" />
+                                                                            <Send className="h-2 w-2" />
                                                                         )}
                                                                         {sendingAccessId === c.id ? 'Envoi...' : 'Envoyer'}
                                                                     </button>
@@ -518,13 +522,13 @@ export default function ConsultantDashboard() {
                                                                             navigator.clipboard.writeText(c.tenants.client_email)
                                                                         }
                                                                     }}
-                                                                    className="group/item flex items-center gap-2 w-full bg-slate-50 hover:bg-purple-50 border border-slate-200/60 hover:border-purple-200 px-3 py-1.5 rounded-xl transition-all cursor-copy"
+                                                                    className="group/item flex items-center gap-1.5 w-full bg-slate-100/50 hover:bg-purple-50 border border-slate-200/40 hover:border-purple-200 px-2.5 py-1 rounded-lg transition-all cursor-copy"
                                                                     title="Cliquer pour copier l'email"
                                                                 >
-                                                                    <div className="flex-shrink-0 bg-white p-1.5 rounded-lg shadow-sm border border-slate-100">
-                                                                        <Mail className="h-4 w-4 text-slate-400 group-hover/item:text-purple-500" />
+                                                                    <div className="flex-shrink-0 bg-white p-1 rounded-md shadow-sm border border-slate-100">
+                                                                        <Mail className="h-3.5 w-3.5 text-slate-400 group-hover/item:text-purple-500" />
                                                                     </div>
-                                                                    <span className="text-xs font-bold text-slate-700 whitespace-nowrap truncate font-medium">
+                                                                    <span className="text-[11px] font-bold text-slate-700 whitespace-nowrap truncate font-medium">
                                                                         {c.tenants?.client_email || 'Non défini'}
                                                                     </span>
                                                                 </div>
@@ -537,19 +541,19 @@ export default function ConsultantDashboard() {
                                                                             navigator.clipboard.writeText(c.tenants.initial_password)
                                                                         }
                                                                     }}
-                                                                    className="group/item flex items-center gap-2 w-full bg-amber-50 hover:bg-amber-100 border border-amber-200/60 hover:border-amber-300 px-3 py-1.5 rounded-xl transition-all cursor-copy"
+                                                                    className="group/item flex items-center gap-1.5 w-full bg-amber-50/50 hover:bg-amber-100 border border-amber-200/40 hover:border-amber-300 px-2.5 py-1 rounded-lg transition-all cursor-copy"
                                                                     title="Cliquer pour copier le mot de passe"
                                                                 >
-                                                                    <div className="flex-shrink-0 bg-white p-1.5 rounded-lg shadow-sm border border-amber-100">
-                                                                        <Lock className="h-4 w-4 text-amber-500" />
+                                                                    <div className="flex-shrink-0 bg-white p-1 rounded-md shadow-sm border border-amber-100">
+                                                                        <Lock className="h-3.5 w-3.5 text-amber-500" />
                                                                     </div>
-                                                                    <span className="text-xs font-mono font-black text-amber-800 whitespace-nowrap">
+                                                                    <span className="text-[11px] font-mono font-black text-amber-800 whitespace-nowrap">
                                                                         {c.tenants?.initial_password || '—'}
                                                                     </span>
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="py-6 w-1/4" onClick={() => navigate(`/consultant/case/${c.id}`)}>
+                                                        <td className="py-4 w-1/4 group-hover:bg-slate-50/60 transition-all duration-300" onClick={() => navigate(`${pathPrefix}/case/${c.id}`)}>
                                                             <div className="flex flex-col gap-1.5 pr-8">
                                                                 <div className="flex justify-between items-center mb-0.5">
                                                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Progression</span>
@@ -565,20 +569,28 @@ export default function ConsultantDashboard() {
                                                                 </div>
                                                             </div>
                                                         </td>
-                                                        <td className="py-4 text-right pr-2" onClick={() => navigate(`/consultant/case/${c.id}`)}>
+                                                        <td className="py-4 text-right pr-2 group-hover:bg-slate-50/60 transition-all duration-300" onClick={() => navigate(`${pathPrefix}/case/${c.id}`)}>
                                                             {c.status === 'validated' ? (
-                                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-100">
-                                                                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block"></span> Validé
+                                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm whitespace-nowrap">
+                                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block"></span> Validé
                                                                 </span>
-                                                            ) : (c.status === 'active' || (c.progress > 0)) ? (
-                                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100 shadow-sm">
-                                                                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span> En cours
-                                                                </span>
+                                                            ) : c.status === 'active' ? (
+                                                                (c.progress || 0) > 0 ? (
+                                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100 shadow-sm whitespace-nowrap">
+                                                                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span> En cours
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-slate-50 text-slate-600 border border-slate-200/60 shadow-sm whitespace-nowrap">
+                                                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span> Non démarré
+                                                                    </span>
+                                                                )
                                                             ) : (
-                                                                <span className="text-gray-300 font-bold px-4">—</span>
+                                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100 shadow-sm whitespace-nowrap">
+                                                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span> Inactif
+                                                                </span>
                                                             )}
                                                         </td>
-                                                        <td className="py-4 text-right pr-4 relative">
+                                                        <td className="py-4 text-right pr-4 relative group-hover:bg-slate-50/60 group-hover:rounded-r-2xl transition-all duration-300">
                                                             <div className="relative">
                                                                 <button
                                                                     onClick={(e) => {

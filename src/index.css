@@ -99,4 +99,43 @@ body {
   mask-composite: exclude;
   animation: gradient-x 4s linear infinite;
   pointer-events: none;
-}
+}
+
+/* Green Theme for Internal Users */
+.theme-green {
+  --color-purple-50: #f0fdf4 !important;
+  --color-purple-100: #dcfce7 !important;
+  --color-purple-200: #bbf7d0 !important;
+  --color-purple-300: #86efac !important;
+  --color-purple-400: #4ade80 !important;
+  --color-purple-500: #22c55e !important;
+  --color-purple-600: #16a34a !important;
+  --color-purple-700: #15803d !important;
+  --color-purple-800: #166534 !important;
+  --color-purple-900: #14532d !important;
+}
+
+/* Page & Component entry animations for smooth loading transitions */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-entry {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.stagger-item-1 { animation-delay: 50ms; }
+.stagger-item-2 { animation-delay: 100ms; }
+.stagger-item-3 { animation-delay: 150ms; }
+.stagger-item-4 { animation-delay: 200ms; }
+.stagger-item-5 { animation-delay: 250ms; }
+.stagger-item-6 { animation-delay: 300ms; }
+
+

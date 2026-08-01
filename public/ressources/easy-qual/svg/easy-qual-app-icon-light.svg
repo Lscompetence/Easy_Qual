@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" role="img" aria-label="Easy'Qual - app icon light">
+  <title>Easy'Qual - app icon light</title>
+  <defs>
+    <linearGradient id="easyqualApplightSatin" x1="42" y1="42" x2="202" y2="205" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#92EFE2"/>
+      <stop offset="42%" stop-color="#43CFC5"/>
+      <stop offset="100%" stop-color="#378AD9"/>
+    </linearGradient>
+    <linearGradient id="easyqualApplightDarkTile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#111722"/>
+      <stop offset="100%" stop-color="#080B11"/>
+    </linearGradient>
+    <linearGradient id="easyqualApplightTileSheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.095"/>
+      <stop offset="62%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+
+  </defs>
+  <rect x="0.75" y="0.75" width="218.5" height="218.5" rx="48" fill="#FFFFFF" stroke="#E1E6EF" stroke-width="1.5"/>
+
+  <rect x="1.6" y="1.6" width="216.8" height="94" rx="46" fill="url(#easyqualApplightTileSheen)" opacity="0.34"/>
+  <g>
+    <path d="M177 104C173 73 149 52 116 52C80 52 53 79 53 115C53 151 80 178 117 178C139 178 157 168 169 151" fill="none" stroke="url(#easyqualApplightSatin)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M57 115H148" fill="none" stroke="url(#easyqualApplightSatin)" stroke-width="19" stroke-linecap="round"/>
+    <path d="M141 149L184 192" fill="none" stroke="url(#easyqualApplightSatin)" stroke-width="20" stroke-linecap="round"/>
+    <path d="M93 57C112 50 135 54 151 65" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" opacity="0.30"/>
+    <path d="M62 108H112" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" opacity="0.22"/>
+  </g>
+</svg>

@@ -473,7 +473,7 @@ export default function ConsultantTopBar({ onNewFolder, showNewFolder = false, s
             {/* Right: Actions */}
             <div className="flex items-center gap-4">
                 {/* Credit Balance Display */}
-                {showCredits && (
+                {showCredits && !profile?.is_internal && (
                     <div className="flex items-center bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden h-12">
                         <div className="flex items-center gap-3 px-4 py-2 bg-amber-50/50">
                             <div className="p-1.5 bg-amber-100 rounded-lg shadow-inner">

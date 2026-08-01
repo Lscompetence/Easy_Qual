@@ -8,10 +8,10 @@ export default function Login({ forceRole }) {
     const [searchParams] = useSearchParams()
     const location = useLocation()
     
-    // Block the URL parameter 'role=admin' to force the use of the secret route
+    // Block the URL parameter 'role=admin' or 'role=internal' to force the use of the secret route
     let roleParam = forceRole || searchParams.get('role') || localStorage.getItem('eq_forgot_password_role') || 'client';
-    if (!forceRole && roleParam === 'admin') {
-        roleParam = 'client'; // Fallback to client if someone tries to guess the admin URL
+    if (!forceRole && (roleParam === 'admin' || roleParam === 'internal')) {
+        roleParam = 'client'; // Fallback to client if someone tries to guess the admin or internal URL
     }
 
     const [email, setEmail] = useState('')
@@ -77,6 +77,16 @@ export default function Login({ forceRole }) {
                     inputClass: 'focus:border-blue-500 focus:ring-blue-500/20',
                     linkClass: 'text-blue-600 hover:text-blue-500',
                     badgeClass: 'bg-blue-50 text-blue-600 border-blue-100'
+                }
+            case 'internal':
+                return {
+                    title: 'Espace Collaborateur Interne',
+                    welcome: 'Accès Interne Réservé',
+                    color: 'purple', // Reuses the logo/icon shape but we style button green!
+                    buttonClass: 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500 shadow-emerald-600/20',
+                    inputClass: 'focus:border-emerald-500 focus:ring-emerald-500/20',
+                    linkClass: 'text-emerald-600 hover:text-emerald-500',
+                    badgeClass: 'bg-emerald-50 text-emerald-750 border-emerald-100 font-bold'
                 }
             case 'consultant':
                 return {
@@ -203,12 +213,38 @@ export default function Login({ forceRole }) {
                 await logout();
                 throw new Error('Accès refusé. Réservé aux administrateurs.');
             }
+            if (roleParam === 'internal') {
+                if (actualRole !== 'consultant') {
+                    await logout();
+                    throw new Error('Accès refusé.');
+                }
+                const { data: prof, error: profError } = await supabase
+                    .from('profiles')
+                    .select('is_internal')
+                    .eq('id', user.id)
+                    .maybeSingle();
+                
+                if (profError || !prof || !prof.is_internal) {
+                    await logout();
+                    throw new Error('Accès refusé. Ce compte n\'est pas configuré comme un collaborateur interne.');
+                }
+            }
 
             // 3. REDIRECT based on role
             if (actualRole === 'admin') {
                 navigate('/admin/dashboard')
             } else if (actualRole === 'consultant') {
-                navigate('/consultant/dashboard')
+                const { data: prof } = await supabase
+                    .from('profiles')
+                    .select('is_internal')
+                    .eq('id', user.id)
+                    .maybeSingle();
+
+                if (prof?.is_internal) {
+                    navigate('/internal/dashboard')
+                } else {
+                    navigate('/consultant/dashboard')
+                }
             } else if (actualRole === 'of') {
                 navigate('/client/dashboard')
             } else {
@@ -230,7 +266,7 @@ export default function Login({ forceRole }) {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50/50">
-            <div className="max-w-md w-full bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-10 border border-gray-100">
+            <div className="max-w-md w-full bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-10 border border-gray-100 animate-page-entry">
                 {/* Logo Section */}
                 <div className="text-center mb-10 flex justify-center">
                     <Logo size="large" color={config.color} />
