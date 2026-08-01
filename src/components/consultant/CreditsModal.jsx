@@ -1,19 +1,50 @@
 /* eslint-disable */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, CreditCard, ShieldCheck, CheckCircle2, Lock, Sparkles, AlertCircle, Gift } from 'lucide-react'
 import { supabase } from '../../supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
 
-export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }) {
+export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess, initialStep = 'selection', initialSelectedPack = null }) {
     const { user, profile } = useAuth()
-    const [step, setStep] = useState('selection') // 'selection', 'card', 'processing', 'success'
-    const [selectedPack, setSelectedPack] = useState(null)
+    const [step, setStep] = useState(initialStep) // 'selection', 'card', 'processing', 'success'
+    const [selectedPack, setSelectedPack] = useState(initialSelectedPack)
     const [isProcessing, setIsProcessing] = useState(false)
     const [isSuccess, setIsSuccess] = useState(false)
     const [boughtCredits, setBoughtCredits] = useState(0)
     const [paymentError, setPaymentError] = useState(null)
     const [currentTotalBalance, setCurrentTotalBalance] = useState(balance)
     const [initialBalanceBeforeUpdate, setInitialBalanceBeforeUpdate] = useState(balance)
+    const [quantities, setQuantities] = useState({
+        decouverte: 1,
+        pro: 5,
+        expert: 10
+    })
+
+    useEffect(() => {
+        if (isOpen) {
+            setStep(initialStep)
+            setSelectedPack(initialSelectedPack)
+            if (initialSelectedPack) {
+                const credits = initialSelectedPack.credits || 1
+                if (credits >= 10) {
+                    setQuantities(prev => ({ ...prev, expert: credits }))
+                } else if (credits >= 5) {
+                    setQuantities(prev => ({ ...prev, pro: credits }))
+                } else {
+                    setQuantities(prev => ({ ...prev, decouverte: credits }))
+                }
+            }
+            if (initialStep === 'success' && initialSelectedPack) {
+                setIsSuccess(true)
+                const packCredits = initialSelectedPack.credits || 0
+                setInitialBalanceBeforeUpdate(Math.max(0, balance - packCredits))
+                setCurrentTotalBalance(balance)
+                setBoughtCredits(packCredits)
+            } else {
+                setIsSuccess(false)
+            }
+        }
+    }, [isOpen, initialStep, initialSelectedPack, balance])
 
     // Form states for credit card
     const [cardName, setCardName] = useState('')
@@ -73,70 +104,25 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }
         setPaymentError(null)
         setIsProcessing(true)
         setStep('processing')
-        const initialBal = balance || 0;
-        setInitialBalanceBeforeUpdate(initialBal);
 
         try {
-            await new Promise(resolve => setTimeout(resolve, 2500))
+            const bodyPayload = selectedPack.id === 'custom'
+                ? { customQuantity: selectedPack.credits }
+                : { packId: selectedPack.id };
 
-            if (cardNumber.replace(/\s/g, '').endsWith('0000')) {
-                setPaymentError("Paiement échoué : Solde insuffisant sur votre compte bancaire. Veuillez utiliser une autre carte.")
-                setStep('card')
-                setIsProcessing(false)
-                return
+            const { data, error } = await supabase.functions.invoke('stripe', {
+                body: bodyPayload
+            })
+
+            if (error || !data?.url) {
+                throw new Error(error?.message || "Impossible d'initier la session de paiement Stripe.")
             }
 
-            const expectedBalance = (balance || 0) + (selectedPack?.credits || 0);
-
-            const { error: rpcError } = await supabase.rpc('add_credits', {
-                p_consultant_id: user.id,
-                p_amount: selectedPack.credits
-            });
-
-            if (rpcError) {
-                const { error: updateError } = await supabase
-                    .from('credits_wallet')
-                    .update({
-                        balance: (balance || 0) + selectedPack.credits,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('consultant_id', user.id);
-
-                if (updateError) {
-                    throw new Error("Erreur de synchronisation avec la base de données. Veuillez contacter l'administrateur.");
-                }
-
-                await supabase.from('admin_notifications').insert({
-                    title: 'Achat de crédits (Manuel)',
-                    content: `Le consultant ${user.email} a acheté ${selectedPack.credits} crédits.`,
-                    type: 'success',
-                    metadata: { consultant_id: user.id, amount: selectedPack.credits }
-                });
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            const { data: updatedWallet } = await supabase
-                .from('credits_wallet')
-                .select('balance')
-                .eq('consultant_id', user.id)
-                .single();
-
-            const dbBalance = updatedWallet?.balance;
-            const finalBalanceToShow = (dbBalance && dbBalance > balance) ? dbBalance : expectedBalance;
-
-            setCurrentTotalBalance(finalBalanceToShow);
-            setBoughtCredits(selectedPack.credits);
-            setIsSuccess(true);
-            setStep('success');
-
-            if (onSuccess) {
-                setTimeout(() => onSuccess(finalBalanceToShow), 300);
-            }
+            // Redirect to Stripe checkout
+            window.location.href = data.url
         } catch (error) {
-            setPaymentError(error.message || "Une erreur technique est survenue lors de la mise à jour de vos crédits.")
+            setPaymentError(error.message || "Une erreur technique est survenue lors de l'initialisation du paiement.")
             setStep('card')
-        } finally {
             setIsProcessing(false)
         }
     }
@@ -230,7 +216,7 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }
                         <button
                             type="button"
                             onClick={resetAndClose}
-                            className="absolute top-8 right-8 p-3 bg-slate-50 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-all z-50"
+                            className="absolute top-8 right-8 p-3 bg-slate-50 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-all z-50 cursor-pointer"
                         >
                             <X className="h-6 w-6" />
                         </button>
@@ -241,72 +227,313 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }
                                 Tarifs <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500">dégressifs</span> selon votre volume
                             </h1>
                             <p className="text-slate-500 text-sm md:text-base max-w-lg mx-auto">
-                                Plus vous achetez de crédits, plus le coût unitaire diminue.<br/>
-                                Aucun engagement, aucun abonnement.
+                                Choisissez le pack adapté et ajustez le nombre exact de crédits dont vous avez besoin.
                             </p>
                         </div>
 
-                        {/* Packs Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full relative z-10">
-                            {packs.map((pack) => {
-                                const isPro = pack.popular;
-                                return (
-                                    <div key={pack.id} className={`relative flex flex-col rounded-3xl transition-all duration-300 ${
-                                        isPro 
-                                        ? 'bg-white ring-4 ring-indigo-600/20 border-2 border-indigo-600 shadow-xl shadow-indigo-600/10 -translate-y-2' 
-                                        : 'bg-white border-2 border-slate-100 hover:border-slate-200 hover:shadow-lg'
-                                    }`}>
-                                        
-                                        {/* Pro Badge */}
-                                        {isPro && (
-                                            <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
-                                                <span className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-[0.15em] shadow-lg shadow-indigo-600/30">
-                                                    {pack.badge}
-                                                </span>
-                                            </div>
-                                        )}
+                        {/* Packs Grid with Internal Range Selectors */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full relative z-10">
+                            
+                            {/* Card 1: Pack Découverte (Range 1 - 4) */}
+                            <div className="relative flex flex-col rounded-3xl transition-all duration-300 bg-white border-2 border-slate-100 hover:border-slate-200 hover:shadow-lg">
+                                <div className="flex-1 flex flex-col h-full p-8 pt-10">
+                                    <div className="text-center mb-6">
+                                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100">
+                                            Palier 1 · 200€ / crédit
+                                        </span>
+                                        <h3 className="text-2xl font-black text-slate-900 mt-4 mb-1">Pack Découverte</h3>
+                                        <p className="text-slate-400 text-xs italic">De 1 à 4 crédits</p>
+                                    </div>
 
-                                        <div className="flex-1 flex flex-col h-full p-8 pt-10">
-                                            <div className="text-center mb-8">
-                                                <h3 className="text-xl font-black text-slate-900 mb-1">{pack.name}</h3>
-                                                <p className="text-slate-400 text-xs italic">{pack.subtitle}</p>
-                                            </div>
+                                    <div className="flex flex-col items-center mb-6 bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-3">Quantité (Max 4)</p>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setQuantities(prev => ({ ...prev, decouverte: Math.max(1, prev.decouverte - 1) }))}
+                                                className="h-10 w-10 rounded-lg bg-white border border-slate-200 hover:border-slate-350 text-slate-650 font-bold text-lg flex items-center justify-center transition-all hover:bg-slate-50 shadow-sm active:scale-95 cursor-pointer"
+                                            >
+                                                -
+                                            </button>
+                                            <input
+                                                type="number"
+                                                id="qty-decouverte"
+                                                min="1"
+                                                max="4"
+                                                value={quantities.decouverte}
+                                                onChange={(e) => {
+                                                    const val = parseInt(e.target.value, 10);
+                                                    if (!isNaN(val)) setQuantities(prev => ({ ...prev, decouverte: Math.max(1, Math.min(4, val)) }));
+                                                }}
+                                                className="h-10 w-16 text-center font-black text-slate-900 border-2 border-slate-200 rounded-lg focus:border-indigo-500 focus:outline-none text-base bg-white"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setQuantities(prev => ({ ...prev, decouverte: Math.min(4, prev.decouverte + 1) }))}
+                                                className="h-10 w-10 rounded-lg bg-white border border-slate-200 hover:border-slate-350 text-slate-650 font-bold text-lg flex items-center justify-center transition-all hover:bg-slate-50 shadow-sm active:scale-95 cursor-pointer"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
 
-                                            <div className="flex flex-col items-center mb-6">
-                                                <div className="flex items-baseline gap-1">
-                                                    <span className={`text-5xl font-black tracking-tighter ${isPro ? 'text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-600' : 'text-slate-900'}`}>
-                                                        {pack.pricePerCredit}€
-                                                    </span>
-                                                    <span className="text-slate-400 text-sm font-medium">/ crédit</span>
+                                    <div className="w-full h-px bg-slate-100 my-4"></div>
+
+                                    {/* Private calculation details */}
+                                    <div className="space-y-2 mb-6">
+                                        <div className="flex justify-between text-xs text-slate-400 font-bold uppercase tracking-wider">
+                                            <span>Calcul</span>
+                                            <span>Montant</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm text-slate-600">
+                                            <span>{quantities.decouverte} crédit{quantities.decouverte > 1 ? 's' : ''} × 200€</span>
+                                            <span className="font-bold">{quantities.decouverte * 200}€ HT</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-auto pt-4">
+                                        <button
+                                            type="button"
+                                            id="btn-order-decouverte"
+                                            onClick={() => {
+                                                setSelectedPack({
+                                                    id: 'decouverte',
+                                                    name: 'Pack Découverte',
+                                                    credits: quantities.decouverte,
+                                                    pricePerCredit: 200,
+                                                    price: quantities.decouverte * 200
+                                                });
+                                                setStep('card');
+                                            }}
+                                            className="w-full py-3.5 bg-white border-2 border-slate-200 text-slate-700 hover:border-slate-350 hover:bg-slate-50 rounded-xl text-sm font-bold transition-all active:scale-95 cursor-pointer shadow-sm"
+                                        >
+                                            Commander ({quantities.decouverte * 200}€ HT) →
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Card 2: Pack Pro (Range 5 - 9) with Exceptional Visual Effect when quantity is 9 */}
+                            <div 
+                                id="card-pro"
+                                className={`relative flex flex-col rounded-3xl transition-all duration-500 border-2 ${
+                                    quantities.pro === 9 
+                                        ? 'glow-card-9 shadow-2xl shadow-indigo-500/20' 
+                                        : 'bg-white border-indigo-500/30 ring-4 ring-indigo-650/5 shadow-xl -translate-y-1'
+                                }`}
+                            >
+                                <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
+                                    <span className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-[0.15em] shadow-lg shadow-indigo-600/30">
+                                        Palier 2 · 180€ / crédit
+                                    </span>
+                                </div>
+
+                                <div className="flex-1 flex flex-col h-full p-8 pt-10">
+                                    <div className="text-center mb-6">
+                                        <h3 className={`text-2xl font-black mt-4 mb-1 ${quantities.pro === 9 ? 'text-white' : 'text-slate-900'}`}>Pack Pro</h3>
+                                        <p className={`${quantities.pro === 9 ? 'text-indigo-200' : 'text-slate-400'} text-xs italic`}>De 5 à 9 crédits</p>
+                                    </div>
+
+                                    {/* Exceptional Effect Alert inside the Card for Qty = 9 */}
+                                    {quantities.pro === 9 && (
+                                        <div className="mb-6 p-4 bg-gradient-to-br from-amber-500 to-orange-500 text-slate-950 rounded-2xl border border-amber-300 shadow-xl relative overflow-hidden animate-pulse">
+                                            <div className="relative z-10 text-center">
+                                                <div className="flex items-center justify-center gap-1.5 mb-1.5">
+                                                    <Sparkles className="h-4 w-4 text-slate-950 animate-bounce" />
+                                                    <span className="text-[10px] font-black uppercase tracking-wider">Opportunité Commerciale !</span>
                                                 </div>
-                                                <p className="text-slate-500 text-sm mt-3 font-bold bg-slate-50 px-3 py-1 rounded-full">{pack.credits} crédit{pack.credits > 1 ? 's' : ''}</p>
-                                            </div>
-
-                                            <div className="w-full h-px bg-slate-100 my-6"></div>
-
-                                            <div className="flex justify-between items-center mb-8 w-full px-2">
-                                                <span className="text-slate-400 text-sm font-medium">Total</span>
-                                                <span className="text-slate-900 font-black text-lg">{pack.price}€ HT</span>
-                                            </div>
-
-                                            <div className="mt-auto flex flex-col items-center">
-                                                <p className="text-slate-500 text-xs italic mb-6 text-center">{pack.description}</p>
-                                                
+                                                <p className="text-xs leading-snug font-bold">
+                                                    10 crédits vous coûtent <span className="font-extrabold underline text-red-700">1 600 € HT</span> au lieu de 1 620 € HT (soit 20 € de moins !)
+                                                </p>
                                                 <button
-                                                    onClick={() => handleSelectPack(pack)}
-                                                    className={`w-full py-4 rounded-xl text-sm font-bold transition-all active:scale-95 ${
-                                                        isPro
-                                                            ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg shadow-indigo-600/25 hover:shadow-indigo-600/40'
-                                                            : 'bg-white border-2 border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                                                    }`}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setQuantities(prev => ({ ...prev, expert: 10 }));
+                                                        const expCard = document.getElementById('card-expert');
+                                                        if (expCard) {
+                                                            expCard.scrollIntoView({ behavior: 'smooth' });
+                                                            expCard.classList.add('ring-8', 'ring-amber-500/50');
+                                                            setTimeout(() => expCard.classList.remove('ring-8', 'ring-amber-500/50'), 1500);
+                                                        }
+                                                    }}
+                                                    className="mt-3.5 w-full py-2 bg-slate-950 text-white text-xs font-black rounded-xl hover:bg-slate-900 transition-all flex items-center justify-center gap-1.5 shadow active:scale-95 cursor-pointer"
                                                 >
-                                                    Choisir ce pack →
+                                                    Passer à 10 crédits
                                                 </button>
                                             </div>
                                         </div>
+                                    )}
+
+                                    <div className={`flex flex-col items-center mb-6 rounded-2xl p-4 border ${
+                                        quantities.pro === 9 
+                                            ? 'bg-slate-900/50 border-slate-700/50' 
+                                            : 'bg-slate-50 border-slate-100'
+                                    }`}>
+                                        <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${quantities.pro === 9 ? 'text-indigo-200' : 'text-slate-400'}`}>Quantité (5 à 9)</p>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setQuantities(prev => ({ ...prev, pro: Math.max(5, prev.pro - 1) }))}
+                                                className={`h-10 w-10 rounded-lg border font-bold text-lg flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer ${
+                                                    quantities.pro === 9 
+                                                        ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-700' 
+                                                        : 'bg-white border-slate-200 text-slate-650 hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                -
+                                            </button>
+                                            <input
+                                                type="number"
+                                                id="qty-pro"
+                                                min="5"
+                                                max="9"
+                                                value={quantities.pro}
+                                                onChange={(e) => {
+                                                    const val = parseInt(e.target.value, 10);
+                                                    if (!isNaN(val)) setQuantities(prev => ({ ...prev, pro: Math.max(5, Math.min(9, val)) }));
+                                                }}
+                                                className={`h-10 w-16 text-center font-black border-2 rounded-lg focus:border-indigo-500 focus:outline-none text-base ${
+                                                    quantities.pro === 9 
+                                                        ? 'bg-slate-800 border-slate-700 text-white' 
+                                                        : 'bg-white border-slate-200 text-slate-900'
+                                                }`}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setQuantities(prev => ({ ...prev, pro: Math.min(9, prev.pro + 1) }))}
+                                                className={`h-10 w-10 rounded-lg border font-bold text-lg flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer ${
+                                                    quantities.pro === 9 
+                                                        ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-700' 
+                                                        : 'bg-white border-slate-200 text-slate-650 hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                +
+                                            </button>
+                                        </div>
                                     </div>
-                                )
-                            })}
+
+                                    <div className={`w-full h-px my-4 ${quantities.pro === 9 ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+
+                                    {/* Private calculation details */}
+                                    <div className="space-y-2 mb-6">
+                                        <div className={`flex justify-between text-xs font-bold uppercase tracking-wider ${quantities.pro === 9 ? 'text-indigo-300' : 'text-slate-400'}`}>
+                                            <span>Calcul</span>
+                                            <span>Montant</span>
+                                        </div>
+                                        <div className={`flex justify-between text-sm ${quantities.pro === 9 ? 'text-slate-200' : 'text-slate-650'}`}>
+                                            <span>{quantities.pro} crédit{quantities.pro > 1 ? 's' : ''} × 180€</span>
+                                            <span className="font-bold">{quantities.pro * 180}€ HT</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-auto pt-4">
+                                        <button
+                                            type="button"
+                                            id="btn-order-pro"
+                                            onClick={() => {
+                                                setSelectedPack({
+                                                    id: 'pro',
+                                                    name: 'Pack Pro',
+                                                    credits: quantities.pro,
+                                                    pricePerCredit: 180,
+                                                    price: quantities.pro * 180
+                                                });
+                                                setStep('card');
+                                            }}
+                                            className={`w-full py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 cursor-pointer shadow-md ${
+                                                quantities.pro === 9 
+                                                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black shadow-amber-500/20 hover:scale-[1.01]' 
+                                                    : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-indigo-600/25'
+                                            }`}
+                                        >
+                                            Commander ({quantities.pro * 180}€ HT) →
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Card 3: Pack Expert (Range 10+) */}
+                            <div 
+                                id="card-expert"
+                                className="relative flex flex-col rounded-3xl transition-all duration-300 bg-white border-2 border-slate-100 hover:border-slate-200 hover:shadow-lg"
+                            >
+                                <div className="flex-1 flex flex-col h-full p-8 pt-10">
+                                    <div className="text-center mb-6">
+                                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-100">
+                                            Palier 3 · 160€ / crédit
+                                        </span>
+                                        <h3 className="text-2xl font-black text-slate-900 mt-4 mb-1">Pack Expert</h3>
+                                        <p className="text-slate-400 text-xs italic">10 crédits et plus</p>
+                                    </div>
+
+                                    <div className="flex flex-col items-center mb-6 bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-3">Quantité (Min 10)</p>
+                                        <div className="flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setQuantities(prev => ({ ...prev, expert: Math.max(10, prev.expert - 1) }))}
+                                                className="h-10 w-10 rounded-lg bg-white border border-slate-200 hover:border-slate-350 text-slate-650 font-bold text-lg flex items-center justify-center transition-all hover:bg-slate-50 shadow-sm active:scale-95 cursor-pointer"
+                                            >
+                                                -
+                                            </button>
+                                            <input
+                                                type="number"
+                                                id="qty-expert"
+                                                min="10"
+                                                max="999"
+                                                value={quantities.expert}
+                                                onChange={(e) => {
+                                                    const val = parseInt(e.target.value, 10);
+                                                    if (!isNaN(val)) setQuantities(prev => ({ ...prev, expert: Math.max(10, Math.min(999, val)) }));
+                                                }}
+                                                className="h-10 w-16 text-center font-black text-slate-900 border-2 border-slate-200 rounded-lg focus:border-indigo-500 focus:outline-none text-base bg-white"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setQuantities(prev => ({ ...prev, expert: Math.min(999, prev.expert + 1) }))}
+                                                className="h-10 w-10 rounded-lg bg-white border border-slate-200 hover:border-slate-350 text-slate-650 font-bold text-lg flex items-center justify-center transition-all hover:bg-slate-50 shadow-sm active:scale-95 cursor-pointer"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="w-full h-px bg-slate-100 my-4"></div>
+
+                                    {/* Private calculation details */}
+                                    <div className="space-y-2 mb-6">
+                                        <div className="flex justify-between text-xs text-slate-400 font-bold uppercase tracking-wider">
+                                            <span>Calcul</span>
+                                            <span>Montant</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm text-slate-600">
+                                            <span>{quantities.expert} crédit{quantities.expert > 1 ? 's' : ''} × 160€</span>
+                                            <span className="font-bold">{quantities.expert * 160}€ HT</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-auto pt-4">
+                                        <button
+                                            type="button"
+                                            id="btn-order-expert"
+                                            onClick={() => {
+                                                setSelectedPack({
+                                                    id: 'expert',
+                                                    name: 'Pack Expert',
+                                                    credits: quantities.expert,
+                                                    pricePerCredit: 160,
+                                                    price: quantities.expert * 160
+                                                });
+                                                setStep('card');
+                                            }}
+                                            className="w-full py-3.5 bg-white border-2 border-slate-200 text-slate-700 hover:border-slate-350 hover:bg-slate-50 rounded-xl text-sm font-bold transition-all active:scale-95 cursor-pointer shadow-sm"
+                                        >
+                                            Commander ({quantities.expert * 160}€ HT) →
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
 
                         {/* Bottom Banner */}
@@ -319,6 +546,7 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }
                             </p>
                         </div>
                     </div>
+
                 ) : (
                     // --- CARD LAYOUT ---
                     <div className="bg-white rounded-[2.5rem] shadow-2xl p-10 relative overflow-hidden">
@@ -345,69 +573,39 @@ export default function CreditsModal({ isOpen, onClose, balance = 0, onSuccess }
                             </div>
                         )}
 
+                        <div className="bg-slate-50 rounded-2xl p-6 mb-6 relative z-10 border border-slate-100">
+                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Récapitulatif de la commande</h3>
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-500">Pack sélectionné :</span>
+                                    <span className="font-bold text-slate-900">{selectedPack.name}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-slate-500">Crédits inclus :</span>
+                                    <span className="font-bold text-indigo-600">+{selectedPack.credits} crédit{selectedPack.credits > 1 ? 's' : ''}</span>
+                                </div>
+                                <div className="h-px bg-slate-200 my-2"></div>
+                                <div className="flex justify-between text-base">
+                                    <span className="font-bold text-slate-900">Total à payer :</span>
+                                    <span className="font-black text-indigo-600">{selectedPack.price}€ HT</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mb-6 p-4 bg-blue-50/50 border border-blue-100/50 rounded-xl flex items-start gap-3 relative z-10 text-xs text-blue-800 leading-relaxed">
+                            <ShieldCheck className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+                            <p>
+                                Le paiement est géré de manière entièrement sécurisée par **Stripe**. Vous allez être redirigé vers leur plateforme pour finaliser la transaction (prend en charge Apple Pay, Google Pay et Cartes Bancaires).
+                            </p>
+                        </div>
+
                         <form onSubmit={handlePaymentSubmit} className="space-y-5 relative z-10">
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Titulaire de la carte</label>
-                                <input
-                                    required
-                                    type="text"
-                                    placeholder="AHMED ALAOUUI"
-                                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-xl text-slate-900 focus:border-indigo-500 outline-none transition-all uppercase placeholder:text-slate-300 font-bold"
-                                    value={cardName}
-                                    onChange={e => setCardName(e.target.value)}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Numéro de carte</label>
-                                <div className="relative">
-                                    <input
-                                        required
-                                        type="text"
-                                        placeholder="4242 4242 4242 4242"
-                                        className="w-full pl-14 pr-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-xl text-slate-900 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-300 font-mono tracking-wider font-bold"
-                                        value={cardNumber}
-                                        onChange={e => setCardNumber(e.target.value.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim().substring(0, 19))}
-                                    />
-                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 p-1.5 bg-white rounded-md shadow-sm">
-                                        <CreditCard className="h-4 w-4 text-slate-400" />
-                                    </div>
-                                </div>
-                                <p className="text-[9px] text-slate-400 mt-2 ml-1 italic">* Testez l'échec en terminant par 0000</p>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Expiration</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        placeholder="MM / YY"
-                                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-xl text-slate-900 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-300 font-mono font-bold"
-                                        value={cardExpiry}
-                                        onChange={e => setCardExpiry(e.target.value.replace(/\D/g, '').replace(/(.{2})/g, '$1/').trim().substring(0, 5))}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">CVC / CVV</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        maxLength="3"
-                                        placeholder="•••"
-                                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-xl text-slate-900 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-300 font-mono font-bold"
-                                        value={cardCvc}
-                                        onChange={e => setCardCvc(e.target.value.replace(/\D/g, '').substring(0, 3))}
-                                    />
-                                </div>
-                            </div>
-
                             <button
                                 type="submit"
-                                className="w-full mt-6 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                                className="w-full mt-2 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
                             >
                                 <Lock className="h-4 w-4" />
-                                Payer {selectedPack.price}€ HT
+                                Procéder au paiement sécurisé →
                             </button>
                             
                             <button
