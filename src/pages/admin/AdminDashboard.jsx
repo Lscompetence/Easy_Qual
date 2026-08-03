@@ -46,6 +46,8 @@ export default function AdminDashboard() {
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [showSuccessModal, setShowSuccessModal] = useState(false) // New Success Modal
     const [createdConsultantParams, setCreatedConsultantParams] = useState(null) // Data for Success Modal
+    const [emailCopied, setEmailCopied] = useState(false)
+    const [passCopied, setPassCopied] = useState(false)
 
     // Credit Success Modal State
     const [showCreditSuccessModal, setShowCreditSuccessModal] = useState(false)
@@ -84,6 +86,7 @@ export default function AdminDashboard() {
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false)
     const [showDeleteSuccessModal, setShowDeleteSuccessModal] = useState(false)
     const [deletedConsultantName, setDeletedConsultantName] = useState('')
+    const [wasDeletedUserInternal, setWasDeletedUserInternal] = useState(false)
     const [consultantToDelete, setConsultantToDelete] = useState(null)
     const [isDeleting, setIsDeleting] = useState(false)
 
@@ -744,6 +747,7 @@ export default function AdminDashboard() {
 
             // Setup success modal data
             setDeletedConsultantName(`${consultantToDelete.first_name || ''} ${consultantToDelete.last_name || ''}`.trim() || consultantToDelete.email)
+            setWasDeletedUserInternal(consultantToDelete.is_internal || false)
 
             setShowDeleteConfirmModal(false)
             setConsultantToDelete(null)
@@ -1758,12 +1762,15 @@ export default function AdminDashboard() {
                     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center p-4 z-50">
                         <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all">
                             <div className="mb-6 border-b border-gray-100 pb-4">
-                                <h3 className="text-xl font-bold text-gray-900">Provisioning Consultant</h3>
-                                <p className="text-sm text-gray-500">Créez un compte et allouez des crédits.</p>
+                                <h3 className="text-xl font-bold text-gray-900">
+                                    {newConsultant.isInternal ? "Créer un Collaborateur Interne" : "Provisioning Consultant"}
+                                </h3>
+                                <p className="text-sm text-gray-500">
+                                    {newConsultant.isInternal ? "Créez un compte interne avec accès illimité." : "Créez un compte et allouez des crédits."}
+                                </p>
                             </div>
 
                             <form onSubmit={handleCreateConsultant} className="space-y-4">
-                                {/* ... (Existing Create Form Fields) ... */}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-gray-700 text-sm font-bold mb-2">Prénom</label>
@@ -1787,149 +1794,222 @@ export default function AdminDashboard() {
                                     </div>
                                 </div>
 
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Nom Commercial / Entreprise</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={newConsultant.commercialName}
-                                        onChange={(e) => setNewConsultant({ ...newConsultant, commercialName: e.target.value })}
-                                        placeholder="Ex: QualiConsult SARL"
-                                    />
-                                </div>
+                                {newConsultant.isInternal ? (
+                                    <>
+                                        <div>
+                                            <label className="block text-gray-700 text-sm font-bold mb-2">Téléphone</label>
+                                            <div className="flex w-full relative">
+                                                {/* Custom Country Selector */}
+                                                <div className="relative">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+                                                        className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-l-lg bg-gray-50 border-r-0 focus:outline-none focus:ring-2 focus:ring-blue-500 h-full"
+                                                        style={{ minWidth: '100px' }}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <img
+                                                                src={`https://flagcdn.com/w40/${COUNTRY_CODES.find(c => c.code === newConsultant.countryCode)?.label.toLowerCase()}.png`}
+                                                                alt="flag"
+                                                                className="w-5 h-auto shadow-sm rounded-sm"
+                                                            />
+                                                            <span className="text-xs font-bold text-gray-700">
+                                                                {newConsultant.countryCode}
+                                                            </span>
+                                                        </div>
+                                                        <MoreHorizontal className="h-3 w-3 text-gray-400 ml-1" />
+                                                    </button>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-gray-700 text-sm font-bold mb-2">Numéro SIRET</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            value={newConsultant.siret}
-                                            onChange={(e) => setNewConsultant({ ...newConsultant, siret: e.target.value })}
-                                            placeholder="14 chiffres"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-gray-700 text-sm font-bold mb-2">Téléphone</label>
-                                        <div className="flex w-full relative">
-                                            {/* Custom Country Selector */}
-                                            <div className="relative">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowCountryDropdown(!showCountryDropdown)}
-                                                    className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-l-lg bg-gray-50 border-r-0 focus:outline-none focus:ring-2 focus:ring-blue-500 h-full"
-                                                    style={{ minWidth: '100px' }}
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <img
-                                                            src={`https://flagcdn.com/w40/${COUNTRY_CODES.find(c => c.code === newConsultant.countryCode)?.label.toLowerCase()}.png`}
-                                                            alt="flag"
-                                                            className="w-5 h-auto shadow-sm rounded-sm"
-                                                        />
-                                                        <span className="text-xs font-bold text-gray-700">
-                                                            {newConsultant.countryCode}
-                                                        </span>
-                                                    </div>
-                                                    <MoreHorizontal className="h-3 w-3 text-gray-400 ml-1" />
-                                                </button>
-
-                                                {showCountryDropdown && (
-                                                    <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-[70] max-h-60 overflow-y-auto">
-                                                        {COUNTRY_CODES.map(c => (
-                                                            <div
-                                                                key={c.code}
-                                                                onClick={() => {
-                                                                    setNewConsultant({ ...newConsultant, countryCode: c.code })
-                                                                    setShowCountryDropdown(false)
-                                                                }}
-                                                                className="flex items-center gap-3 px-3 py-2 hover:bg-blue-50 cursor-pointer transition-colors"
-                                                            >
-                                                                <img
-                                                                    src={`https://flagcdn.com/w40/${c.label.toLowerCase()}.png`}
-                                                                    alt={c.label}
-                                                                    className="w-6 h-auto shadow-sm rounded-sm"
-                                                                />
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-xs font-bold text-gray-900">{c.label}</span>
-                                                                    <span className="text-[10px] text-gray-500">{c.code}</span>
+                                                    {showCountryDropdown && (
+                                                        <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-[70] max-h-60 overflow-y-auto">
+                                                            {COUNTRY_CODES.map(c => (
+                                                                <div
+                                                                    key={c.code}
+                                                                    onClick={() => {
+                                                                        setNewConsultant({ ...newConsultant, countryCode: c.code })
+                                                                        setShowCountryDropdown(false)
+                                                                    }}
+                                                                    className="flex items-center gap-3 px-3 py-2 hover:bg-blue-50 cursor-pointer transition-colors"
+                                                                >
+                                                                    <img
+                                                                        src={`https://flagcdn.com/w40/${c.label.toLowerCase()}.png`}
+                                                                        alt={c.label}
+                                                                        className="w-6 h-auto shadow-sm rounded-sm"
+                                                                    />
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-xs font-bold text-gray-900">{c.label}</span>
+                                                                        <span className="text-[10px] text-gray-500">{c.code}</span>
+                                                                    </div>
+                                                                    {newConsultant.countryCode === c.code && (
+                                                                        <Check className="h-3 w-3 text-blue-600 ml-auto" />
+                                                                    )}
                                                                 </div>
-                                                                {newConsultant.countryCode === c.code && (
-                                                                    <Check className="h-3 w-3 text-blue-600 ml-auto" />
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
 
+                                                <input
+                                                    type="tel"
+                                                    required
+                                                    className="min-w-0 w-full px-3 py-2 border border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    value={newConsultant.phone}
+                                                    onChange={(e) => setNewConsultant({ ...newConsultant, phone: e.target.value.replace(/\s/g, '') })}
+                                                    placeholder="Ex: 612345678"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-gray-700 text-sm font-bold mb-2">Email Professionnel</label>
                                             <input
-                                                type="tel"
+                                                type="email"
                                                 required
-                                                className="min-w-0 w-full px-3 py-2 border border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                value={newConsultant.phone}
-                                                onChange={(e) => setNewConsultant({ ...newConsultant, phone: e.target.value.replace(/\s/g, '') })}
-                                                placeholder="Ex: 612345678"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                value={newConsultant.email}
+                                                onChange={(e) => setNewConsultant({ ...newConsultant, email: e.target.value })}
                                             />
                                         </div>
-                                    </div>
-                                </div>
 
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Email Professionnel</label>
-                                    <input
-                                        type="email"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        value={newConsultant.email}
-                                        onChange={(e) => setNewConsultant({ ...newConsultant, email: e.target.value })}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="flex items-center gap-3 cursor-pointer bg-slate-50 p-3 rounded-xl border border-slate-150">
-                                        <input
-                                            type="checkbox"
-                                            className="h-4 w-4 text-blue-600 rounded"
-                                            checked={newConsultant.isInternal}
-                                            onChange={(e) => setNewConsultant({ 
-                                                ...newConsultant, 
-                                                isInternal: e.target.checked,
-                                                initialCredits: e.target.checked ? 0 : 10
-                                            })}
-                                        />
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-bold text-slate-800">Compte interne (Profil interne)</span>
-                                            <span className="text-[10px] text-slate-400">Ce collaborateur n'utilisera aucun crédit et aura un accès illimité.</span>
+                                        <div>
+                                            <label className="block text-gray-700 text-sm font-bold mb-2">Mot de Passe (Provisoire)</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
+                                                value={newConsultant.password}
+                                                onChange={(e) => setNewConsultant({ ...newConsultant, password: e.target.value })}
+                                                placeholder="Ex: Pass123!"
+                                            />
                                         </div>
-                                    </label>
-                                </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <label className="block text-gray-700 text-sm font-bold mb-2">Nom Commercial / Entreprise</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                value={newConsultant.commercialName}
+                                                onChange={(e) => setNewConsultant({ ...newConsultant, commercialName: e.target.value })}
+                                                placeholder="Ex: QualiConsult SARL"
+                                            />
+                                        </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-gray-700 text-sm font-bold mb-2">Mot de Passe (Provisoire)</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
-                                            value={newConsultant.password}
-                                            onChange={(e) => setNewConsultant({ ...newConsultant, password: e.target.value })}
-                                            placeholder="Ex: Pass123!"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-gray-700 text-sm font-bold mb-2">Crédits Initiaux</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            disabled={newConsultant.isInternal}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                                            value={newConsultant.isInternal ? 0 : newConsultant.initialCredits}
-                                            onChange={(e) => setNewConsultant({ ...newConsultant, initialCredits: parseInt(e.target.value) || 0 })}
-                                        />
-                                    </div>
-                                </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-gray-700 text-sm font-bold mb-2">Numéro SIRET</label>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    value={newConsultant.siret}
+                                                    onChange={(e) => setNewConsultant({ ...newConsultant, siret: e.target.value })}
+                                                    placeholder="14 chiffres"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-gray-700 text-sm font-bold mb-2">Téléphone</label>
+                                                <div className="flex w-full relative">
+                                                    {/* Custom Country Selector */}
+                                                    <div className="relative">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+                                                            className="flex items-center justify-between px-3 py-2 border border-gray-300 rounded-l-lg bg-gray-50 border-r-0 focus:outline-none focus:ring-2 focus:ring-blue-500 h-full"
+                                                            style={{ minWidth: '100px' }}
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <img
+                                                                    src={`https://flagcdn.com/w40/${COUNTRY_CODES.find(c => c.code === newConsultant.countryCode)?.label.toLowerCase()}.png`}
+                                                                    alt="flag"
+                                                                    className="w-5 h-auto shadow-sm rounded-sm"
+                                                                />
+                                                                <span className="text-xs font-bold text-gray-700">
+                                                                    {newConsultant.countryCode}
+                                                                </span>
+                                                            </div>
+                                                            <MoreHorizontal className="h-3 w-3 text-gray-400 ml-1" />
+                                                        </button>
+
+                                                        {showCountryDropdown && (
+                                                            <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-[70] max-h-60 overflow-y-auto">
+                                                                {COUNTRY_CODES.map(c => (
+                                                                    <div
+                                                                        key={c.code}
+                                                                        onClick={() => {
+                                                                            setNewConsultant({ ...newConsultant, countryCode: c.code })
+                                                                            setShowCountryDropdown(false)
+                                                                        }}
+                                                                        className="flex items-center gap-3 px-3 py-2 hover:bg-blue-50 cursor-pointer transition-colors"
+                                                                    >
+                                                                        <img
+                                                                            src={`https://flagcdn.com/w40/${c.label.toLowerCase()}.png`}
+                                                                            alt={c.label}
+                                                                            className="w-6 h-auto shadow-sm rounded-sm"
+                                                                        />
+                                                                        <div className="flex flex-col">
+                                                                            <span className="text-xs font-bold text-gray-900">{c.label}</span>
+                                                                            <span className="text-[10px] text-gray-500">{c.code}</span>
+                                                                        </div>
+                                                                        {newConsultant.countryCode === c.code && (
+                                                                            <Check className="h-3 w-3 text-blue-600 ml-auto" />
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <input
+                                                        type="tel"
+                                                        required
+                                                        className="min-w-0 w-full px-3 py-2 border border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        value={newConsultant.phone}
+                                                        onChange={(e) => setNewConsultant({ ...newConsultant, phone: e.target.value.replace(/\s/g, '') })}
+                                                        placeholder="Ex: 612345678"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-gray-700 text-sm font-bold mb-2">Email Professionnel</label>
+                                            <input
+                                                type="email"
+                                                required
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                value={newConsultant.email}
+                                                onChange={(e) => setNewConsultant({ ...newConsultant, email: e.target.value })}
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-gray-700 text-sm font-bold mb-2">Mot de Passe (Provisoire)</label>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-mono text-sm"
+                                                    value={newConsultant.password}
+                                                    onChange={(e) => setNewConsultant({ ...newConsultant, password: e.target.value })}
+                                                    placeholder="Ex: Pass123!"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-gray-700 text-sm font-bold mb-2">Crédits Initiaux</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    value={newConsultant.initialCredits}
+                                                    onChange={(e) => setNewConsultant({ ...newConsultant, initialCredits: parseInt(e.target.value) || 0 })}
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
 
                                 <div className="bg-blue-50 p-3 rounded-lg flex items-start">
                                     <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" />
@@ -1967,7 +2047,9 @@ export default function AdminDashboard() {
                     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm overflow-y-auto h-full w-full flex items-center justify-center p-4 z-50">
                         <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all">
                             <div className="mb-6 border-b border-gray-100 pb-4">
-                                <h3 className="text-xl font-bold text-gray-900">Modifier Consultant</h3>
+                                <h3 className="text-xl font-bold text-gray-900">
+                                    {editConsultant.is_internal ? "Modifier le Collaborateur Interne" : "Modifier Consultant"}
+                                </h3>
                                 <p className="text-sm text-gray-500">Mettre à jour les informations du profil.</p>
                             </div>
 
@@ -1995,36 +2077,52 @@ export default function AdminDashboard() {
                                     </div>
                                 </div>
 
-                                <div>
-                                    <label className="block text-gray-700 text-sm font-bold mb-2">Nom Commercial</label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
-                                        value={editConsultant.commercial_name || ''}
-                                        readOnly
-                                    />
-                                </div>
+                                {editConsultant.is_internal ? (
+                                    <>
+                                        <div>
+                                            <label className="block text-gray-700 text-sm font-bold mb-2">Téléphone</label>
+                                            <input
+                                                type="tel"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                                                value={editConsultant.phone || ''}
+                                                readOnly
+                                            />
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <label className="block text-gray-700 text-sm font-bold mb-2">Nom Commercial</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                                                value={editConsultant.commercial_name || ''}
+                                                readOnly
+                                            />
+                                        </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-gray-700 text-sm font-bold mb-2">Siret</label>
-                                        <input
-                                            type="text"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
-                                            value={editConsultant.siret || ''}
-                                            readOnly
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-gray-700 text-sm font-bold mb-2">Téléphone</label>
-                                        <input
-                                            type="tel"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
-                                            value={editConsultant.phone || ''}
-                                            readOnly
-                                        />
-                                    </div>
-                                </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-gray-700 text-sm font-bold mb-2">Siret</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                                                    value={editConsultant.siret || ''}
+                                                    readOnly
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-gray-700 text-sm font-bold mb-2">Téléphone</label>
+                                                <input
+                                                    type="tel"
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                                                    value={editConsultant.phone || ''}
+                                                    readOnly
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
 
                                 <div>
                                     <label className="block text-gray-700 text-sm font-bold mb-2">Email</label>
@@ -2067,32 +2165,100 @@ export default function AdminDashboard() {
             {/* Success Modal (New) */}
             {
                 showSuccessModal && createdConsultantParams && (
-                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-bounce-in">
-                            <div className="bg-green-500 p-6 flex justify-center">
-                                <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-lg">
-                                    <Check className="h-10 w-10 text-green-500 stroke-[3]" />
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[999] animate-fade-in">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all border border-slate-100/50 animate-zoom-in">
+                            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-8 flex flex-col items-center relative overflow-hidden">
+                                {/* Graphic background circles */}
+                                <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                                <div className="absolute bottom-0 right-0 w-32 h-32 bg-black/5 rounded-full translate-x-1/3 translate-y-1/3"></div>
+
+                                <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-xl relative z-10 border-4 border-emerald-100/50">
+                                    <Check className="h-10 w-10 text-emerald-500 stroke-[3]" />
                                 </div>
                             </div>
                             <div className="p-8 text-center">
-                                <h3 className="text-2xl font-bold text-gray-900 mb-2">Compte Créé !</h3>
-                                <p className="text-gray-500 mb-6">
-                                    Le consultant <span className="font-bold text-gray-900">{createdConsultantParams.firstName} {createdConsultantParams.lastName}</span> a été ajouté avec succès.
+                                 <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">
+                                    {createdConsultantParams.isInternal ? "Collaborateur Créé !" : "Compte Créé !"}
+                                </h3>
+                                <p className="text-slate-500 mb-6 text-sm leading-relaxed">
+                                    {createdConsultantParams.isInternal 
+                                        ? "Le collaborateur interne " 
+                                        : "Le consultant "
+                                    }
+                                    <span className="font-extrabold text-slate-800"> {createdConsultantParams.firstName} {createdConsultantParams.lastName}</span> a été ajouté avec succès.
                                 </p>
 
-                                <div className="bg-gray-50 rounded-xl p-4 mb-8 text-left space-y-3">
-                                    <div className="flex justify-between">
-                                        <span className="text-sm text-gray-500">Email</span>
-                                        <span className="text-sm font-medium text-gray-900">{createdConsultantParams.email}</span>
+                                <div className="bg-slate-50 border border-slate-150 rounded-2xl p-5 mb-8 text-left space-y-4 shadow-inner">
+                                    {/* Email Row */}
+                                    <div className="flex justify-between items-center gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Adresse Email</span>
+                                            <span className="text-sm font-bold text-slate-700 truncate block" title={createdConsultantParams.email}>
+                                                {createdConsultantParams.email}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(createdConsultantParams.email);
+                                                setEmailCopied(true);
+                                                setTimeout(() => setEmailCopied(false), 2500);
+                                            }}
+                                            className="p-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all shadow-sm flex-shrink-0 relative group"
+                                            title="Copier l'email"
+                                        >
+                                            {emailCopied && (
+                                                <span className="text-[9px] font-black text-emerald-600 absolute bottom-full left-1/2 -translate-x-1/2 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded shadow-sm mb-1 animate-pulse whitespace-nowrap z-50">
+                                                    Copié !
+                                                </span>
+                                            )}
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                        </button>
                                     </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-sm text-gray-500">Crédits</span>
-                                        <span className="text-sm font-bold text-green-600">{createdConsultantParams.initialCredits}</span>
+
+                                    <div className="border-t border-slate-200/60 my-1"></div>
+
+                                    {/* Password Row */}
+                                    <div className="flex justify-between items-center gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Mot de passe (Provisoire)</span>
+                                            <code className="text-sm font-mono font-bold text-blue-600 bg-blue-50/50 px-2.5 py-1 rounded-lg border border-blue-100/50 inline-block tracking-wider select-all">
+                                                {createdConsultantParams.password}
+                                            </code>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(createdConsultantParams.password);
+                                                setPassCopied(true);
+                                                setTimeout(() => setPassCopied(false), 2500);
+                                            }}
+                                            className="p-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all shadow-sm flex-shrink-0 relative group"
+                                            title="Copier le mot de passe"
+                                        >
+                                            {passCopied && (
+                                                <span className="text-[9px] font-black text-emerald-600 absolute bottom-full left-1/2 -translate-x-1/2 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded shadow-sm mb-1 animate-pulse whitespace-nowrap z-50">
+                                                    Copié !
+                                                </span>
+                                            )}
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                        </button>
                                     </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-sm text-gray-500">Mot de passe</span>
-                                        <code className="text-sm font-mono bg-white px-2 py-0.5 rounded border">{createdConsultantParams.password}</code>
-                                    </div>
+
+                                    {!createdConsultantParams.isInternal && (
+                                        <>
+                                            <div className="border-t border-slate-200/60 my-1"></div>
+                                            {/* Credits Row */}
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Crédits de Départ</span>
+                                                    <span className="text-sm font-black text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 rounded-lg inline-block">
+                                                        {createdConsultantParams.initialCredits} Crédits
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 <button
@@ -2100,7 +2266,7 @@ export default function AdminDashboard() {
                                         setShowSuccessModal(false)
                                         setCreatedConsultantParams(null)
                                     }}
-                                    className="w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-green-600/20"
+                                    className="w-full py-4 px-6 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl font-black transition-all shadow-lg shadow-emerald-600/20 hover:shadow-xl active:scale-95 text-sm uppercase tracking-widest"
                                 >
                                     Terminer
                                 </button>
@@ -2222,35 +2388,41 @@ export default function AdminDashboard() {
             {/* Success Modal (Edit Consultant) */}
             {
                 showEditSuccessModal && editConsultant && (
-                    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[70]">
-                        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-bounce-in">
-                            <div className="bg-blue-100 p-6 flex justify-center">
-                                <div className="h-20 w-20 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white stroke-[2]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                    </svg>
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[999] animate-fade-in">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all border border-slate-100/50 animate-zoom-in">
+                            <div className="bg-gradient-to-br from-blue-500 to-indigo-650 p-8 flex flex-col items-center relative overflow-hidden">
+                                {/* Graphic background circles */}
+                                <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                                <div className="absolute bottom-0 right-0 w-32 h-32 bg-black/5 rounded-full translate-x-1/3 translate-y-1/3"></div>
+
+                                <div className="h-20 w-20 bg-white rounded-full flex items-center justify-center shadow-xl relative z-10 border-4 border-blue-100/50">
+                                    <Check className="h-10 w-10 text-blue-500 stroke-[3]" />
                                 </div>
                             </div>
-                            <div className="p-6 text-center">
-                                <h3 className="text-xl font-bold text-gray-900 mb-2">Profil Mis à Jour !</h3>
-                                <p className="text-gray-500 mb-6 text-sm">
-                                    Les informations de ce consultant ont été modifiées avec succès.
+                            <div className="p-8 text-center">
+                                <h3 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">Profil Mis à Jour !</h3>
+                                <p className="text-slate-500 mb-6 text-sm leading-relaxed">
+                                    Les informations de ce {editConsultant.is_internal ? "collaborateur" : "consultant"} ont été modifiées avec succès.
                                 </p>
 
-                                <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left space-y-3 border border-gray-100">
+                                <div className="bg-slate-50 border border-slate-150 rounded-2xl p-5 mb-8 text-left space-y-4 shadow-inner">
+                                    {!editConsultant.is_internal && (
+                                        <>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Société</span>
+                                                <span className="text-sm font-bold text-slate-700">{editConsultant.commercial_name || '-'}</span>
+                                            </div>
+                                            <div className="border-t border-slate-200/60 my-1"></div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">SIRET</span>
+                                                <span className="text-sm font-semibold text-slate-600">{editConsultant.siret || '-'}</span>
+                                            </div>
+                                            <div className="border-t border-slate-200/60 my-1"></div>
+                                        </>
+                                    )}
                                     <div className="flex justify-between items-center">
-                                        <span className="text-sm text-gray-500">Société</span>
-                                        <span className="text-sm font-medium text-gray-900">{editConsultant.commercial_name || '-'}</span>
-                                    </div>
-                                    <div className="border-t border-gray-200 my-1"></div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-gray-500">SIRET</span>
-                                        <span className="text-sm font-medium text-gray-900">{editConsultant.siret || '-'}</span>
-                                    </div>
-                                    <div className="border-t border-gray-200 my-1"></div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-sm text-gray-500">Téléphone</span>
-                                        <span className="text-sm font-medium text-gray-900">{editConsultant.phone || '-'}</span>
+                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Téléphone</span>
+                                        <span className="text-sm font-bold text-slate-700">{editConsultant.phone || '-'}</span>
                                     </div>
                                 </div>
 
@@ -2259,7 +2431,7 @@ export default function AdminDashboard() {
                                         setShowEditSuccessModal(false)
                                         setEditConsultant(null)
                                     }}
-                                    className="w-full py-3 px-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-all shadow-lg"
+                                    className="w-full py-4 px-6 bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl font-black transition-all shadow-lg shadow-blue-600/20 hover:shadow-xl active:scale-95 text-sm uppercase tracking-widest"
                                 >
                                     C'est noté
                                 </button>
@@ -2381,7 +2553,9 @@ export default function AdminDashboard() {
                             </div>
 
                             <div className="p-8">
-                                <h3 className="text-2xl font-black text-gray-900 text-center mb-2 tracking-tight">Supprimer le consultant ?</h3>
+                                <h3 className="text-2xl font-black text-gray-900 text-center mb-2 tracking-tight">
+                                    {consultantToDelete.is_internal ? "Supprimer ce collaborateur ?" : "Supprimer ce consultant ?"}
+                                </h3>
                                 <p className="text-gray-500 text-center mb-8 leading-relaxed">
                                     Vous êtes sur le point de retirer <span className="font-extrabold text-red-600 italic underline decoration-red-200 underline-offset-4 tracking-tighter">"{consultantToDelete.first_name || ''} {consultantToDelete.last_name || ''}"</span>.
                                     <br />Toutes ses données seront effacées.
@@ -2393,7 +2567,10 @@ export default function AdminDashboard() {
                                         <div>
                                             <p className="text-xs font-black text-red-700 uppercase tracking-widest mb-1">Attention Irréversible</p>
                                             <p className="text-[11px] text-red-600 font-medium leading-normal italic">
-                                                Cette action supprimera également le portefeuille de crédits et l'historique de cet utilisateur.
+                                                {consultantToDelete.is_internal
+                                                    ? "Cette action supprimera également l'historique de ce collaborateur."
+                                                    : "Cette action supprimera également le portefeuille de crédits et l'historique de cet utilisateur."
+                                                }
                                             </p>
                                         </div>
                                     </div>
@@ -2446,9 +2623,12 @@ export default function AdminDashboard() {
                                 </div>
                             </div>
                             <div className="p-8 text-center">
-                                <h3 className="text-2xl font-bold text-gray-900 mb-2">Compte Supprimé</h3>
+                                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                                    {wasDeletedUserInternal ? "Collaborateur Supprimé" : "Compte Supprimé"}
+                                </h3>
                                 <p className="text-gray-500 mb-6 text-sm">
-                                    Le consultant <span className="font-bold text-gray-900">{deletedConsultantName}</span> a été retiré de la plateforme avec succès.
+                                    {wasDeletedUserInternal ? "Le collaborateur interne " : "Le consultant "}
+                                    <span className="font-bold text-gray-900">{deletedConsultantName}</span> a été retiré de la plateforme avec succès.
                                 </p>
 
                                 <div className="bg-gray-50 rounded-xl p-4 mb-8 text-left border border-gray-100 flex items-center space-x-3">

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../supabaseClient'
 import { Building, Mail, CheckCircle, AlertCircle, Lock, X } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 
 const getDistinctCategoriesCount = (categories) => {
     if (!categories || categories.length === 0) return 0;
@@ -22,6 +23,8 @@ const getCaseCost = (category, trainingCategories) => {
 };
 
 export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onSuccess }) {
+    const { profile } = useAuth()
+    const isInternal = profile?.is_internal || false
     const [actionLoading, setActionLoading] = useState(false)
     const [error, setError] = useState(null)
     const [successMsg, setSuccessMsg] = useState(null)
@@ -48,8 +51,8 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 throw new Error('Nom et Email du client sont obligatoires')
             }
 
-            const cost = getCaseCost(newCaseData.category, newCaseData.trainingCategories)
-            if (walletBalance < cost) {
+            const cost = isInternal ? 0 : getCaseCost(newCaseData.category, newCaseData.trainingCategories)
+            if (!isInternal && walletBalance < cost) {
                 throw new Error(`Solde insuffisant. Coût: ${cost} crédits. Solde: ${walletBalance}.`)
             }
 
@@ -200,7 +203,7 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 <div className="mb-6 border-b border-gray-100 pb-4 pr-10">
                     <h3 className="text-xl font-bold text-gray-900">Nouveau Dossier Qualiopi</h3>
                     <p className="text-sm text-gray-500 mt-1">
-                        Cette action débitera votre compte de crédits.
+                        {isInternal ? "Créez un nouveau dossier d'accompagnement." : "Cette action débitera votre compte de crédits."}
                     </p>
                 </div>
 
@@ -231,7 +234,9 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                                 <Building className="h-5 w-5 text-gray-400" />
                             </div>
                             <span className="block text-sm font-bold text-gray-900">Mono-site</span>
-                            <span className="block text-[10px] text-gray-400 mt-1 font-medium bg-white px-2 py-0.5 rounded-full border border-gray-100 uppercase">1 Crédit</span>
+                            {!isInternal && (
+                                <span className="block text-[10px] text-gray-400 mt-1 font-medium bg-white px-2 py-0.5 rounded-full border border-gray-100 uppercase">1 Crédit</span>
+                            )}
                         </div>
 
                         <div
@@ -248,7 +253,9 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                                 </div>
                             </div>
                             <span className="block text-sm font-bold text-gray-900">Multi-site</span>
-                            <span className="block text-[10px] text-gray-400 mt-1 font-medium bg-white px-2 py-0.5 rounded-full border border-gray-100 uppercase">2 Crédits</span>
+                            {!isInternal && (
+                                <span className="block text-[10px] text-gray-400 mt-1 font-medium bg-white px-2 py-0.5 rounded-full border border-gray-100 uppercase">2 Crédits</span>
+                            )}
                         </div>
                     </div>
 
@@ -399,19 +406,21 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                     </div>
 
                     {/* Summary */}
-                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-3">
-                        <div className="flex-shrink-0 mt-0.5">
-                            <AlertCircle className="h-5 w-5 text-amber-500" />
-                        </div>
-                        <div>
-                            <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">Résumé de la transaction</h3>
-                            <div className="text-xs text-amber-800 space-y-0.5 font-medium">
-                                <p>Votre solde actuel : <span className="font-bold underline underline-offset-2">{walletBalance}</span></p>
-                                <p>Coût de la création : <span className="font-bold">{getCaseCost(newCaseData.category, newCaseData.trainingCategories)} crédit(s)</span></p>
-                                <p>Nouveau solde après débit : <span className="font-bold underline underline-offset-2">{walletBalance - getCaseCost(newCaseData.category, newCaseData.trainingCategories)}</span></p>
+                    {!isInternal && (
+                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-3">
+                            <div className="flex-shrink-0 mt-0.5">
+                                <AlertCircle className="h-5 w-5 text-amber-500" />
+                            </div>
+                            <div>
+                                <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">Résumé de la transaction</h3>
+                                <div className="text-xs text-amber-800 space-y-0.5 font-medium">
+                                    <p>Votre solde actuel : <span className="font-bold underline underline-offset-2">{walletBalance}</span></p>
+                                    <p>Coût de la création : <span className="font-bold">{getCaseCost(newCaseData.category, newCaseData.trainingCategories)} crédit(s)</span></p>
+                                    <p>Nouveau solde après débit : <span className="font-bold underline underline-offset-2">{walletBalance - getCaseCost(newCaseData.category, newCaseData.trainingCategories)}</span></p>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="flex justify-center flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
                         <button
@@ -426,7 +435,7 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                             disabled={actionLoading}
                             className="px-8 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700 hover:scale-[1.02] transform transition-all active:scale-[0.98] shadow-lg shadow-purple-600/30 disabled:opacity-50 disabled:cursor-not-allowed order-1 sm:order-2"
                         >
-                            {actionLoading ? 'Traitement...' : `Confirmer le débit (${getCaseCost(newCaseData.category, newCaseData.trainingCategories)} Crédits)`}
+                            {actionLoading ? 'Traitement...' : (isInternal ? 'Confirmer la création' : `Confirmer le débit (${getCaseCost(newCaseData.category, newCaseData.trainingCategories)} Crédits)`)}
                         </button>
                     </div>
                 </form>

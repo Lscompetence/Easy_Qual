@@ -51,6 +51,15 @@ export default function UpdatePassword() {
                     inputClass: 'focus:border-[#cc6d3e] focus:ring-[#cc6d3e]/20',
                     badgeClass: 'bg-[#cc6d3e]/10 text-[#cc6d3e] border-[#cc6d3e]/20'
                 }
+            case 'internal':
+                return {
+                    title: 'Espace Collaborateur Interne',
+                    welcome: 'Réinitialisation',
+                    color: 'purple',
+                    buttonClass: 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500 shadow-emerald-600/20',
+                    inputClass: 'focus:border-emerald-500 focus:ring-emerald-500/20',
+                    badgeClass: 'bg-emerald-50 text-emerald-750 border-emerald-100 font-bold'
+                }
             default:
                 return {
                     title: 'Espace Global',
@@ -159,7 +168,9 @@ export default function UpdatePassword() {
             setMessage({ type: 'success', text: 'Votre mot de passe a été mis à jour avec succès !' })
 
             setTimeout(() => {
-                navigate(roleParam ? `/login?role=${roleParam}` : '/login')
+                if (roleParam === 'admin') navigate('/admin-lsc-secure')
+                else if (roleParam === 'internal') navigate('/internal-lsc-secure')
+                else navigate(roleParam ? `/login?role=${roleParam}` : '/login')
             }, 2000)
 
         } catch (error) {
@@ -212,7 +223,7 @@ export default function UpdatePassword() {
                                 <div className="mt-1">
                                     <button
                                         type="button"
-                                        onClick={() => navigate('/forgot-password')}
+                                        onClick={() => navigate(`/forgot-password?role=${roleParam}`)}
                                         className="underline font-bold"
                                     >
                                         Réessayer l'envoi

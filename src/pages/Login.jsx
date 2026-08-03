@@ -319,7 +319,7 @@ export default function Login({ forceRole }) {
                         </div>
                         <div className="flex justify-end">
                             <Link
-                                to={`/forgot-password${location.search}`}
+                                to={`/forgot-password?role=${roleParam}`}
                                 className={`text-sm font-medium transition-colors ${config.linkClass}`}
                             >
                                 Mot de passe oublié ?

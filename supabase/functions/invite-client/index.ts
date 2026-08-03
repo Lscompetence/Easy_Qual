@@ -112,133 +112,8 @@ const sendWelcomeEmailBrevo = async (
         </html>
     `;
 
-    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: { 
-            'api-key': apiKey, 
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-            sender: { name: 'EasyQual', email: 'yassinealaoui095@gmail.com' }, 
-            to: [{ email: email, name: firstName || lastName ? `${firstName} ${lastName}`.trim() : tenantName }],
-            subject: 'Vos accès Client EasyQual',
-            htmlContent: htmlContent
-        })
-    });
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform',
-}
-
-const extractErrorMessage = (err: any): string => {
-    if (!err) return "Erreur inconnue";
-    if (typeof err === 'string') return err;
-    
-    // Extract non-enumerable properties from Error
-    const props = Object.getOwnPropertyNames(err);
-    if (props.includes('message') && err.message) {
-        return String(err.message);
-    }
-    
-    // Fallback to serialization
-    const detailObj: any = {};
-    for (const prop of props) {
-        detailObj[prop] = err[prop];
-    }
-    const str = JSON.stringify(detailObj);
-    if (str === '{}') {
-        return String(err);
-    }
-    return str;
-}
-
-const sendWelcomeEmailBrevo = async (
-    email: string,
-    tenantName: string,
-    firstName: string,
-    lastName: string,
-    passwordToUse: string,
-    origin: string,
-    apiKey: string
-) => {
-    console.log(`[INVITE] Sending Brevo email to client: ${email}`)
-    const loginUrl = `${origin}/login`
-    const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-    
-    const nameDisplay = firstName ? firstName : tenantName;
-
-    const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <link rel="preconnect" href="https://fonts.googleapis.com">
-            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-            <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-            <style>
-                body { font-family: 'Poppins', 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; color: #1a1a1a; margin: 0; padding: 0; background-color: #f9f9fb; }
-                .wrapper { width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #eef0f2; }
-                .header { padding: 40px 20px; text-align: center; border-bottom: 1px solid #f0f0f0; }
-                .logo { font-size: 28px; font-weight: 800; color: #0f172a; text-decoration: none; letter-spacing: -1px; }
-                .logo span { color: #8b5cf6; }
-                .content { padding: 40px 50px; }
-                .welcome { font-size: 24px; font-weight: 700; margin-bottom: 10px; color: #111827; }
-                .intro { font-size: 15px; color: #4b5563; margin-bottom: 30px; font-weight: 300; }
-                .card { background-color: #f8fafc; border-radius: 16px; padding: 30px; margin: 30px 0; border: 1px solid #e2e8f0; }
-                .card-title { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #64748b; font-weight: 700; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; }
-                .field { margin-bottom: 15px; font-size: 14px; }
-                .field strong { color: #64748b; width: 100px; display: inline-block; font-size: 12px; }
-                .field span { color: #1e293b; font-weight: 600; }
-                .password-box { background: #ffffff; padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 16px; color: #8b5cf6; }
-                .btn { display: inline-block; background-color: #8b5cf6; color: #ffffff !important; padding: 18px 35px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 15px; margin-top: 20px; text-align: center; box-shadow: 0 4px 6px -1px rgba(139, 92, 246, 0.2); }
-                .footer { background-color: #0f172a; color: #94a3b8; padding: 50px; text-align: center; font-size: 13px; }
-                .footer p { margin: 8px 0; font-weight: 300; }
-                .footer a { color: #ffffff; text-decoration: none; font-weight: 600; }
-                .meta { display: block; font-size: 10px; color: #94a3b8; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 1px; }
-            </style>
-        </head>
-        <body>
-            <div class="wrapper">
-                <div class="header">
-                    <div class="logo">Easy<span>'</span>Qual</div>
-                </div>
-                <div class="content">
-                    <div class="meta">
-                        RÉF : ACC-CLIENT &nbsp; | &nbsp; ${dateStr}
-                    </div>
-                    <h1 class="welcome">Bienvenue, ${nameDisplay} !</h1>
-                    <p class="intro">Votre espace d'accompagnement EasyQual est prêt. Vous pouvez dès à présent suivre votre progression, déposer vos éléments de preuve et collaborer avec votre consultant.</p>
-                    
-                    <div class="card">
-                        <div class="card-title">Fiche d'accès sécurisée</div>
-                        <div class="field"><strong>EMAIL</strong> <span>${email}</span></div>
-                        <div class="field"><strong>PASSWORD</strong> <span class="password-box">${passwordToUse}</span></div>
-                    </div>
-
-                    <div style="text-align: center;">
-                        <a href="${loginUrl}" class="btn">Accéder à mon espace client</a>
-                    </div>
-                    
-                    <p style="font-size: 12px; color: #94a3b8; margin-top: 45px; text-align: center; font-weight: 300;">
-                        Pour votre sécurité, ce mot de passe temporaire doit être modifié lors de votre première connexion dans l'onglet "Profil".
-                    </p>
-                </div>
-                <div class="footer">
-                    <div class="logo" style="color: #ffffff; margin-bottom: 25px; font-size: 24px;">Easy<span>'</span>Qual</div>
-                    <p>L'excellence opérationnelle pour votre certification Qualiopi.</p>
-                    <p>Une question ? <a href="mailto:devweb.lsc@outlook.com">Contactez notre support</a></p>
-                    <p style="margin-top: 30px; border-top: 1px solid #1e293b; padding-top: 25px; font-size: 10px; opacity: 0.6;">
-                        © 2026 EasyQual. Tous droits réservés.
-                    </p>
-                </div>
-            </div>
-        </body>
-        </html>
-    `;
+    const senderEmail = Deno.env.get('BREVO_SENDER_EMAIL') || 'devweb.lsc@outlook.com'
+    const senderName = Deno.env.get('BREVO_SENDER_NAME') || 'EasyQual'
 
     const res = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
@@ -248,7 +123,7 @@ const sendWelcomeEmailBrevo = async (
             'Accept': 'application/json'
         },
         body: JSON.stringify({
-            sender: { name: 'EasyQual', email: 'yassinealaoui095@gmail.com' }, 
+            sender: { name: senderName, email: senderEmail }, 
             to: [{ email: email, name: firstName || lastName ? `${firstName} ${lastName}`.trim() : tenantName }],
             subject: 'Vos accès Client EasyQual',
             htmlContent: htmlContent
