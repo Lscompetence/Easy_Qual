@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../supabaseClient'
 import { Building, Mail, CheckCircle, AlertCircle, Lock, Edit3, AlertTriangle } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 
 const getDistinctCategoriesCount = (categories) => {
     if (!categories || categories.length === 0) return 0;
@@ -22,6 +23,8 @@ const getCaseCost = (category, trainingCategories) => {
 };
 
 export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuccess }) {
+    const { profile } = useAuth()
+    const isInternal = profile?.is_internal || false
     const [actionLoading, setActionLoading] = useState(false)
     const [error, setError] = useState(null)
     const [successMsg, setSuccessMsg] = useState(null)
@@ -81,7 +84,7 @@ export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuc
             // Ce commentaire est indispensable pour éviter qu'une implémentation "par symétrie" ne vienne casser le modèle économique de la plateforme.
             const costDifference = Math.max(0, newCost - currentPaid);
 
-            if (costDifference > 0 && walletBalance < costDifference) {
+            if (!isInternal && costDifference > 0 && walletBalance < costDifference) {
                 throw new Error(`Solde de crédits insuffisant. Requis : ${costDifference} cr. Disponible : ${walletBalance} cr.`);
             }
 
@@ -169,7 +172,9 @@ export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuc
                                     <Building className="h-5 w-5 text-gray-400" />
                                 </div>
                                 <span className="block text-sm font-bold text-gray-900">Mono-site</span>
-                                <span className="block text-[10px] text-gray-400 mt-1 font-medium bg-white px-2 py-0.5 rounded-full border border-gray-100 uppercase">1 Crédit</span>
+                                {!isInternal && (
+                                    <span className="block text-[10px] text-gray-400 mt-1 font-medium bg-white px-2 py-0.5 rounded-full border border-gray-100 uppercase">1 Crédit</span>
+                                )}
                             </div>
 
                             <div
@@ -185,7 +190,9 @@ export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuc
                                     </div>
                                 </div>
                                 <span className="block text-sm font-bold text-gray-900">Multi-site</span>
-                                <span className="block text-[10px] text-gray-400 mt-1 font-medium bg-white px-2 py-0.5 rounded-full border border-gray-100 uppercase">2 Crédits</span>
+                                {!isInternal && (
+                                    <span className="block text-[10px] text-gray-400 mt-1 font-medium bg-white px-2 py-0.5 rounded-full border border-gray-100 uppercase">2 Crédits</span>
+                                )}
                             </div>
                         </div>
                         <p className="text-[10px] text-gray-400 font-semibold italic mt-2">* Le type de site (mono-site / multi-site) est fixé à la création et ne peut pas être modifié.</p>
@@ -279,7 +286,7 @@ export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuc
                                             <span className={`text-[11px] font-bold ${formData.trainingCategories.includes(cat) ? 'text-purple-900' : 'text-gray-500'}`}>
                                                 {cat}
                                                 {isAlreadyActive && <span className="text-[9px] text-gray-400 font-semibold ml-1">(Déjà actif)</span>}
-                                                {showPlusOne && <span className="text-[9px] text-purple-600 font-extrabold ml-1.5">(+1 cr.)</span>}
+                                                {!isInternal && showPlusOne && <span className="text-[9px] text-purple-600 font-extrabold ml-1.5">(+1 cr.)</span>}
                                             </span>
                                         </label>
                                     );
@@ -308,6 +315,7 @@ export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuc
                         const costDifference = Math.max(0, newCost - currentPaid);
                         const hasInsufficientCredits = costDifference > 0 && walletBalance < costDifference;
 
+                        if (isInternal) return null;
                         return (
                             <div className="mt-4 p-4 rounded-xl border font-medium text-xs space-y-1 bg-amber-50 border-amber-100 text-amber-800">
                                 <p className="text-[10px] font-bold text-amber-900 uppercase tracking-wide mb-1">Résumé de la tarification</p>
@@ -359,12 +367,12 @@ export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuc
                         </button>
                         <button
                             type="submit"
-                            disabled={actionLoading || (() => {
+                            disabled={actionLoading || (!isInternal && (() => {
                                 const currentPaid = caseData?.paid_credits || getCaseCost(caseData?.category || 'mono-site', caseData?.training_categories || []);
                                 const newCost = getCaseCost(formData.category, formData.trainingCategories);
                                 const costDifference = Math.max(0, newCost - currentPaid);
                                 return costDifference > 0 && walletBalance < costDifference;
-                            })()}
+                            })())}
                             className="px-8 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700 shadow-lg shadow-purple-600/30 disabled:opacity-50"
                         >
                             {actionLoading ? 'Mise à jour...' : 'Sauvegarder les modifications'}

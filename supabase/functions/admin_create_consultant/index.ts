@@ -16,9 +16,11 @@ Deno.serve(async (req) => {
     const BREVO_API_KEY = Deno.env.get('BREVO_API_KEY')
 
     // Helper to send invitation via Brevo (formerly Sendinblue)
-    const sendWelcomeEmailBrevo = async (email: string, firstName: string, lastName: string, passwordToUse: string, origin: string) => {
-        console.log(`[INVITE] Sending Brevo email to: ${email}`)
-        const loginUrl = `${origin}/login?role=consultant`
+    const sendWelcomeEmailBrevo = async (email: string, firstName: string, lastName: string, passwordToUse: string, origin: string, isInternal?: boolean) => {
+        console.log(`[INVITE] Sending Brevo email to: ${email}, isInternal: ${isInternal}`)
+        const loginUrl = isInternal 
+            ? `${origin}/internal-lsc-secure` 
+            : `${origin}/login?role=consultant`
         const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
         
         const htmlContent = `
@@ -95,6 +97,9 @@ Deno.serve(async (req) => {
              return { success: false, error: "Clé API Brevo manquante dans la configuration." };
         }
 
+        const senderEmail = Deno.env.get('BREVO_SENDER_EMAIL') || 'devweb.lsc@outlook.com'
+        const senderName = Deno.env.get('BREVO_SENDER_NAME') || 'EasyQual'
+
         const res = await fetch('https://api.brevo.com/v3/smtp/email', {
             method: 'POST',
             headers: { 
@@ -103,7 +108,7 @@ Deno.serve(async (req) => {
                 'Accept': 'application/json'
             },
             body: JSON.stringify({
-                sender: { name: 'EasyQual', email: 'yassinealaoui095@gmail.com' }, 
+                sender: { name: senderName, email: senderEmail }, 
                 to: [{ email: email, name: `${firstName} ${lastName}` }],
                 subject: 'Vos accès Consultant EasyQual',
                 htmlContent: htmlContent
@@ -183,7 +188,7 @@ Deno.serve(async (req) => {
             }
 
             // Immediately send credentials using Brevo
-            await sendWelcomeEmailBrevo(email, firstName, lastName, pwdToUse, origin);
+            await sendWelcomeEmailBrevo(email, firstName, lastName, pwdToUse, origin, isInternal || false);
 
             return new Response(JSON.stringify({ 
                 success: true, 
@@ -198,10 +203,10 @@ Deno.serve(async (req) => {
             console.log(`[RESEND] Attempting to resend credentials to: ${email}`)
             if (!email) throw new Error("Email manquant")
             
-            // Fetch profile data including names and temp password
+            // Fetch profile data including names, temp password, and is_internal flag
             const { data: profile, error: profErr } = await supabase
                 .from('profiles')
-                .select('first_name, last_name, temp_password')
+                .select('first_name, last_name, temp_password, is_internal')
                 .eq('email', email)
                 .maybeSingle()
 
@@ -223,7 +228,8 @@ Deno.serve(async (req) => {
                 profile.first_name || 'Consultant', 
                 profile.last_name || '', 
                 pwdToUse, 
-                origin
+                origin,
+                profile.is_internal || false
             )
 
             if (!inviteRes.success) {

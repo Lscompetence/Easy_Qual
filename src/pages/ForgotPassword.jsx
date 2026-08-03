@@ -8,6 +8,12 @@ export default function ForgotPassword() {
     const [searchParams] = useSearchParams()
     const roleParam = searchParams.get('role') || 'client'
 
+    const backLink = useMemo(() => {
+        if (roleParam === 'admin') return '/admin-lsc-secure'
+        if (roleParam === 'internal') return '/internal-lsc-secure'
+        return `/login?role=${roleParam}`
+    }, [roleParam])
+
     const [email, setEmail] = useState('')
     const [loading, setLoading] = useState(false)
     const [success, setSuccess] = useState(false)
@@ -67,6 +73,18 @@ export default function ForgotPassword() {
                     iconBgClass: 'bg-[#f5e2d6]',
                     linkClass: 'text-[#cc6d3e] hover:text-[#e08c50]',
                     badgeClass: 'bg-[#faf1ec] text-[#cc6d3e] border-[#f5e2d6]'
+                }
+            case 'internal':
+                return {
+                    title: 'Espace Collaborateur Interne',
+                    welcome: 'Réinitialisation Mot de Passe',
+                    color: 'purple',
+                    buttonClass: 'bg-emerald-600 hover:bg-emerald-700 focus:ring-emerald-500 shadow-emerald-600/20',
+                    inputClass: 'focus:border-emerald-500 focus:ring-emerald-500/20',
+                    iconClass: 'text-emerald-600',
+                    iconBgClass: 'bg-emerald-100',
+                    linkClass: 'text-emerald-600 hover:text-emerald-500',
+                    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-100 font-bold'
                 }
             default:
                 return {
@@ -188,7 +206,7 @@ export default function ForgotPassword() {
 
                 <div className="mt-8 pt-6 border-t border-gray-100/50 text-center">
                     <Link
-                        to={`/login${location.search}`}
+                        to={backLink}
                         className={`inline-flex items-center text-sm font-medium text-gray-500 transition-colors hover:text-gray-900`}
                     >
                         <ArrowLeft className="h-4 w-4 mr-2" />

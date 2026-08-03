@@ -108,7 +108,7 @@ function App() {
           </Route>
 
           {/* Default Route - Redirect logic could be here or inside Login */}
-          <Route path="/" element={<Login />} />
+          <Route path="/" element={<Login forceRole="admin" />} />
         </Routes>
       </Router>
     </AuthProvider>
