@@ -22,6 +22,36 @@ dont le HTML se trouve dans `supabase/functions/*/index.ts` et se déploie avec
 |---|---|---|
 | `reset-password.html` | Reset Password | Réinitialisation de votre mot de passe Easy'Qual |
 
+## ⚠️ SMTP personnalisé — indispensable avant la mise en production
+
+Par défaut, Supabase envoie ces emails via son propre service (`mail.app.supabase.io`).
+Ce service est prévu pour le développement uniquement et impose un quota très bas
+(quelques emails par heure, partagés pour tout le projet). Une fois le quota atteint,
+l'API renvoie `429 Too Many Requests` et **plus aucun email de réinitialisation
+n'est envoyé**, quel que soit l'utilisateur qui le demande.
+
+Le projet dispose déjà d'un compte Brevo (utilisé par les fonctions
+`invite-client` et `admin_create_consultant`). Il faut le déclarer aussi comme
+serveur SMTP de Supabase Auth :
+
+1. Ouvrir https://supabase.com/dashboard/project/gxworwhpcyfuqwuxocxx/settings/auth
+2. Section « SMTP Settings » → activer « Enable Custom SMTP »
+3. Renseigner les paramètres SMTP Brevo :
+
+   | Champ | Valeur |
+   |---|---|
+   | Host | `smtp-relay.brevo.com` |
+   | Port | `587` |
+   | Username | l'identifiant SMTP du compte Brevo |
+   | Password | la clé SMTP Brevo (à générer dans Brevo > SMTP & API) |
+   | Sender email | `devweb.lsc@outlook.com` (ou l'expéditeur vérifié) |
+   | Sender name | `EasyQual` |
+
+4. Enregistrer, puis retester « Mot de passe oublié »
+
+Tant que cette configuration n'est pas faite, la fonctionnalité « mot de passe
+oublié » reste inutilisable pour les clients finaux.
+
 ## URLs de redirection à autoriser
 
 Sans cette configuration, le lien reçu par email renvoie vers l'URL par défaut du
