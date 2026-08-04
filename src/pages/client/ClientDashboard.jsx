@@ -493,7 +493,7 @@ export default function ClientDashboard() {
     const [dirtyIndicators, setDirtyIndicators] = useState(new Set())
     const [pendingFiles, setPendingFiles] = useState({})
     const [savingIndicator, setSavingIndicator] = useState(null)
-    const [saveSuccess, setSaveSuccess] = useState({})
+    const [, setSaveSuccess] = useState({})
     const [globalMessage, setGlobalMessage] = useState(null)
     const [selectedAudit, setSelectedAudit] = useState(() => localStorage.getItem('clientSelectedAudit') || 'initial')
     const [lastFailedScores, setLastFailedScores] = useState(() => {
@@ -2154,7 +2154,7 @@ export default function ClientDashboard() {
                                 {/* Vertical connector line */}
                                 <div className="absolute left-[13px] top-8 bottom-8 w-0.5 bg-gray-100 -z-0" />
 
-                                {currentCriterion.items.map((ind, idx) => {
+                                {currentCriterion.items.map((ind) => {
                                     // Robust state lookup: try both number and string keys
                                      const state = indicatorStates[ind.id] || indicatorStates[String(ind.id)] || {}
                                      const status = state.status || null

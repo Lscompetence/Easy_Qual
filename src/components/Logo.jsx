@@ -1,4 +1,4 @@
-export default function Logo({ className = "", size = "normal", color = "blue", iconOnly = false }) {
+export default function Logo({ className = "", size = "normal" }) {
     const sizeClasses = {
         small: "h-8",
         normal: "h-12",

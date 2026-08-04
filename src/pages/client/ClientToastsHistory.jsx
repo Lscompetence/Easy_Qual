@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
     Clock,
     CheckCircle,
@@ -18,8 +17,7 @@ import ClientSidebar from '../../components/client/ClientSidebar'
 import ClientTopBar from '../../components/client/ClientTopBar'
 
 export default function ClientToastsHistory() {
-    const { user, profile } = useAuth()
-    const navigate = useNavigate()
+    const { user } = useAuth()
     const [notifications, setNotifications] = useState([])
     const [loading, setLoading] = useState(true)
     const [showMobileMenu, setShowMobileMenu] = useState(false)

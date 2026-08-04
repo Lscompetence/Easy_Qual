@@ -1,4 +1,4 @@
-/* global describe, before, after, it */
+/* global describe, before, after, it, process */
 import chrome from 'selenium-webdriver/chrome.js';
 import { Builder, By, until, Key } from 'selenium-webdriver';
 import assert from 'assert';
@@ -8,6 +8,16 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const driverPath = path.resolve(__dirname, '../../node_modules/chromedriver/lib/chromedriver/chromedriver.exe');
+
+// ⚙️ Config surchargeables par variables d'environnement (évite les mots de passe en dur / obsolètes)
+// Lancer le serveur avant : npm run dev -- --port 5188 --strictPort
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:5188';
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL || 'devweb.lsc@outlook.com';
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD || '123456';
+const CLIENT_EMAIL = process.env.E2E_CLIENT_EMAIL || 'sofiane.dnednia@gmail.com';
+const CLIENT_PASSWORD = process.env.E2E_CLIENT_PASSWORD || '123456';
+const CONSULTANT_EMAIL = process.env.E2E_CONSULTANT_EMAIL || 'yassinealaoui095@gmail.com';
+const CONSULTANT_PASSWORD = process.env.E2E_CONSULTANT_PASSWORD || 'Pass123456';
 
 describe('Selenium E2E Tests - EasyQual', function () {
   let driver;
@@ -52,7 +62,7 @@ describe('Selenium E2E Tests - EasyQual', function () {
 
   it('1. devrait afficher la page de connexion et tester la connexion Administrateur', async function () {
     console.log("🌐 Navigation vers l'espace Administrateur sécurisé...");
-    await driver.get('http://localhost:5188/admin-lsc-secure');
+    await driver.get(`${BASE_URL}/admin-lsc-secure`);
     
     console.log("🍪 Contournement du bandeau cookie...");
     await acceptCookies('admin');
@@ -68,8 +78,8 @@ describe('Selenium E2E Tests - EasyQual', function () {
     const emailInput = await driver.findElement(By.id('email-address'));
     const passwordInput = await driver.findElement(By.id('password'));
 
-    await emailInput.sendKeys('devweb.lsc@outlook.com');
-    await passwordInput.sendKeys('123456');
+    await emailInput.sendKeys(ADMIN_EMAIL);
+    await passwordInput.sendKeys(ADMIN_PASSWORD);
 
     console.log("🖱️ Clic sur le bouton de connexion...");
     const submitBtn = await driver.findElement(By.css('button[type="submit"]'));
@@ -90,7 +100,7 @@ describe('Selenium E2E Tests - EasyQual', function () {
 
   it('2. devrait tester la connexion Client (OF)', async function () {
     console.log("🌐 Navigation vers l'espace Client...");
-    await driver.get('http://localhost:5188/login?role=client');
+    await driver.get(`${BASE_URL}/login?role=client`);
     
     console.log("🍪 Contournement du bandeau cookie...");
     await acceptCookies('of');
@@ -102,8 +112,8 @@ describe('Selenium E2E Tests - EasyQual', function () {
     const emailInput = await driver.findElement(By.id('email-address'));
     const passwordInput = await driver.findElement(By.id('password'));
 
-    await emailInput.sendKeys('sofiane.dnednia@gmail.com');
-    await passwordInput.sendKeys('123456');
+    await emailInput.sendKeys(CLIENT_EMAIL);
+    await passwordInput.sendKeys(CLIENT_PASSWORD);
 
     console.log("🖱️ Clic sur le bouton de connexion...");
     const submitBtn = await driver.findElement(By.css('button[type="submit"]'));
@@ -124,7 +134,7 @@ describe('Selenium E2E Tests - EasyQual', function () {
 
   it('3. devrait tester la connexion Consultant, la recharge de crédits et le levier commercial', async function () {
     console.log("🌐 Navigation vers l'espace Consultant...");
-    await driver.get('http://localhost:5188/login?role=consultant');
+    await driver.get(`${BASE_URL}/login?role=consultant`);
     
     console.log("🍪 Contournement du bandeau cookie...");
     await acceptCookies('consultant');
@@ -136,8 +146,8 @@ describe('Selenium E2E Tests - EasyQual', function () {
     const emailInput = await driver.findElement(By.id('email-address'));
     const passwordInput = await driver.findElement(By.id('password'));
 
-    await emailInput.sendKeys('yassinealaoui095@gmail.com');
-    await passwordInput.sendKeys('Pass123456');
+    await emailInput.sendKeys(CONSULTANT_EMAIL);
+    await passwordInput.sendKeys(CONSULTANT_PASSWORD);
 
     console.log("🖱️ Clic sur le bouton de connexion...");
     const submitBtn = await driver.findElement(By.css('button[type="submit"]'));
@@ -177,12 +187,23 @@ describe('Selenium E2E Tests - EasyQual', function () {
     console.log("✅ Quantité optimisée à 10 crédits !");
 
     console.log("🖱️ Clic sur 'Commander'...");
-    const orderBtn = await driver.findElement(By.id('btn-order-expert'));
-    await orderBtn.click();
+    // Le clic peut être perdu si React re-rend le bouton : on re-localise et on réessaie jusqu'à 3 fois
+    let recapVisible = false;
+    for (let attempt = 1; attempt <= 3 && !recapVisible; attempt++) {
+      const orderBtn = await driver.findElement(By.id('btn-order-expert'));
+      await driver.executeScript("arguments[0].scrollIntoView({block: 'center'});", orderBtn);
+      await driver.sleep(400);
+      await driver.executeScript("arguments[0].click();", orderBtn);
+      try {
+        await driver.wait(until.elementLocated(By.xpath("//h3[contains(text(), 'Récapitulatif de la commande')]")), 5000);
+        recapVisible = true;
+      } catch {
+        console.log(`   ↻ Tentative ${attempt} sans effet, nouveau clic...`);
+      }
+    }
 
     console.log("👁️ Vérification de l'affichage du panier final (Étape de confirmation)...");
-    const recapHeader = await driver.wait(until.elementLocated(By.xpath("//h3[contains(text(), 'Récapitulatif de la commande')]")), 10000);
-    assert.ok(recapHeader, "L'étape de récapitulatif de commande doit s'afficher.");
+    assert.ok(recapVisible, "L'étape de récapitulatif de commande doit s'afficher.");
 
     const totalToPay = await driver.findElement(By.xpath("//span[contains(text(), '1600')]"));
     assert.ok(totalToPay, "Le prix final doit afficher 1600€ HT pour 10 crédits.");

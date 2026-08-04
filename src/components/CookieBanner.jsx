@@ -39,7 +39,10 @@ const CookieBanner = () => {
     setShowModal(false);
   };
 
-  if (!isVisible || !role) return null;
+  const path = window.location.pathname;
+  const isLoginRoute = path === '/login' || path === '/internal-lsc-secure' || path === '/admin-lsc-secure' || path === '/';
+
+  if (!isVisible || !role || isLoginRoute) return null;
 
   const roleLabel = ROLE_LABELS[role] || role;
 

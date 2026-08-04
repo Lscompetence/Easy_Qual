@@ -9,7 +9,7 @@ export default function AdminActivities() {
     const [profiles, setProfiles] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
-    const [filterType, setFilterType] = useState('all') // 'all', 'credits', 'users', 'cases'
+    const [filterType] = useState('all') // 'all', 'credits', 'users', 'cases'
     const navigate = useNavigate()
 
     useEffect(() => {

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
 import { ArrowLeft, Check, Mail } from 'lucide-react'
@@ -20,7 +20,6 @@ export default function ForgotPassword() {
     const [error, setError] = useState(null)
     const { resetPassword, maintenanceMode } = useAuth()
     const navigate = useNavigate()
-    const location = useLocation()
 
     // 🛠️ MAINTENANCE REDIRECT
     useEffect(() => {

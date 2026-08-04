@@ -89,7 +89,7 @@ export default function UpdateCaseModal({ isOpen, onClose, user, caseData, onSuc
             }
 
             // Call the secure RPC to update case info and debit credits atomically
-            const { data, error: rpcError } = await supabase.rpc('update_case_and_debit', {
+            const { error: rpcError } = await supabase.rpc('update_case_and_debit', {
                 p_case_id: caseData.id,
                 p_consultant_id: user.id,
                 p_tenant_name: formData.tenantName.trim(),

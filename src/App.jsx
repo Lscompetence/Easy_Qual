@@ -29,6 +29,7 @@ import Maintenance from './pages/Maintenance'
 import AuditQualiopi from './pages/consultant/AuditQualiopi'
 import AuditPrototype from './pages/AuditPrototype/AuditQualiopi'
 import ClientToastsHistory from './pages/client/ClientToastsHistory'
+import NotFound from './pages/NotFound'
 
 function App() {
   return (
@@ -109,6 +110,9 @@ function App() {
 
           {/* Default Route - Redirect logic could be here or inside Login */}
           <Route path="/" element={<Login forceRole="admin" />} />
+
+          {/* 404 - Catch all unknown routes */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Router>
     </AuthProvider>

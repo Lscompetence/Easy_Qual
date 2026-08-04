@@ -18,9 +18,16 @@ Deno.serve(async (req) => {
     // Helper to send invitation via Brevo (formerly Sendinblue)
     const sendWelcomeEmailBrevo = async (email: string, firstName: string, lastName: string, passwordToUse: string, origin: string, isInternal?: boolean) => {
         console.log(`[INVITE] Sending Brevo email to: ${email}, isInternal: ${isInternal}`)
-        const loginUrl = isInternal 
-            ? `${origin}/internal-lsc-secure` 
+        const loginUrl = isInternal
+            ? `${origin}/internal-lsc-secure`
             : `${origin}/login?role=consultant`
+        // Logo hébergé : les images en localhost ne s'affichent pas dans les emails
+        const logoUrl = (origin && !origin.includes('localhost'))
+            ? `${origin}/logo.png`
+            : 'https://easy-qual.vercel.app/logo.png'
+        // Couleur d'accent assortie à la plateforme : violet (consultant) / vert émeraude (interne)
+        const accent = isInternal ? '#059669' : '#9333ea'
+        const accentShadow = isInternal ? 'rgba(5, 150, 105, 0.2)' : 'rgba(147, 51, 234, 0.2)'
         const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
         
         const htmlContent = `
@@ -36,7 +43,7 @@ Deno.serve(async (req) => {
                     .wrapper { width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #eef0f2; }
                     .header { padding: 40px 20px; text-align: center; border-bottom: 1px solid #f0f0f0; }
                     .logo { font-size: 28px; font-weight: 800; color: #0f172a; text-decoration: none; letter-spacing: -1px; }
-                    .logo span { color: #2563eb; }
+                    .logo span { color: ${accent}; }
                     .content { padding: 40px 50px; }
                     .welcome { font-size: 24px; font-weight: 700; margin-bottom: 10px; color: #111827; }
                     .intro { font-size: 15px; color: #4b5563; margin-bottom: 30px; font-weight: 300; }
@@ -45,8 +52,8 @@ Deno.serve(async (req) => {
                     .field { margin-bottom: 15px; font-size: 14px; }
                     .field strong { color: #64748b; width: 100px; display: inline-block; font-size: 12px; }
                     .field span { color: #1e293b; font-weight: 600; }
-                    .password-box { background: #ffffff; padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 16px; color: #2563eb; }
-                    .btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; padding: 18px 35px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 15px; margin-top: 20px; text-align: center; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2); }
+                    .password-box { background: #ffffff; padding: 6px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 16px; color: ${accent}; }
+                    .btn { display: inline-block; background-color: ${accent}; color: #ffffff !important; padding: 18px 35px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 15px; margin-top: 20px; text-align: center; box-shadow: 0 4px 6px -1px ${accentShadow}; }
                     .footer { background-color: #0f172a; color: #94a3b8; padding: 50px; text-align: center; font-size: 13px; }
                     .footer p { margin: 8px 0; font-weight: 300; }
                     .footer a { color: #ffffff; text-decoration: none; font-weight: 600; }
@@ -56,7 +63,7 @@ Deno.serve(async (req) => {
             <body>
                 <div class="wrapper">
                     <div class="header">
-                        <div class="logo">Easy<span>'</span>Qual</div>
+                        <img src="${logoUrl}" alt="Easy'Qual" style="height: 48px; width: auto;" />
                     </div>
                     <div class="content">
                         <div class="meta">
@@ -80,7 +87,9 @@ Deno.serve(async (req) => {
                         </p>
                     </div>
                     <div class="footer">
-                        <div class="logo" style="color: #ffffff; margin-bottom: 25px; font-size: 24px;">Easy<span>'</span>Qual</div>
+                        <div style="display: inline-block; background-color: #ffffff; padding: 10px 18px; border-radius: 12px; margin-bottom: 25px;">
+                            <img src="${logoUrl}" alt="Easy'Qual" style="height: 36px; width: auto; display: block;" />
+                        </div>
                         <p>L'excellence opérationnelle pour votre certification Qualiopi.</p>
                         <p>Une question ? <a href="mailto:devweb.lsc@outlook.com">Contactez notre support</a></p>
                         <p style="margin-top: 30px; border-top: 1px solid #1e293b; padding-top: 25px; font-size: 10px; opacity: 0.6;">
@@ -127,7 +136,7 @@ Deno.serve(async (req) => {
         const body = await req.json()
         const { action, userId, email, password, firstName, lastName, initialCredits, commercialName, siret, phone, isInternal } = body
         const origin = req.headers.get('origin') || 'http://localhost:5173'
-        
+
         console.log(`[REQ] Action: ${action}, Email: ${email || 'N/A'}, Origin: ${origin}`)
 
         const supabase = createClient(
@@ -135,6 +144,33 @@ Deno.serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
             { auth: { autoRefreshToken: false, persistSession: false } }
         )
+
+        // 🔒 SÉCURITÉ : toutes les actions de cette fonction (création/suppression de consultants,
+        // renvoi d'identifiants) sont réservées aux administrateurs authentifiés.
+        const authHeader = req.headers.get('Authorization') || ''
+        const supabaseCaller = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+            { global: { headers: { Authorization: authHeader } } }
+        )
+        const { data: { user: caller }, error: callerError } = await supabaseCaller.auth.getUser()
+        if (callerError || !caller) {
+            return new Response(JSON.stringify({ success: false, error: 'Non autorisé : authentification requise.' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 401
+            })
+        }
+        const { data: callerProfile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', caller.id)
+            .maybeSingle()
+        if (!callerProfile || callerProfile.role !== 'admin') {
+            return new Response(JSON.stringify({ success: false, error: 'Non autorisé : réservé aux administrateurs.' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 403
+            })
+        }
 
         // --- 1. DELETE CONSULTANT ---
         if (action === 'delete_user') {

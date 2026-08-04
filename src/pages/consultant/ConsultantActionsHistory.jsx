@@ -33,6 +33,7 @@ export default function ConsultantActionsHistory() {
     }, [user])
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- chargement initial depuis localStorage (système externe)
         loadHistory()
         // Listen to storage events if updated in another tab
         window.addEventListener('storage', loadHistory)

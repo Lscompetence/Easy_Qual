@@ -16,7 +16,7 @@ const ProtectedRoute = ({ allowedRoles }) => {
         };
     }, [profile, role]);
 
-    if (loading) {
+    if (loading || (user && role === 'consultant' && !profile)) {
         return <div className="flex justify-center items-center h-screen">Chargement...</div>
     }
 
