@@ -42,7 +42,7 @@ const sendWelcomeEmailBrevo = async (
     // Logo hébergé : les images en localhost ne s'affichent pas dans les emails
     const logoUrl = (origin && !origin.includes('localhost'))
         ? `${origin}/logo.png`
-        : 'https://easy-qual.vercel.app/logo.png'
+        : 'https://easy-qual.fr/logo.png'
     const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     
     const nameDisplay = firstName ? firstName : tenantName;

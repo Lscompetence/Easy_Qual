@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
         // Logo hébergé : les images en localhost ne s'affichent pas dans les emails
         const logoUrl = (origin && !origin.includes('localhost'))
             ? `${origin}/logo.png`
-            : 'https://easy-qual.vercel.app/logo.png'
+            : 'https://easy-qual.fr/logo.png'
         // Couleur d'accent assortie à la plateforme : violet (consultant) / vert émeraude (interne)
         const accent = isInternal ? '#059669' : '#9333ea'
         const accentShadow = isInternal ? 'rgba(5, 150, 105, 0.2)' : 'rgba(147, 51, 234, 0.2)'

@@ -40,7 +40,7 @@ serve(async (req) => {
                 html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="text-align: center; padding: 20px 0;">
-              <img src="https://easy-qual.vercel.app/logo.png" alt="Easy'Qual" style="height: 48px; width: auto;" />
+              <img src="https://easy-qual.fr/logo.png" alt="Easy'Qual" style="height: 48px; width: auto;" />
             </div>
             <h2 style="color: #2563eb;">Bonjour ${firstName} ${lastName},</h2>
             <p>Voici vos identifiants pour accéder à la plateforme Easy'Qual :</p>
