@@ -71,6 +71,7 @@ export default function ClientTopBar({ breadcrumbs = [], consultantName = '', on
     // Reset badge when user is on the messages page
     useEffect(() => {
         if (location.pathname === '/client/messages') {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- reset volontaire du badge à l'arrivée sur la page messages
             setUnreadMsgCount(0)
         }
     }, [location.pathname])

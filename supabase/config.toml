@@ -1,3 +1,33 @@
+[auth]
+# URL de base de l'application (utilisée par défaut dans les liens des emails)
+site_url = "https://easy-qual.fr"
+# URLs vers lesquelles Supabase accepte de rediriger après un lien email.
+# Sans ces entrées, le lien de reinitialisation retombe sur site_url et
+# affiche "Email link is invalid or has expired".
+additional_redirect_urls = [
+  "https://easy-qual.fr/**",
+  "https://easy-qual.vercel.app/**",
+  "https://ls-easyqual.netlify.app/**",
+  "http://localhost:5173/**",
+  "http://localhost:5188/**",
+]
+
+# ⚠️ Les valeurs ci-dessous reprennent la configuration existante du projet.
+# "config push" remplace TOUTE la section [auth] par ce fichier : tout reglage
+# omis ici serait remis a la valeur par defaut du CLI lors du prochain push.
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8
+
+# Template francais aux couleurs Easy'Qual pour la reinitialisation de mot de passe
+[auth.email.template.recovery]
+subject = "Réinitialisation de votre mot de passe Easy'Qual"
+content_path = "./supabase/email-templates/reset-password.html"
 
 [functions.repair-passwords]
 enabled = true

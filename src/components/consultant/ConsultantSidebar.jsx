@@ -263,7 +263,11 @@ export default function ConsultantSidebar({ isOpen, onClose }) {
                             Mon Profil
                         </Link>
                         <button
-                            onClick={async () => { await logout(); window.location.href = '/login?role=consultant'; }}
+                            onClick={async () => {
+                                const targetUrl = profile?.is_internal ? '/internal-lsc-secure' : '/login?role=consultant';
+                                await logout();
+                                window.location.href = targetUrl;
+                            }}
                             className="flex-shrink-0 p-1.5 bg-white border border-gray-200 text-gray-400 rounded-md hover:text-red-500 hover:border-red-100 hover:bg-red-50 transition-all"
                             title="Déconnexion"
                         >

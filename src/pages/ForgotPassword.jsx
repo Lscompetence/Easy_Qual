@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
 import { ArrowLeft, Check, Mail } from 'lucide-react'
@@ -20,7 +20,6 @@ export default function ForgotPassword() {
     const [error, setError] = useState(null)
     const { resetPassword, maintenanceMode } = useAuth()
     const navigate = useNavigate()
-    const location = useLocation()
 
     // 🛠️ MAINTENANCE REDIRECT
     useEffect(() => {
@@ -116,8 +115,8 @@ export default function ForgotPassword() {
             let errorMessage = err.message || 'Impossible d\'envoyer l\'email.'
             const errStr = errorMessage.toLowerCase()
             
-            if (errStr.includes('rate limit')) {
-                errorMessage = "Un email vient déjà d'être envoyé. Veuillez patienter 1 minute avant de recommencer."
+            if (errStr.includes('rate limit') || errStr.includes('too many requests') || err.status === 429) {
+                errorMessage = "Trop de demandes d'envoi. Le quota d'emails est temporairement atteint : veuillez réessayer plus tard ou contacter le support."
             } else if (errStr.includes('not found')) {
                 errorMessage = "Aucun compte n'est associé à cette adresse email."
             } else if (errStr.includes('error sending recovery email')) {

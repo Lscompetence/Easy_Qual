@@ -161,8 +161,6 @@ export default function AdminDashboard() {
                 .eq('status', 'new')
             
             if (!error) {
-                // Check if user has locally cleared questionnaires count recently
-                const clearedLocal = localStorage.getItem('questionnaires_cleared_at');
                 // We'll just trust local storage if they clicked it in this session or ever.
                 // If the count fetched is > 0, we only show it if they haven't cleared it.
                 // But what if NEW ones arrive? We can store the last count they cleared.
@@ -506,13 +504,19 @@ export default function AdminDashboard() {
         e.preventDefault()
         if (!editConsultant || !originalEditConsultant) return
 
+        const trimmedFirstName = (editConsultant.first_name || '').trim()
+        const trimmedLastName = (editConsultant.last_name || '').trim()
+        const trimmedCommercialName = (editConsultant.commercial_name || '').trim()
+        const trimmedSiret = (editConsultant.siret || '').trim()
+        const trimmedPhone = (editConsultant.phone || '').trim()
+
         // 1. Detect Changes
         const hasChanges =
-            editConsultant.first_name !== originalEditConsultant.first_name ||
-            editConsultant.last_name !== originalEditConsultant.last_name ||
-            editConsultant.commercial_name !== originalEditConsultant.commercial_name ||
-            editConsultant.siret !== originalEditConsultant.siret ||
-            editConsultant.phone !== originalEditConsultant.phone
+            trimmedFirstName !== originalEditConsultant.first_name ||
+            trimmedLastName !== originalEditConsultant.last_name ||
+            trimmedCommercialName !== originalEditConsultant.commercial_name ||
+            trimmedSiret !== originalEditConsultant.siret ||
+            trimmedPhone !== originalEditConsultant.phone
 
         if (!hasChanges) {
             setSuccessMsg("Aucun changement détecté.")
@@ -527,11 +531,11 @@ export default function AdminDashboard() {
             const { error } = await supabase
                 .from('profiles')
                 .update({
-                    first_name: editConsultant.first_name,
-                    last_name: editConsultant.last_name,
-                    commercial_name: editConsultant.commercial_name,
-                    siret: editConsultant.siret,
-                    phone: editConsultant.phone,
+                    first_name: trimmedFirstName,
+                    last_name: trimmedLastName,
+                    commercial_name: trimmedCommercialName,
+                    siret: trimmedSiret,
+                    phone: trimmedPhone,
                     // email is skipped
                 })
                 .eq('id', editConsultant.id)
@@ -630,9 +634,16 @@ export default function AdminDashboard() {
     const handleCreateConsultant = async (e) => {
         e.preventDefault()
 
+        const trimmedEmail = newConsultant.email.trim()
+        const trimmedPassword = newConsultant.password.trim()
+        const trimmedFirstName = newConsultant.firstName.trim()
+        const trimmedLastName = newConsultant.lastName.trim()
+        const trimmedCommercialName = (newConsultant.commercialName || '').trim()
+        const trimmedSiret = (newConsultant.siret || '').trim()
+
         // 1. Basic Client side validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(newConsultant.email)) {
+        if (!emailRegex.test(trimmedEmail)) {
             const msg = "Veuillez saisir une adresse email valide."
             setError(msg)
             setShowErrorModal(true)
@@ -647,13 +658,13 @@ export default function AdminDashboard() {
             const { data: funcData, error: funcError } = await supabase.functions.invoke('admin_create_consultant', {
                 body: {
                     action: 'create_consultant',
-                    email: newConsultant.email,
-                    password: newConsultant.password,
-                    firstName: newConsultant.firstName,
-                    lastName: newConsultant.lastName,
-                    commercialName: newConsultant.commercialName || '',
-                    siret: newConsultant.siret || '',
-                    phone: `${newConsultant.countryCode || '+33'}${newConsultant.phone || ''}`,
+                    email: trimmedEmail,
+                    password: trimmedPassword,
+                    firstName: trimmedFirstName,
+                    lastName: trimmedLastName,
+                    commercialName: trimmedCommercialName,
+                    siret: trimmedSiret,
+                    phone: `${newConsultant.countryCode || '+33'}${newConsultant.phone || ''}`.trim(),
                     initialCredits: newConsultant.initialCredits !== undefined ? newConsultant.initialCredits : 10,
                     isInternal: newConsultant.isInternal || false
                 }
@@ -2023,7 +2034,6 @@ export default function AdminDashboard() {
                                         type="button"
                                         onClick={() => setShowCreateModal(false)}
                                         className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium"
-                                        end
                                     >
                                         Annuler
                                     </button>

@@ -18,9 +18,28 @@ export default function Login({ forceRole }) {
     const [password, setPassword] = useState('')
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(false)
+    const [isLoggingIn, setIsLoggingIn] = useState(false)
 
-    const { login, logout, maintenanceMode } = useAuth()
+    const { login, logout, maintenanceMode, user, role, profile } = useAuth()
     const navigate = useNavigate()
+
+    // 🌍 AUTO-REDIRECT IF ALREADY LOGGED IN
+    useEffect(() => {
+        if (isLoggingIn) return; // Do NOT auto-redirect while submitting the login form!
+        if (user && role) {
+            if (role === 'admin') {
+                navigate('/admin/dashboard')
+            } else if (role === 'consultant') {
+                if (profile?.is_internal === true) {
+                    navigate('/internal/dashboard')
+                } else if (profile?.is_internal === false) {
+                    navigate('/consultant/dashboard')
+                }
+            } else if (role === 'of') {
+                navigate('/client/dashboard')
+            }
+        }
+    }, [user, role, profile, navigate, isLoggingIn])
 
     // 🛠️ MAINTENANCE REDIRECT
     useEffect(() => {
@@ -127,6 +146,7 @@ export default function Login({ forceRole }) {
         e.preventDefault()
         setError(null)
         setLoading(true)
+        setIsLoggingIn(true)
 
         // Nettoyer l'email, mais GARDER le mot de passe tel quel (les espaces comptent)
         const cleanEmail = email.trim().toLowerCase()
@@ -141,59 +161,10 @@ export default function Login({ forceRole }) {
                 setTimeout(() => reject(new Error('Timeout')), 30000)
             )
 
-            let authResponse;
-            try {
-                authResponse = await Promise.race([loginPromise, timeoutPromise])
-            } catch (err) {
-                // 🛠️ SELF-HEALING LOGIC for CLIENTS
-                // If login fails and we are in the client space, let's check if the account exists in tenants but not in Auth
-                if (roleParam === 'client' && (err.status === 400 || err.message?.includes('Invalid login credentials'))) {
-
-
-                    // 1. Check if email exists in tenants table
-                    const { data: tenant } = await supabase
-                        .from('tenants')
-                        .select('id, name, initial_password')
-                        .eq('client_email', cleanEmail)
-                        .single();
-
-                    // 2. If found and the password matches the one in our records
-                    if (tenant && tenant.initial_password === rawPassword) {
-
-
-                        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-                        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-                        // Call repair function
-                        const repairRes = await fetch(`${supabaseUrl}/functions/v1/invite-client`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'apikey': anonKey,
-                                'Authorization': `Bearer ${anonKey}`
-                            },
-                            body: JSON.stringify({
-                                email: cleanEmail,
-                                password: rawPassword,
-                                tenant_id: tenant.id,
-                                tenant_name: tenant.name
-                            })
-                        });
-
-                        if (repairRes.ok) {
-
-                            // Try login again after repair
-                            authResponse = await login(cleanEmail, rawPassword);
-                        } else {
-                            throw err; // If repair fails, throw original login error
-                        }
-                    } else {
-                        throw err;
-                    }
-                } else {
-                    throw err;
-                }
-            }
+            // Note sécurité : l'ancien mécanisme de "self-healing" (réparation de compte via un appel
+            // non authentifié à invite-client) a été retiré — la fonction exige désormais un appelant
+            // authentifié consultant/admin. Un compte client cassé se répare via "Renvoyer les accès".
+            const authResponse = await Promise.race([loginPromise, timeoutPromise])
 
             const { user } = authResponse;
 
@@ -203,11 +174,29 @@ export default function Login({ forceRole }) {
             // 2. STRICT ROLE VERIFICATION
             if (roleParam === 'client' && actualRole !== 'of') {
                 await logout();
+                sessionStorage.clear();
+                localStorage.removeItem('easyqual-auth-token');
                 throw new Error('Accès refusé. Veuillez utiliser la page de connexion Espace Consultant.');
             }
-            if (roleParam === 'consultant' && actualRole !== 'consultant') {
-                await logout();
-                throw new Error('Accès refusé. Veuillez utiliser la page de connexion Espace Client.');
+            if (roleParam === 'consultant') {
+                if (actualRole !== 'consultant') {
+                    await logout();
+                    sessionStorage.clear();
+                    localStorage.removeItem('easyqual-auth-token');
+                    throw new Error('Accès refusé. Veuillez utiliser la page de connexion Espace Client.');
+                }
+                const { data: prof } = await supabase
+                    .from('profiles')
+                    .select('is_internal')
+                    .eq('id', user.id)
+                    .maybeSingle();
+                
+                if (prof?.is_internal) {
+                    await logout();
+                    sessionStorage.clear();
+                    localStorage.removeItem('easyqual-auth-token');
+                    throw new Error("Accès refusé. C'est impossible de se connecter à une session pour laquelle vous n'avez pas le droit de vous authentifier.");
+                }
             }
             if (roleParam === 'admin' && actualRole !== 'admin') {
                 await logout();
@@ -216,6 +205,8 @@ export default function Login({ forceRole }) {
             if (roleParam === 'internal') {
                 if (actualRole !== 'consultant') {
                     await logout();
+                    sessionStorage.clear();
+                    localStorage.removeItem('easyqual-auth-token');
                     throw new Error('Accès refusé.');
                 }
                 const { data: prof, error: profError } = await supabase
@@ -226,7 +217,9 @@ export default function Login({ forceRole }) {
                 
                 if (profError || !prof || !prof.is_internal) {
                     await logout();
-                    throw new Error('Accès refusé. Ce compte n\'est pas configuré comme un collaborateur interne.');
+                    sessionStorage.clear();
+                    localStorage.removeItem('easyqual-auth-token');
+                    throw new Error("Accès refusé. C'est impossible de se connecter à une session pour laquelle vous n'avez pas le droit de vous authentifier.");
                 }
             }
 
@@ -261,6 +254,7 @@ export default function Login({ forceRole }) {
             }
         } finally {
             setLoading(false)
+            setIsLoggingIn(false)
         }
     }
 

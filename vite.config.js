@@ -8,5 +8,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/setupTests.js',
+    // Les tests E2E Selenium (tests/e2e) sont lancés via "npm run test:e2e" (Mocha), pas par Vitest
+    include: ['src/**/*.{test,spec}.{js,jsx}'],
   },
 })

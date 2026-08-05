@@ -20,7 +20,7 @@ export default function ClientProfile() {
     const [showPassword, setShowPassword] = useState(false)
 
     const [showSuccessModal, setShowSuccessModal] = useState(false)
-    const [message, setMessage] = useState({ type: '', content: '' })
+    const [, setMessage] = useState({ type: '', content: '' })
     const [initialized, setInitialized] = useState(false)
     const [consultantName, setConsultantName] = useState('')
     const [indicatorStates, setIndicatorStates] = useState({})

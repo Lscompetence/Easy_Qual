@@ -19,6 +19,7 @@ export default function QuizModal({ isOpen, onClose, criterionId, criterionLabel
      
     useEffect(() => {
         if (isOpen) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- réinitialisation volontaire du quiz à chaque ouverture du modal
             setStep('intro');
             setCurrentQuestion(0);
             setAnswers([]);

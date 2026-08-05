@@ -109,12 +109,19 @@ export default function NewCaseModal({ isOpen, onClose, user, walletBalance, onS
                 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
                 const functionUrl = `${supabaseUrl}/functions/v1/invite-client`;
 
+                // La fonction invite-client exige le jeton de l'utilisateur connecté
+                // (consultant ou admin) : la clé anon seule n'est plus acceptée.
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.access_token) {
+                    throw new Error("Session expirée. Veuillez vous reconnecter pour créer le compte client.");
+                }
+
                 const response = await fetch(functionUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'apikey': anonKey,
-                        'Authorization': `Bearer ${anonKey}`
+                        'Authorization': `Bearer ${session.access_token}`
                     },
                     body: JSON.stringify({
                         email: cleanedEmail,
